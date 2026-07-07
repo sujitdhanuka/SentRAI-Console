@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SentRAI - Console</title>
+  <link rel="icon" type="image/png" href="/static/logo.png" />
+  <meta name="description" content="Enterprise AI Governance Platform — Model Inventory, Risk Triage, Drift Monitoring, Audit & Incident Reporting" />
+  <link rel="stylesheet" href="/static/css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/logo.png" alt="SentrAI" class="brand-mark" style="height:48px; width:48px; display:block;" />
+      <div>
+        <div class="brand-title">SentRAI - Console</div>
+        <div class="brand-sub">AI Model Governance · Risk Triage · Drift Monitoring · Audit · Incident Reporting</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <button class="btn ghost small" id="btn-toggle-theme" style="cursor:pointer;">☀️ Light Mode</button>
+      <div class="topbar-status" id="health-status">checking service…</div>
+      <!-- User info chip — shown after login -->
+      <div id="user-chip" style="display:none; align-items:center; gap:8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:20px; padding:4px 12px 4px 6px;">
+        <div id="user-avatar" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:#fff;">?</div>
+        <div style="display:flex;flex-direction:column;line-height:1.2;">
+          <span id="user-display-name" style="font-size:0.72rem;font-weight:600;color:var(--fg);">User</span>
+          <span id="user-display-role" style="font-size:0.62rem;color:var(--muted);">VIEWER</span>
+        </div>
+        <button id="btn-logout" title="Sign out" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:0.75rem;padding:0 0 0 4px;" onclick="logout()">🚪</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="projects">Projects</button>
+    <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="inventory">Model Inventory</button>
+    <button class="tab" data-tab="monitoring">Drift Monitoring</button>
+    <button class="tab" data-tab="audit">Audit Trail</button>
+    <button class="tab" data-tab="incidents">Incidents</button>
+    <button class="tab" data-tab="lineage">Lineage Graph</button>
+    <button class="tab" data-tab="docs">Docs</button>
+    <button class="tab" data-tab="users" id="tab-users" style="display:none;">Users</button>
+    <button class="tab" data-tab="orgs" id="tab-orgs" style="display:none;">Organizations</button>
+    <div id="active-project-bar" style="display:none; margin-left:auto; display:none; align-items:center; gap:10px; padding:0 12px;">
+      <span style="font-size:0.75rem; color:var(--muted);">Active Project:</span>
+      <span id="active-project-name" style="font-size:0.8rem; font-weight:600; color:var(--accent);"></span>
+      <button id="btn-close-project" style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer; white-space:nowrap;" title="Close project and return to project selection">× Close Project</button>
+    </div>
+  </nav>
+
+  <main id="app">
+    <!-- ── Projects ── -->
+    <section class="panel active" id="panel-projects">
+      <div class="panel-head">
+        <h2>Projects</h2>
+        <button class="btn primary" id="btn-new-project">+ New Project</button>
+      </div>
+      <p class="muted" style="margin:-10px 0 18px">
+        Each project tracks one application's codebase — its own scan history and its own scoped model inventory.
+        Create a project per app you want to govern, point it at that app's source directory, then scan and track
+        its AI models independently of any other project.
+      </p>
+
+      <div class="card form-card hidden" id="form-new-project">
+        <h3 id="project-form-title">New Project</h3>
+        <form id="project-form">
+          <input type="hidden" name="project_id" />
+          <div class="form-row">
+            <label>Project Name <input required name="name" placeholder="e.g. Dhancept Terminal" /></label>
+            <label>Description (optional) <input name="description" placeholder="e.g. AI trading research platform" /></label>
+          </div>
+          <label>Root Directory (on this server's filesystem)
+            <div style="display:flex; gap:8px;">
+              <input name="root_directory" required placeholder="/Users/you/Documents/Projects/your-app" style="flex:1" />
+              <button type="button" class="btn ghost" id="btn-browse-project-directory">📁 Browse…</button>
+            </div>
+          </label>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-cancel-project">Cancel</button>
+            <button type="submit" class="btn primary" id="project-form-submit">Create Project</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="grid cards" id="projects-grid"></div>
+      <div class="empty-state" id="projects-empty">No projects yet — create one to start tracking an application's AI models.</div>
+    </section>
+    <!-- ── Overview ── -->
+    <section class="panel" id="panel-overview">
+      <div class="panel-head">
+        <h2>Seven Sutras of Responsible AI</h2>
+        <p class="muted">Foundational principles enforced across every registered model.</p>
+      </div>
+      <div class="grid cards" id="sutras-grid"></div>
+
+      <div class="panel-head" style="margin-top:32px">
+        <h2>Compliance Snapshot</h2>
+      </div>
+      <div class="grid stat-grid" id="overview-stats"></div>
+    </section>
+
+    <!-- ── Inventory ── -->
+    <section class="panel" id="panel-inventory">
+      <div class="panel-head">
+        <h2>AI Model Inventory</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <select id="inventory-project-filter" style="display:none;"></select>
+          <button class="btn primary" id="btn-new-model">+ Register Model</button>
+        </div>
+      </div>
+
+      <div class="card form-card hidden" id="form-register-model">
+        <h3>Register New AI Model</h3>
+        <form id="model-form">
+          <div class="form-row">
+            <label>Model Name <input required name="name" placeholder="e.g. Credit Risk Scorer v2" /></label>
+            <label>Model Type
+              <select name="model_type">
+                <option value="MACHINE_LEARNING">Machine Learning</option>
+                <option value="DEEP_LEARNING">Deep Learning</option>
+                <option value="NLP">NLP</option>
+                <option value="GENERATIVE_AI">Generative AI</option>
+                <option value="RULES_BASED">Rules-Based</option>
+                <option value="HYBRID">Hybrid</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Functional Area <input required name="functional_area" placeholder="e.g. credit_underwriting, fraud_detection" /></label>
+            <label>Owner Team <input required name="owner_team" placeholder="e.g. Risk Engineering" /></label>
+          </div>
+          <label>Use Case Description <textarea required name="use_case_description" rows="2" placeholder="What does this model do, and who does it affect?"></textarea></label>
+          <div class="form-row">
+            <label>Developed By <input required name="developed_by" placeholder="internal / vendor name" /></label>
+            <label>Board Policy Reference <input required name="board_policy_ref" placeholder="e.g. AI-POLICY-2026-001" /></label>
+          </div>
+          <label>Target Customer Segments <input name="target_customer_segments" placeholder="comma-separated, e.g. retail, sme" /></label>
+          <div class="form-row">
+            <label class="checkbox"><input type="checkbox" name="human_oversight_required" checked /> Human Oversight Required</label>
+            <label>Autonomous Scope (if any) <input name="autonomous_scope" placeholder="e.g. routine FAQ responses" /></label>
+          </div>
+          <fieldset>
+            <legend>Sutras Declared</legend>
+            <div class="checkbox-grid" id="sutras-checkboxes"></div>
+          </fieldset>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-cancel-model">Cancel</button>
+            <button type="submit" class="btn primary">Register Model</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <table class="data-table" id="models-table">
+          <thead>
+            <tr><th>Name</th><th>Risk</th><th>Compliance</th><th>Lifecycle</th><th>Oversight</th><th>Grievances</th><th>Registered</th><th>Actions</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="models-empty">No models registered yet.</div>
+      </div>
+    </section>
+
+    <!-- ── Monitoring ── -->
+    <section class="panel" id="panel-monitoring">
+      <div class="panel-head">
+        <h2>Drift Detection &amp; Business Continuity</h2>
+      </div>
+
+      <div class="card form-card">
+        <h3>Evaluate Model Drift</h3>
+        <form id="drift-form">
+          <label>Select Model
+            <select name="model_id" id="drift-model-select" required></select>
+          </label>
+          <div class="form-row">
+            <label>Training Scores (comma-separated) <input name="training_scores" placeholder="0.1,0.2,0.15,..." /></label>
+            <label>Live Scores (comma-separated) <input name="live_scores" placeholder="0.5,0.6,0.55,..." /></label>
+          </div>
+          <div class="form-row">
+            <label>Baseline Accuracy <input type="number" step="0.01" min="0" max="1" name="baseline_accuracy" value="0.90" /></label>
+            <label>Current Accuracy <input type="number" step="0.01" min="0" max="1" name="current_accuracy" value="0.88" /></label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-demo-data">Generate Demo Data (Drifted)</button>
+            <button type="submit" class="btn primary">Evaluate Drift</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card hidden" id="drift-result-card"></div>
+
+      <div class="card">
+        <h3>BCP Fallback Status</h3>
+        <div id="bcp-panel" class="bcp-panel muted">Select a model above to view fallback status.</div>
+      </div>
+
+      <div class="card">
+        <h3>Drift History</h3>
+        <table class="data-table" id="drift-history-table">
+          <thead><tr><th>Time</th><th>Status</th><th>PSI</th><th>W-Distance</th><th>Acc Δ</th><th>Circuit Breaker</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="drift-history-empty">No drift evaluations yet for this model.</div>
+      </div>
+    </section>
+
+    <!-- ── Audit ── -->
+    <section class="panel" id="panel-audit">
+      <div class="panel-head">
+        <h2>AI Audit Framework</h2>
+      </div>
+
+      <div class="card form-card">
+        <h3>Initiate Audit</h3>
+        <form id="audit-form">
+          <label>Select Model <select name="model_id" id="audit-model-select" required></select></label>
+          <div class="form-row">
+            <label>Audit Type
+              <select name="audit_type">
+                <option value="INTERNAL">Internal</option>
+                <option value="THIRD_PARTY">Third-Party</option>
+                <option value="SUPERVISORY">Supervisory</option>
+              </select>
+            </label>
+            <label>Auditor Reference <input name="auditor_ref" required placeholder="e.g. Internal Risk Team" /></label>
+          </div>
+          <fieldset>
+            <legend>Input Data Audit</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox"><input type="checkbox" name="training_data_bias_checked" /> Training data bias checked</label>
+              <label class="checkbox"><input type="checkbox" name="data_consent_verified" /> Data consent verified</label>
+              <label class="checkbox"><input type="checkbox" name="data_sources_documented" /> Data sources documented</label>
+              <label class="checkbox"><input type="checkbox" name="sensitive_attributes_excluded" /> Sensitive attributes excluded</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Model &amp; Algorithm Audit</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox"><input type="checkbox" name="model_architecture_reviewed" /> Architecture reviewed</label>
+              <label class="checkbox"><input type="checkbox" name="decision_logic_documented" /> Decision logic documented</label>
+              <label class="checkbox"><input type="checkbox" name="adversarial_robustness_tested" /> Adversarial robustness tested</label>
+              <label class="checkbox"><input type="checkbox" name="performance_benchmarks_met" /> Performance benchmarks met</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Output &amp; Behaviour Audit</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox"><input type="checkbox" name="bcp_verified" /> BCP verified</label>
+              <label class="checkbox"><input type="checkbox" name="human_override_tested" /> Human override tested</label>
+            </div>
+            <label>Explainability Score (0–1) <input type="number" step="0.01" min="0" max="1" name="explainability_score" value="0.8" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>7 Sutras Verification</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox"><input type="checkbox" name="trust_verified" /> Trust verified</label>
+              <label class="checkbox"><input type="checkbox" name="human_oversight_verified" /> Human oversight verified</label>
+              <label class="checkbox"><input type="checkbox" name="innovation_not_stifled" checked /> Innovation not stifled</label>
+              <label class="checkbox"><input type="checkbox" name="fairness_metrics_passed" /> Fairness metrics passed</label>
+              <label class="checkbox"><input type="checkbox" name="accountability_chain_documented" /> Accountability documented</label>
+              <label class="checkbox"><input type="checkbox" name="explainability_verified" /> Explainability verified</label>
+            </div>
+          </fieldset>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Run Audit</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card hidden" id="audit-result-card"></div>
+
+      <div class="card">
+        <h3>Audit History</h3>
+        <table class="data-table" id="audit-history-table">
+          <thead><tr><th>Date</th><th>Type</th><th>Auditor</th><th>Verdict</th><th>Explainability</th><th>Findings</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="audit-history-empty">No audits yet for this model.</div>
+      </div>
+
+      <div class="card form-card">
+        <h3>Test Decision Explainability</h3>
+        <form id="explain-form">
+          <div class="form-row">
+            <label>Decision Reference <input name="decision_ref" required placeholder="e.g. LOAN-APP-2026-00123" /></label>
+            <label>Outcome <input name="decision_outcome" required placeholder="APPROVED / REJECTED / REFERRED" /></label>
+          </div>
+          <label>Top Features (name:weight, comma-separated) <input name="top_features" placeholder="credit_score:0.45, income_stability:0.3" /></label>
+          <div class="form-row">
+            <label>Confidence (0–1) <input type="number" step="0.01" min="0" max="1" name="confidence_score" value="0.9" /></label>
+            <label>Explanation Method <input name="explanation_method" value="SHAP" /></label>
+          </div>
+          <label>Human-Readable Summary <textarea name="human_readable_summary" rows="2" required></textarea></label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Record Explanation</button>
+          </div>
+        </form>
+        <div id="explain-result"></div>
+      </div>
+    </section>
+
+    <!-- ── Incidents ── -->
+    <section class="panel" id="panel-incidents">
+      <div class="panel-head">
+        <h2>Incident Reporting &amp; Sectoral Risk</h2>
+        <button class="btn primary" id="btn-new-incident">+ Report Incident</button>
+      </div>
+
+      <div class="grid stat-grid" id="sectoral-stats"></div>
+
+      <div class="card form-card hidden" id="form-report-incident">
+        <h3>Report AI Incident</h3>
+        <form id="incident-form">
+          <label>Model <select name="model_id" id="incident-model-select" required></select></label>
+          <div class="form-row">
+            <label>Regulated Entity / Org Name <input required name="re_name" placeholder="e.g. Example Bank Ltd." /></label>
+            <label>Functional Area <input required name="functional_area" placeholder="e.g. credit_underwriting" /></label>
+          </div>
+          <div class="form-row">
+            <label>Category
+              <select name="incident_category">
+                <option value="BIAS_DISCRIMINATION">Bias / Discrimination</option>
+                <option value="MODEL_DRIFT">Model Drift</option>
+                <option value="DATA_PRIVACY_BREACH">Data Privacy Breach</option>
+                <option value="EXPLAINABILITY_FAILURE">Explainability Failure</option>
+                <option value="ADVERSARIAL_ATTACK">Adversarial Attack</option>
+                <option value="UNINTENDED_AUTONOMOUS_ACTION">Unintended Autonomous Action</option>
+                <option value="SYSTEM_UNAVAILABILITY">System Unavailability</option>
+                <option value="CONSUMER_HARM">Consumer Harm</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </label>
+            <label>Severity
+              <select name="severity">
+                <option value="P1_CRITICAL">P1 — Critical (6h)</option>
+                <option value="P2_HIGH">P2 — High (24h)</option>
+                <option value="P3_MEDIUM">P3 — Medium (72h)</option>
+                <option value="P4_LOW">P4 — Low (7d)</option>
+              </select>
+            </label>
+          </div>
+          <label>Description (min 50 chars) <textarea required name="description" rows="3"></textarea></label>
+          <div class="form-row">
+            <label>Observed At <input type="datetime-local" name="observed_at" required /></label>
+            <label>Detected At <input type="datetime-local" name="detected_at" required /></label>
+          </div>
+          <label>Model Risk Level
+            <select name="model_risk_level">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH" selected>High</option>
+              <option value="CRITICAL">Critical</option>
+              <option disabled>───────────────</option>
+              <option value="MINIMAL">EU: Minimal Risk</option>
+              <option value="LIMITED">EU: Limited Risk</option>
+              <option value="PROHIBITED">EU: Prohibited</option>
+            </select>
+          </label>
+          <label>Immediate Action Taken (min 20 chars) <textarea required name="immediate_action_taken" rows="2"></textarea></label>
+          <div class="checkbox-grid">
+            <label class="checkbox"><input type="checkbox" name="autonomous_system_involved" /> Autonomous system involved</label>
+            <label class="checkbox"><input type="checkbox" name="system_suspended" /> System suspended</label>
+            <label class="checkbox"><input type="checkbox" name="fallback_activated" /> Fallback activated</label>
+            <label class="checkbox"><input type="checkbox" name="repeat_incident" /> Repeat incident</label>
+          </div>
+          <fieldset>
+            <legend>Affected Consumers (optional)</legend>
+            <div class="form-row">
+              <label>Count <input type="number" name="ac_count" min="0" /></label>
+              <label>Harm Type <input name="ac_harm_type" placeholder="e.g. credit_denial_bias" /></label>
+            </div>
+            <label>Demographic Segment <input name="ac_segment" placeholder="e.g. rural applicants (no individual IDs)" /></label>
+          </fieldset>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-cancel-incident">Cancel</button>
+            <button type="submit" class="btn danger">Submit Incident Report</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <table class="data-table" id="incidents-table">
+          <thead><tr><th>Model</th><th>Category</th><th>Severity</th><th>Status</th><th>Deadline</th><th>Reported</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty-state" id="incidents-empty">No incidents reported.</div>
+      </div>
+    </section>
+
+    <!-- ── Discover ── -->
+    <section class="panel" id="panel-discover">
+      <div class="panel-head">
+        <h2>Discover Models From a Codebase</h2>
+      </div>
+      <p class="muted" style="margin:-10px 0 18px">
+        Point this at the root of any application's source tree (e.g. <code>/path/to/your-app/src</code>).
+        This runs a <strong>static, read-only</strong> scan — it pattern-matches for LLM/ML API calls, agent
+        definitions, and scoring logic, then reports governance gaps against the 7 Sutras. It does not execute
+        any code in the target directory. Results are candidates for a human to confirm, not a certification.
+      </p>
+
+      <div class="card form-card">
+        <h3>Scan a Directory</h3>
+        <form id="scan-form">
+          <label style="display:none;">Project
+            <select id="discover-project-select">
+              <option value="">— Ad-hoc scan (no project) —</option>
+            </select>
+          </label>
+          <label>Directory Path (on this server's filesystem)
+            <div style="display:flex; gap:8px;">
+              <input name="directory" required placeholder="/Users/you/Documents/Projects/your-app/src" style="flex:1" />
+              <button type="button" class="btn ghost" id="btn-browse-directory">📁 Browse…</button>
+            </div>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Scan Codebase</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card hidden" id="scan-result-card">
+        <div class="panel-head">
+          <h3 id="scan-summary"></h3>
+          <div>
+            <button class="btn ghost small" id="btn-select-all">Select All</button>
+            <button class="btn primary small" id="btn-import-selected">Import Selected →</button>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:14px">
+          <label>Owner Team for Imported Models <input id="import-owner-team" value="UNASSIGNED — pending review" /></label>
+          <label>Board Policy Reference (optional) <input id="import-policy-ref" placeholder="leave blank if not yet established" /></label>
+        </div>
+        <div id="candidates-list"></div>
+    </section>
+    
+    <!-- ── Lineage Graph ── -->
+    <section class="panel" id="panel-lineage">
+      <div class="panel-head">
+        <h2>Interactive Dependency Lineage Graph</h2>
+        <div style="display:none;">
+          <select id="lineage-project-filter" style="font-size:0.72rem; padding:8px 10px;">
+            <option value="">— Select a Project —</option>
+          </select>
+        </div>
+      </div>
+      <p class="muted" style="margin:-10px 0 18px">Visualize your application ecosystem from Projects to Models to Prompts to Tools.</p>
+      <div class="card" style="height: 60vh; background: var(--bg-card); position: relative; border: 1px solid var(--border); border-radius: 8px;">
+        <div id="cy-lineage" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>
+      </div>
+    </section>
+
+    <!-- ── Docs ── -->
+    <section class="panel" id="panel-docs">
+      <div class="panel-head">
+        <h2>Documentation</h2>
+      </div>
+      <div class="card" id="docs-content" style="padding: 24px 32px; line-height: 1.7; overflow-y: auto; max-height: 75vh; font-size: 0.9rem;">
+        <p class="muted">Loading documentation…</p>
+      </div>
+    </section>
+    <!-- ── Users ── -->
+    <section class="panel" id="panel-users">
+      <div class="panel-head">
+        <h2>User Management</h2>
+        <button class="btn primary" id="btn-new-user">+ Add User</button>
+      </div>
+      
+      <div class="card form-card hidden" id="form-new-user">
+        <h3>New User</h3>
+        <form id="user-form">
+          <div class="form-row">
+            <label>Full Name <input required id="new-user-name" placeholder="e.g. Test User" /></label>
+            <label>Email <input type="email" required id="new-user-email" placeholder="e.g. test@example.com" /></label>
+          </div>
+          <div class="form-row">
+            <label>Password <input type="password" required id="new-user-password" placeholder="min 8 characters" /></label>
+            <label>Role 
+              <select id="new-user-role" required>
+                <option value="VIEWER">Viewer</option>
+                <option value="OWNER">Model Owner</option>
+                <option value="REVIEWER">Reviewer</option>
+                <option value="APPROVER">Approver</option>
+                <option value="ADMIN">Admin</option>
+                <option value="CISO">CISO</option>
+              </select>
+            </label>
+            <label>Organization 
+              <select id="new-user-org">
+                <option value="">Global / None</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-cancel-user">Cancel</button>
+            <button type="submit" class="btn primary" id="user-form-submit">Create User</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="table-container" style="margin-top:20px;">
+        <table class="data-table" id="users-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Organization</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── Organizations ── -->
+    <section class="panel" id="panel-orgs">
+      <div class="panel-head">
+        <h2>Organizations</h2>
+        <button class="btn primary" id="btn-new-org">+ Add Organization</button>
+      </div>
+      
+      <div class="card form-card hidden" id="form-new-org">
+        <h3>New Organization</h3>
+        <form id="org-form">
+          <div class="form-row">
+            <label>Name <input required id="new-org-name" placeholder="e.g. Acme Corp" /></label>
+            <label>Description <input id="new-org-desc" placeholder="e.g. Acme Corporation tenant" /></label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-cancel-org">Cancel</button>
+            <button type="submit" class="btn primary" id="org-form-submit">Create Organization</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="table-container" style="margin-top:20px;">
+        <table class="data-table" id="orgs-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Created At</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Directory Browser Modal ── -->
+  <div class="modal-overlay hidden" id="browse-modal-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Choose a Directory</h3>
+        <button class="btn ghost small" id="btn-close-browse-modal">✕</button>
+      </div>
+      <div class="modal-path-bar">
+        <button class="btn small ghost" id="btn-browse-up" title="Go up one level">⬆ Up</button>
+        <code id="browse-current-path">/</code>
+      </div>
+      <div class="modal-dir-list" id="browse-dir-list"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="btn-cancel-browse">Cancel</button>
+        <button class="btn primary" id="btn-select-directory">Select This Folder</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- ── Auth Overlay ────────────────────────────────────────────────────── -->
+  <div id="auth-overlay" style="
+    position:fixed; inset:0; z-index:9999;
+    background:linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 40%, #16213e 100%);
+    display:flex; align-items:center; justify-content:center;
+    font-family:inherit;
+  ">
+    <div style="
+      width:100%; max-width:420px; margin:0 16px;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:20px;
+      padding:40px 36px;
+      backdrop-filter:blur(20px);
+      box-shadow:0 24px 80px rgba(0,0,0,0.6);
+    ">
+      <!-- Logo -->
+      <div style="text-align:center; margin-bottom:28px;">
+        <img src="/static/logo.png" alt="Logo" style="height:48px; width:48px; margin-bottom:8px; display:inline-block;" />
+        <div style="font-size:1.4rem; font-weight:800; letter-spacing:-0.5px; color:#e2e8f0;">SentRAI - Console</div>
+        <div style="font-size:0.75rem; color:#64748b; margin-top:4px;">Enterprise AI Governance Platform</div>
+      </div>
+
+      <!-- Tab switcher -->
+      <div id="auth-tabs" style="display:flex; background:rgba(0,0,0,0.3); border-radius:10px; padding:3px; margin-bottom:24px;">
+        <button id="tab-login" onclick="showAuthTab('login')" style="flex:1;padding:7px;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;font-weight:600;background:rgba(99,102,241,0.85);color:#fff;transition:all 0.2s;">Sign In</button>
+        <button id="tab-register" onclick="showAuthTab('register')" style="flex:1;padding:7px;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;font-weight:600;background:transparent;color:#94a3b8;transition:all 0.2s;">Register</button>
+      </div>
+
+      <!-- Login form -->
+      <form id="form-login" onsubmit="handleLogin(event)">
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:0.75rem;color:#94a3b8;margin-bottom:6px;font-weight:500;">Email</label>
+          <input id="login-email" type="email" required placeholder="you@organisation.com"
+            style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e2e8f0;font-size:0.85rem;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'" />
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block;font-size:0.75rem;color:#94a3b8;margin-bottom:6px;font-weight:500;">Password</label>
+          <input id="login-password" type="password" required placeholder="••••••••"
+            style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e2e8f0;font-size:0.85rem;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'" />
+        </div>
+        <div id="login-error" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:0.78rem;margin-bottom:14px;"></div>
+        <button type="submit" id="btn-login-submit" style="
+          width:100%;padding:11px;border:none;border-radius:10px;
+          background:linear-gradient(135deg,#6366f1,#8b5cf6);
+          color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;
+          transition:opacity 0.2s;letter-spacing:0.3px;
+        ">Sign In →</button>
+      </form>
+
+      <!-- Register form (hidden by default) -->
+      <form id="form-register" onsubmit="handleRegister(event)" style="display:none;">
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:0.75rem;color:#94a3b8;margin-bottom:6px;font-weight:500;">Full Name</label>
+          <input id="reg-name" type="text" required placeholder="e.g. Priya Sharma"
+            style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e2e8f0;font-size:0.85rem;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'" />
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:0.75rem;color:#94a3b8;margin-bottom:6px;font-weight:500;">Email</label>
+          <input id="reg-email" type="email" required placeholder="you@organisation.com"
+            style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e2e8f0;font-size:0.85rem;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'" />
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:0.75rem;color:#94a3b8;margin-bottom:6px;font-weight:500;">Password</label>
+          <input id="reg-password" type="password" required placeholder="min 8 characters"
+            style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e2e8f0;font-size:0.85rem;outline:none;box-sizing:border-box;"
+            onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'" />
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:0.75rem;color:#94a3b8;margin-bottom:6px;font-weight:500;">Role</label>
+          <select id="reg-role" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e2e8f0;font-size:0.85rem;outline:none;box-sizing:border-box;cursor:pointer;">
+            <option value="VIEWER">Viewer</option>
+            <option value="OWNER">Model Owner</option>
+            <option value="REVIEWER">Reviewer</option>
+            <option value="APPROVER">Approver</option>
+          </select>
+        </div>
+        <div id="reg-error" style="display:none;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:0.78rem;margin-bottom:14px;"></div>
+        <button type="submit" id="btn-reg-submit" style="
+          width:100%;padding:11px;border:none;border-radius:10px;
+          background:linear-gradient(135deg,#6366f1,#8b5cf6);
+          color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;
+          transition:opacity 0.2s;letter-spacing:0.3px;
+        ">Create Account →</button>
+      </form>
+
+      <div style="text-align:center;margin-top:20px;font-size:0.7rem;color:#475569;">
+        SentRAI - Console · Enterprise AI Governance · v2.0
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
