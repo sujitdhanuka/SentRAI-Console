@@ -1,0 +1,97 @@
+/**
+ * Domain enums — 1:1 port of src/sentrai/domain/enums.py and the Role enum
+ * from src/sentrai/domain/user.py. Values are the canonical strings persisted
+ * to the database (matching Python's SAEnum(...) which stores the .value).
+ */
+
+export enum RiskLevel {
+  // Standard
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  CRITICAL = 'CRITICAL',
+  // EU AI Act specific
+  MINIMAL = 'MINIMAL',
+  LIMITED = 'LIMITED',
+  PROHIBITED = 'PROHIBITED',
+}
+
+export enum ModelLifecycleStage {
+  DESIGN = 'DESIGN',
+  DEVELOPMENT = 'DEVELOPMENT',
+  VALIDATION = 'VALIDATION',
+  DEPLOYED = 'DEPLOYED',
+  MONITORING = 'MONITORING',
+  DECOMMISSIONED = 'DECOMMISSIONED',
+}
+
+export enum ModelType {
+  MACHINE_LEARNING = 'MACHINE_LEARNING',
+  DEEP_LEARNING = 'DEEP_LEARNING',
+  NLP = 'NLP',
+  GENERATIVE_AI = 'GENERATIVE_AI',
+  RULES_BASED = 'RULES_BASED',
+  HYBRID = 'HYBRID',
+  AGENT = 'AGENT',
+  TOOL = 'TOOL',
+  MCP_SERVER = 'MCP_SERVER',
+}
+
+export enum DriftStatus {
+  NOMINAL = 'NOMINAL',
+  WARNING = 'WARNING',
+  CIRCUIT_BREAKER_TRIPPED = 'CIRCUIT_BREAKER_TRIPPED',
+  HUMAN_REVIEW_REQUIRED = 'HUMAN_REVIEW_REQUIRED',
+}
+
+export enum IncidentSeverity {
+  P1_CRITICAL = 'P1_CRITICAL', // systemic risk, report within 6 hrs
+  P2_HIGH = 'P2_HIGH', // significant harm, report within 24 hrs
+  P3_MEDIUM = 'P3_MEDIUM', // limited impact, report within 72 hrs
+  P4_LOW = 'P4_LOW', // minor issue, report within 7 days
+}
+
+export enum IncidentCategory {
+  BIAS_DISCRIMINATION = 'BIAS_DISCRIMINATION',
+  MODEL_DRIFT = 'MODEL_DRIFT',
+  DATA_PRIVACY_BREACH = 'DATA_PRIVACY_BREACH',
+  EXPLAINABILITY_FAILURE = 'EXPLAINABILITY_FAILURE',
+  ADVERSARIAL_ATTACK = 'ADVERSARIAL_ATTACK',
+  UNINTENDED_AUTONOMOUS_ACTION = 'UNINTENDED_AUTONOMOUS_ACTION',
+  SYSTEM_UNAVAILABILITY = 'SYSTEM_UNAVAILABILITY',
+  CONSUMER_HARM = 'CONSUMER_HARM',
+  OTHER = 'OTHER',
+}
+
+export enum IncidentStatus {
+  REPORTED = 'REPORTED',
+  UNDER_INVESTIGATION = 'UNDER_INVESTIGATION',
+  REMEDIATION_IN_PROGRESS = 'REMEDIATION_IN_PROGRESS',
+  RESOLVED = 'RESOLVED',
+  CLOSED = 'CLOSED',
+}
+
+export enum AuditType {
+  INTERNAL = 'INTERNAL',
+  THIRD_PARTY = 'THIRD_PARTY',
+  SUPERVISORY = 'SUPERVISORY',
+}
+
+export enum SutraAlignment {
+  TRUST = 'TRUST_IS_THE_FOUNDATION',
+  PEOPLE_FIRST = 'PEOPLE_FIRST',
+  INNOVATION = 'INNOVATION_OVER_RESTRAINT',
+  FAIRNESS = 'FAIRNESS_AND_EQUITY',
+  ACCOUNTABILITY = 'ACCOUNTABILITY',
+  EXPLAINABILITY = 'UNDERSTANDABLE_BY_DESIGN',
+  SAFETY = 'SAFETY_RESILIENCE_SUSTAINABILITY',
+}
+
+export enum Role {
+  VIEWER = 'VIEWER',
+  OWNER = 'OWNER',
+  REVIEWER = 'REVIEWER',
+  APPROVER = 'APPROVER',
+  ADMIN = 'ADMIN',
+  CISO = 'CISO',
+}

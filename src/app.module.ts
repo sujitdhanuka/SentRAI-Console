@@ -1,0 +1,57 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ServeStaticModule } from '@nestjs/serve-static';
+
+import configuration from './config/configuration';
+import { AppController } from './app.controller';
+import { STATIC_DIR, IMAGES_DIR } from './common/paths';
+import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { UsersModule } from './users/users.module';
+import { ProjectsModule } from './projects/projects.module';
+import { InventoryModule } from './inventory/inventory.module';
+import { IncidentsModule } from './incidents/incidents.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
+import { AuditModule } from './audit/audit.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { DiscoveryModule } from './discovery/discovery.module';
+import { TasksModule } from './tasks/tasks.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+    }),
+    ScheduleModule.forRoot(),
+    DatabaseModule,
+    AuthModule,
+    OrganizationsModule,
+    UsersModule,
+    ProjectsModule,
+    InventoryModule,
+    IncidentsModule,
+    MonitoringModule,
+    AuditModule,
+    MetricsModule,
+    DiscoveryModule,
+    TasksModule,
+    // Mirrors FastAPI's StaticFiles mounts: /static -> web/static, /images -> docs/images
+    ServeStaticModule.forRoot(
+      { rootPath: STATIC_DIR, serveRoot: '/static' },
+      { rootPath: IMAGES_DIR, serveRoot: '/images' },
+    ),
+  ],
+  controllers: [AppController],
+  providers: [
+    // Order matters: authenticate first, then check roles.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
+})
+export class AppModule {}

@@ -1,0 +1,103 @@
+/**
+ * Central runtime configuration, loaded from environment variables.
+ * Mirrors src/sentrai/config.py (Settings) and the JWT constants from
+ * api/middleware/auth.py.
+ */
+
+export interface AppConfig {
+  port: number;
+  corsOrigins: string[];
+  appName: string;
+
+  db: {
+    provider: 'sqlite' | 'mariadb';
+    sqlitePath: string;
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+    synchronize: boolean;
+  };
+
+  jwt: {
+    secret: string;
+    algorithm: 'HS256';
+    accessTokenExpireMinutes: number; // 8 hours, matches Python ACCESS_TOKEN_EXPIRE_MINUTES
+    refreshTokenExpireDays: number; // 30 days
+  };
+
+  neo4j: {
+    uri: string;
+    user: string;
+    password: string;
+  };
+
+  // DPDP Act — fields masked in audit logs and responses
+  dpdpPiiFields: string[];
+
+  // Drift monitoring thresholds
+  psiWarningThreshold: number;
+  psiAlertThreshold: number;
+  accuracyDropAlertPct: number;
+
+  // Inventory semi-annual update enforcement (days)
+  inventoryUpdateSlaDays: number;
+}
+
+function bool(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
+export default (): AppConfig => ({
+  port: parseInt(process.env.PORT ?? '8000', 10),
+  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:8000')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  appName: 'RBI SentrAI Compliance Service',
+
+  db: {
+    provider: (process.env.DB_PROVIDER ?? 'sqlite') as 'sqlite' | 'mariadb',
+    sqlitePath: process.env.SQLITE_PATH ?? './dev.db',
+    host: process.env.DB_HOST ?? 'localhost',
+    port: parseInt(process.env.DB_PORT ?? '3306', 10),
+    username: process.env.DB_USER ?? 'sentrai',
+    password: process.env.DB_PASSWORD ?? 'sentrai',
+    database: process.env.DB_NAME ?? 'sentrai_compliance',
+    synchronize: bool(process.env.DB_SYNCHRONIZE, true),
+  },
+
+  jwt: {
+    secret:
+      process.env.JWT_SECRET ??
+      process.env.SENTRAI_JWT_SECRET ??
+      'CHANGE_ME_IN_PRODUCTION_secret_key_32chars',
+    algorithm: 'HS256',
+    accessTokenExpireMinutes: 60 * 8,
+    refreshTokenExpireDays: 30,
+  },
+
+  neo4j: {
+    uri: process.env.NEO4J_URI ?? 'bolt://localhost:7687',
+    user: process.env.NEO4J_USER ?? 'neo4j',
+    password: process.env.NEO4J_PASSWORD ?? 'password',
+  },
+
+  dpdpPiiFields: [
+    'pan',
+    'aadhaar',
+    'mobile',
+    'email',
+    'account_number',
+    'customer_id',
+    'ip_address',
+    'device_id',
+  ],
+
+  psiWarningThreshold: parseFloat(process.env.PSI_WARNING_THRESHOLD ?? '0.10'),
+  psiAlertThreshold: parseFloat(process.env.PSI_ALERT_THRESHOLD ?? '0.20'),
+  accuracyDropAlertPct: parseFloat(process.env.ACCURACY_DROP_ALERT_PCT ?? '0.05'),
+  inventoryUpdateSlaDays: parseInt(process.env.INVENTORY_UPDATE_SLA_DAYS ?? '180', 10),
+});

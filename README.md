@@ -1,59 +1,121 @@
-# SentrAI Compliance Console
+# SentrAI Compliance Console — Node.js (NestJS) Edition
 
-SentrAI Compliance Console is a comprehensive AI governance platform designed to operationalize the RBI's **SentrAI Framework** (*Framework for Responsible and Ethical Enablement of AI*). It bridges the gap between policy and practice by providing actionable tools to discover, track, govern, and monitor AI models across your organization's projects.
+A full port of the Python/FastAPI SentrAI Compliance Console to **NestJS + TypeScript**,
+built so it can be hosted on **Hostinger** (or any Node host) with no Python runtime. It
+serves the original single-page dashboard unchanged and reproduces every API endpoint and
+business rule of the Python backend.
 
-## Core Capabilities
+- **Runtime:** NestJS 10 + TypeScript, Express platform
+- **Database:** TypeORM — **SQLite** locally, **MariaDB/MySQL** in production, chosen from one env var
+- **Auth:** JWT (Passport), bcrypt password hashing, role-based access control
+- **Discovery:** regex + **web-tree-sitter (WASM)** AST scanning, remote GitHub/GitLab scan, k8s/Triton infra scan
+- **Compliance:** 7-Sutras + NIST/EU-AI-Act/ISO-42001 validators, plugin registry
+- **Monitoring:** PSI + 1-D Wasserstein drift math (pure TS), BCP circuit breaker
+- **Extras:** PDF export (pdfkit), Prometheus `/metrics`, DPDP PII masking, scheduled jobs, Neo4j lineage
 
-SentrAI implements the **Governance**, **Protection**, and **Assurance** pillars of the SentrAI framework end-to-end:
+## Quick start (local, SQLite)
 
-* **Discovery & Scanning**: Automatically scan source code to identify AI models, LLM API calls, Machine Learning logic, and FinTech algorithmic patterns.
-* **Model Inventory**: Maintain a centralized registry of all AI models, tracking their lifecycle stages (Design to Decommissioned) and compliance posture.
-* **Governance Enforcement**: Close compliance gaps by declaring model owners, linking board policy references, and ensuring oversight aligns with the 7 Sutras of Responsible AI.
-* **Drift Monitoring**: Evaluate live model performance against training baselines (e.g., PSI, Wasserstein distance) to detect drift and trigger automated circuit breakers.
-* **Auditing**: Perform rigorous audits covering data inputs (bias, consent), model logic, and outputs.
-* **Incident Management**: Track and remediate AI-related incidents (e.g., bias, data leakage, drift) based on severity-driven SLAs.
+```bash
+cp .env.example .env         # DB_PROVIDER=sqlite is the default
+npm install
+npm run start:dev            # http://localhost:8002
+```
 
-## Workflow
+Open http://localhost:8002 and sign in with the seeded admin:
 
-1. **Create Project**: Point to an application's codebase directory.
-2. **Discover Models**: Perform static analysis to find AI components.
-3. **Triage**: Review identified candidates and register genuine models.
-4. **Close Governance Gaps**: Apply governance metadata and ensure compliance.
-5. **Formal Audit**: Run periodic structural and behavioral checks.
-6. **Deploy & Monitor**: Track drift metrics and establish BCP fallbacks.
-7. **Incident Response**: Address any anomalies or policy breaches in real-time.
+- **Email:** `admin@sentrai.local`
+- **Password:** `admin123`
 
-## Getting Started
+API docs (Swagger) are at `/docs`.
 
-### Prerequisites
+## Production build & run
 
-* Python 3.11+
-* PostgreSQL (or SQLite for local development)
+```bash
+npm ci
+npm run build
+npm run start:prod           # node dist/main
+```
 
-### Setup & Run
+## Configuration (`.env`)
 
-1. **Install Dependencies** (It is recommended to use a virtual environment):
-   ```bash
-   pip install -e .
+| Variable | Purpose | Default |
+|---|---|---|
+| `PORT` | HTTP port | `8002` |
+| `CORS_ORIGINS` | Comma-separated allowed origins | `http://localhost:8002` |
+| `DB_PROVIDER` | `sqlite` (local) or `mariadb` (prod) | `sqlite` |
+| `SQLITE_PATH` | SQLite file path (sqlite only) | `./dev.db` |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | MariaDB connection (mariadb only) | — |
+| `DB_SYNCHRONIZE` | Auto-create schema on boot (vs migrations) | `true` |
+| `JWT_SECRET` | HS256 signing secret — **set a strong value in prod** | dev fallback |
+| `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | Optional graph lineage (runs in mock mode if unreachable) | — |
+| `PSI_WARNING_THRESHOLD` / `PSI_ALERT_THRESHOLD` / `INVENTORY_UPDATE_SLA_DAYS` | Thresholds | `0.10` / `0.20` / `180` |
+
+## Deploying on Hostinger
+
+1. In hPanel, create a **Node.js application** (Node 20+), pointing at the repository root.
+   Set the **application startup file** to `dist/main.js` and the **build command**
+   to `npm run build`.
+2. Create a **MariaDB database** from hPanel and note its host/user/password/name.
+3. Set the app's environment variables in hPanel:
    ```
-2. **Environment Setup**:
-   Configure your database connection and other variables in `.env`. (You can copy `.env.example` as a starting point).
-3. **Run the Server**:
-   ```bash
-   uvicorn sentrai.main:app --app-dir src --reload --reload-dir src --port 8000
+   DB_PROVIDER=mariadb
+   DB_HOST=<hostinger db host>
+   DB_PORT=3306
+   DB_USER=<db user>
+   DB_PASSWORD=<db password>
+   DB_NAME=<db name>
+   DB_SYNCHRONIZE=true          # or false + run migrations (see below)
+   JWT_SECRET=<a long random string>
+   CORS_ORIGINS=https://<your-domain>
    ```
-4. **Access the App**:
-   Navigate to `http://localhost:8000` to access the SentrAI dashboard. The API documentation is available at `http://localhost:8000/docs`.
+4. Deploy. On first boot the schema is created (or run migrations) and the default admin is
+   seeded. **Change the admin password immediately** via the Users tab.
 
-## Future Roadmap
+### Schema management
 
-* Automated Red-Teaming & Security Scanning
-* Real-Time Drift Webhooks & Alerting
-* Automated Evidence Collection for Audits
-* Active Bias Mitigation Tools
-* One-Click Regulatory Filings (e.g., RBI Annexures, EU AI Act)
+- **Simple (default):** `DB_SYNCHRONIZE=true` auto-creates/updates tables on boot — fine for
+  a single-instance console.
+- **Controlled:** set `DB_SYNCHRONIZE=false` and manage schema with migrations:
+  ```bash
+  npm run migration:generate -- src/database/migrations/Init
+  npm run migration:run
+  ```
 
----
-*For a detailed overview of the framework and operational guidelines, see the [Help Documentation](docs/HELP.md).*
+## Architecture
 
-# For Demo visit [Dhancept](http://www.dhancept.com)
+```
+src/
+  main.ts, app.module.ts        bootstrap, global JWT + roles guards, static serving, Swagger
+  config/                       env-driven configuration
+  common/                       enums, decorators (@Public, @Roles, @CurrentUser), guards, dpdp, password
+  database/                     TypeORM entities, dual-DB DataSource factory, admin seed
+  auth/                         JWT strategy, login/refresh/register/me
+  organizations/ users/ projects/ inventory/ incidents/ monitoring/ audit/ metrics/
+  compliance/                   sutras + framework validators, plugin registry, PDF generator
+  domain/                       triage, drift math, incident SLA, audit-trail factory (pure logic)
+  discovery/                    scanner, tree-sitter, connectors, agents, neo4j
+  tasks/                        scheduled cron jobs
+public/                         the original dashboard (index.html, static/, docs/)
+```
+
+## Tests
+
+```bash
+npm test                       # unit tests (drift math, validators, plugins, triage)
+npm run test:e2e               # supertest end-to-end over an in-memory SQLite DB
+```
+
+## Notable fixes vs. the Python original
+
+- **`/metrics` drift alerts:** the Python code compared drift status against lowercase strings
+  that never matched the uppercase `DriftStatus` values, so it always reported `0`. Fixed to
+  count `WARNING`, `CIRCUIT_BREAKER_TRIPPED`, and `HUMAN_REVIEW_REQUIRED`.
+- **PDF export endpoint** is public (the dashboard opens it via a plain `<a href>` that cannot
+  carry a bearer token; the model id is an unguessable UUID). In the Python app that link
+  returned 401.
+- **`/auth/me`** returns the real `full_name` (the access token now carries a `name` claim);
+  the Python version returned an empty string.
+- **RBI plugin** now builds a complete model entry so it actually evaluates the sutras (the
+  Python version always hit an exception branch and returned an error placeholder).
+- **Tree-sitter** degrades gracefully to regex-only if the WASM grammars can't load, so the
+  app never hard-fails on a restricted host (the Python import was unguarded).
