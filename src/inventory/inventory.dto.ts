@@ -48,6 +48,14 @@ export class RescanDto {
   @IsOptional() @IsString() project_id?: string | null;
 }
 
+/** An evidence artifact attached to a model (bias-test report, red-team report, ...). */
+export class EvidenceDto {
+  @IsString() type!: string; // 'bias_test' | 'red_team' | 'model_card' | 'dpia' | ...
+  @IsString() ref!: string; // URL or document reference
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() actor: string = 'dashboard_user';
+}
+
 export interface RescanResultRow {
   model_id: string;
   name: string;
@@ -82,4 +90,6 @@ export interface ModelResponse {
   autonomous_scope: string | null;
   last_red_team_date: Date | null;
   sutras_alignment: string[];
+  /** Set when the org crossed its plan's soft model limit (registration never blocks). */
+  plan_warning?: string | null;
 }

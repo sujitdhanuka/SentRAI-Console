@@ -43,6 +43,13 @@ export interface AppConfig {
 
   // Inventory semi-annual update enforcement (days)
   inventoryUpdateSlaDays: number;
+
+  // Outbound webhook for governance notifications (breaker trips, overdue
+  // incidents, staleness, plan soft limits). Unset = log-only.
+  webhookUrl: string | null;
+
+  // EU AI Act high-risk functional areas (comma-separated env override)
+  euAiActHighRiskDomains: string[];
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -100,4 +107,14 @@ export default (): AppConfig => ({
   psiAlertThreshold: parseFloat(process.env.PSI_ALERT_THRESHOLD ?? '0.20'),
   accuracyDropAlertPct: parseFloat(process.env.ACCURACY_DROP_ALERT_PCT ?? '0.05'),
   inventoryUpdateSlaDays: parseInt(process.env.INVENTORY_UPDATE_SLA_DAYS ?? '180', 10),
+
+  webhookUrl: process.env.WEBHOOK_URL?.trim() || null,
+
+  euAiActHighRiskDomains: (
+    process.env.EU_AI_ACT_HIGH_RISK_DOMAINS ??
+    'credit_underwriting,loan_decisioning,fund_movement,credit_scoring,insurance_pricing'
+  )
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
 });

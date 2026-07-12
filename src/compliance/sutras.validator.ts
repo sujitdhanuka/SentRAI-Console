@@ -3,7 +3,7 @@
  * foundational principles. Port of src/sentrai/compliance/sutras_validator.py.
  */
 import { RiskLevel, SutraAlignment } from '../common/enums';
-import { AIModelEntry } from '../domain/model-inventory';
+import { AIModelEntry, hasEvidence } from '../domain/model-inventory';
 
 export interface SutraCheck {
   sutra: SutraAlignment;
@@ -84,13 +84,25 @@ export function validateSutrasCompliance(entry: AIModelEntry): SutrasComplianceR
     mandatory: true,
   });
 
-  // Sutra 4: Fairness and Equity — sutras alignment declared
-  const fairnessOk = entry.sutrasAlignment.includes(SutraAlignment.FAIRNESS);
+  // Sutra 4: Fairness and Equity — evidence over attestation. MEDIUM/HIGH risk
+  // needs an attached bias-test artifact; a self-declared flag only suffices
+  // for LOW risk models.
+  const fairnessEvidence = hasEvidence(entry, 'bias_test');
+  const fairnessDeclared = entry.sutrasAlignment.includes(SutraAlignment.FAIRNESS);
+  const fairnessOk = isMedOrHigh ? fairnessEvidence : fairnessEvidence || fairnessDeclared;
   checks.push({
     sutra: SutraAlignment.FAIRNESS,
     passed: fairnessOk,
-    evidence: fairnessOk ? 'Fairness sutra declared in model registration' : '',
-    gap: fairnessOk ? '' : 'Fairness & Equity sutra not declared. Bias testing must be documented.',
+    evidence: fairnessOk
+      ? fairnessEvidence
+        ? 'Bias-test report attached as evidence artifact'
+        : 'Fairness sutra declared in model registration'
+      : '',
+    gap: fairnessOk
+      ? ''
+      : isMedOrHigh
+        ? 'No bias-test evidence attached. MEDIUM/HIGH risk requires a documented bias-test artifact, not a declaration.'
+        : 'Fairness & Equity sutra not declared. Bias testing must be documented.',
     mandatory: isMedOrHigh,
   });
 
@@ -117,12 +129,20 @@ export function validateSutrasCompliance(entry: AIModelEntry): SutrasComplianceR
     mandatory: isMedOrHigh,
   });
 
-  // Sutra 7: Safety, Resilience, Sustainability — red-team for HIGH
-  const safetyOk = entry.riskLevel === RiskLevel.HIGH ? entry.lastRedTeamDate !== null : true;
+  // Sutra 7: Safety, Resilience, Sustainability — red-team for HIGH (a date
+  // on record or an attached red-team report both count as evidence).
+  const safetyOk =
+    entry.riskLevel === RiskLevel.HIGH
+      ? entry.lastRedTeamDate !== null || hasEvidence(entry, 'red_team')
+      : true;
   checks.push({
     sutra: SutraAlignment.SAFETY,
     passed: safetyOk,
-    evidence: safetyOk ? `Last red-team: ${entry.lastRedTeamDate}` : '',
+    evidence: safetyOk
+      ? entry.lastRedTeamDate
+        ? `Last red-team: ${entry.lastRedTeamDate}`
+        : 'Red-team report attached as evidence artifact'
+      : '',
     gap: safetyOk
       ? ''
       : 'HIGH risk model with no red-team exercise on record. REC 20 mandates semi-annual red-teaming.',

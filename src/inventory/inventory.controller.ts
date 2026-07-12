@@ -20,6 +20,7 @@ import { CurrentUser as CurrentUserType } from '../common/interfaces/current-use
 import { RiskLevel } from '../common/enums';
 import { InventoryService } from './inventory.service';
 import {
+  EvidenceDto,
   GovernanceUpdateDto,
   GrievanceUpdateDto,
   LifecycleUpdateDto,
@@ -69,11 +70,12 @@ export class InventoryController {
   @Delete('models/:modelId')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(
+    @CurrentUser() user: CurrentUserType,
     @Param('modelId') modelId: string,
     @Query('permanent') permanent?: string,
     @Query('actor') actor = 'dashboard_user',
   ): Promise<void> {
-    return this.inventory.remove(modelId, permanent === 'true' || permanent === '1', actor);
+    return this.inventory.remove(user, modelId, permanent === 'true' || permanent === '1', actor);
   }
 
   @Patch('models/:modelId/grievances')
@@ -89,6 +91,24 @@ export class InventoryController {
   @Get('models/:modelId/compliance-check')
   complianceCheck(@Param('modelId') modelId: string) {
     return this.inventory.complianceCheck(modelId);
+  }
+
+  /** Attach an evidence artifact — bias-test report, red-team report, model card. */
+  @Post('models/:modelId/evidence')
+  @HttpCode(HttpStatus.CREATED)
+  addEvidence(@Param('modelId') modelId: string, @Body() dto: EvidenceDto) {
+    return this.inventory.addEvidence(modelId, dto, dto.actor);
+  }
+
+  @Get('models/:modelId/evidence')
+  listEvidence(@Param('modelId') modelId: string) {
+    return this.inventory.listEvidence(modelId);
+  }
+
+  /** Model usage vs. the organization's plan limit (soft limits only). */
+  @Get('organizations/:orgId/usage')
+  orgUsage(@Param('orgId') orgId: string) {
+    return this.inventory.orgUsage(orgId);
   }
 
   @Get('models/:modelId/ledger')

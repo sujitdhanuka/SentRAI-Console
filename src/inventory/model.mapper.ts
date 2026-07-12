@@ -34,5 +34,6 @@ export function modelEntityToEntry(orm: AIModelEntity): AIModelEntry {
     updatedAt: orm.updatedAt,
     isActive: orm.isActive,
     projectId: orm.projectId,
+    evidenceArtifacts: orm.evidenceArtifacts ?? [],
   };
 }

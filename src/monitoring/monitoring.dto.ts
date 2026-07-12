@@ -1,5 +1,12 @@
-import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { DriftStatus } from '../common/enums';
+
+/** A window of inference scores pushed by a serving system for drift evaluation. */
+export class ScoreIngestDto {
+  @IsIn(['reference', 'live']) kind!: 'reference' | 'live';
+  @IsArray() @IsNumber({}, { each: true }) scores!: number[];
+  @IsOptional() @IsNumber() accuracy?: number | null;
+}
 
 export class DriftEvaluationDto {
   @IsString() model_id!: string;

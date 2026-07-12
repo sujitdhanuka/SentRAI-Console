@@ -1,12 +1,33 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AIModelEntity, ModelLedgerEventEntity, ProjectEntity, PromptEntity } from '../database/entities';
+import { ConfigService } from '@nestjs/config';
+import { LessThan, Not } from 'typeorm';
+
+import {
+  AIIncidentEntity,
+  AIModelEntity,
+  BcpStateEntity,
+  DriftReportEntity,
+  ModelLedgerEventEntity,
+  OrganizationEntity,
+  ProjectEntity,
+  PromptEntity,
+} from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
-import { ModelLifecycleStage, RiskLevel, Role, SutraAlignment } from '../common/enums';
-import { AIModelEntry, triageAiModel } from '../domain/model-inventory';
+import { IncidentStatus, ModelLifecycleStage, RiskLevel, Role, SutraAlignment } from '../common/enums';
+import { maskDict } from '../common/dpdp';
+import { NotifierService } from '../common/notifier.service';
+import { AIModelEntry, EvidenceArtifact, triageAiModel } from '../domain/model-inventory';
+import { ValidationContext } from '../compliance/frameworks.validator';
 import { modelEntityToEntry } from './model.mapper';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { DiscoveredCandidate, scanDirectory } from '../discovery/codebase-scanner';
@@ -39,6 +60,13 @@ function parseDate(s?: string | null): Date | null {
 
 const RISK_ORDER: Record<string, number> = { [RiskLevel.LOW]: 0, [RiskLevel.MEDIUM]: 1, [RiskLevel.HIGH]: 2 };
 
+/** Plan → active-model soft limit (null = unlimited). Never blocks anything. */
+const PLAN_MODEL_LIMITS: Record<string, number | null> = {
+  COMMUNITY: 10,
+  GROWTH: 100,
+  ENTERPRISE: null,
+};
+
 @Injectable()
 export class InventoryService {
   constructor(
@@ -46,8 +74,52 @@ export class InventoryService {
     @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     @InjectRepository(PromptEntity) private readonly prompts: Repository<PromptEntity>,
+    @InjectRepository(DriftReportEntity) private readonly drifts: Repository<DriftReportEntity>,
+    @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
+    @InjectRepository(BcpStateEntity) private readonly bcpStates: Repository<BcpStateEntity>,
+    @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
     private readonly treeSitter: TreeSitterService,
+    private readonly notifier: NotifierService,
+    private readonly config: ConfigService,
   ) {}
+
+  /** Append a ledger event; eventData is PII-masked before persistence. */
+  private async recordLedger(modelId: string, eventType: string, eventData: Record<string, any>, actor: string): Promise<void> {
+    await this.ledger.save(this.ledger.create({
+      id: uuidv4(),
+      modelId,
+      eventType,
+      eventData: maskDict(eventData),
+      actor,
+      occurredAt: new Date(),
+    }));
+  }
+
+  /** Gather operational evidence for framework validators (Art-12, MEASURE-2.2, ...). */
+  async buildValidationContext(modelId: string): Promise<ValidationContext> {
+    const [ledgerEventCount, driftReportCount, lastDrift, overdueIncidentCount, bcpState] = await Promise.all([
+      this.ledger.count({ where: { modelId } }),
+      this.drifts.count({ where: { modelId } }),
+      this.drifts.findOne({ where: { modelId }, order: { computedAt: 'DESC' } }),
+      this.incidents.count({
+        where: {
+          modelId,
+          reportingDeadline: LessThan(new Date()),
+          reportedAt: IsNull(),
+          status: Not(IncidentStatus.CLOSED),
+        },
+      }),
+      this.bcpStates.findOne({ where: { modelId } }),
+    ]);
+    return {
+      ledgerEventCount,
+      driftReportCount,
+      lastDriftAt: lastDrift?.computedAt ?? null,
+      overdueIncidentCount,
+      bcpConfigured: Boolean(bcpState),
+      euHighRiskDomains: this.config.get<string[]>('euAiActHighRiskDomains'),
+    };
+  }
 
   private buildResponse(orm: AIModelEntity, triagedRisk?: RiskLevel): ModelResponse {
     const report = validateSutrasCompliance(modelEntityToEntry(orm));
@@ -155,7 +227,71 @@ export class InventoryService {
       occurredAt: entry.registeredAt,
     }));
 
-    return this.buildResponse(orm, triaged);
+    const planWarning = await this.checkPlanSoftLimit(entry.projectId);
+    return { ...this.buildResponse(orm, triaged), plan_warning: planWarning };
+  }
+
+  /**
+   * Plan soft limit: registration NEVER blocks — crossing the plan's model
+   * limit warns in the response, notifies the org (throttled to weekly), and
+   * starts the 30-day grace window. Compliance features stay on regardless.
+   */
+  private async checkPlanSoftLimit(projectId: string | null): Promise<string | null> {
+    if (!projectId) return null;
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (!project?.tenantId) return null;
+    const org = await this.orgs.findOne({ where: { id: project.tenantId } });
+    if (!org) return null;
+
+    const limit = PLAN_MODEL_LIMITS[org.plan ?? 'COMMUNITY'];
+    if (limit === null || limit === undefined) return null;
+
+    const activeCount = await this.models
+      .createQueryBuilder('m')
+      .innerJoin(ProjectEntity, 'p', 'p.id = m.projectId')
+      .where('p.tenantId = :tid AND m.isActive = 1', { tid: org.id })
+      .getCount();
+    if (activeCount <= limit) return null;
+
+    const warning =
+      `Organization '${org.name}' has ${activeCount} active models — over the ${org.plan} plan limit of ${limit}. ` +
+      `A 30-day grace window applies; compliance monitoring is unaffected.`;
+
+    const weekAgo = Date.now() - 7 * 86_400_000;
+    if (!org.limitNotifiedAt || org.limitNotifiedAt.getTime() < weekAgo) {
+      org.limitNotifiedAt = new Date();
+      await this.orgs.save(org);
+      await this.notifier.notify('plan_soft_limit_exceeded', {
+        organization_id: org.id,
+        organization: org.name,
+        plan: org.plan,
+        limit,
+        active_models: activeCount,
+        grace_days: 30,
+      });
+    }
+    return warning;
+  }
+
+  /** Model usage vs. plan limit for an organization (soft limits only). */
+  async orgUsage(orgId: string) {
+    const org = await this.orgs.findOne({ where: { id: orgId } });
+    if (!org) throw new NotFoundException('Organization not found');
+    const limit = PLAN_MODEL_LIMITS[org.plan ?? 'COMMUNITY'] ?? null;
+    const activeModels = await this.models
+      .createQueryBuilder('m')
+      .innerJoin(ProjectEntity, 'p', 'p.id = m.projectId')
+      .where('p.tenantId = :tid AND m.isActive = 1', { tid: org.id })
+      .getCount();
+    return {
+      organization_id: org.id,
+      organization: org.name,
+      plan: org.plan ?? 'COMMUNITY',
+      model_limit: limit,
+      active_models: activeModels,
+      over_limit: limit !== null && activeModels > limit,
+      limit_notified_at: org.limitNotifiedAt ? org.limitNotifiedAt.toISOString() : null,
+    };
   }
 
   async list(
@@ -180,8 +316,38 @@ export class InventoryService {
     return orm;
   }
 
+  /**
+   * Governance gate (REC 14/16): a model cannot be promoted to a live stage
+   * (DEPLOYED / MONITORING) until its accountability chain is complete.
+   * Discovery may create ungoverned drafts, but nothing ungoverned goes live.
+   */
+  private governanceGaps(orm: AIModelEntity): string[] {
+    const missing: string[] = [];
+    if (!orm.ownerTeam || orm.ownerTeam.toLowerCase().includes('unassigned')) {
+      missing.push('owner_team — a named owner team is required');
+    }
+    if (!orm.boardPolicyRef || !orm.boardPolicyRef.trim()) {
+      missing.push('board_policy_ref — a board-approved AI policy reference is required');
+    }
+    const isMedOrHigh = orm.riskLevel === RiskLevel.MEDIUM || orm.riskLevel === RiskLevel.HIGH;
+    if (isMedOrHigh && !orm.humanOversightRequired && !orm.autonomousScope) {
+      missing.push('human_oversight_required or autonomous_scope — MEDIUM/HIGH risk needs oversight or a defined autonomous scope');
+    }
+    return missing;
+  }
+
   async updateLifecycle(modelId: string, dto: LifecycleUpdateDto) {
     const orm = await this.getOrThrow(modelId);
+    const liveStages = [ModelLifecycleStage.DEPLOYED, ModelLifecycleStage.MONITORING];
+    if (liveStages.includes(dto.stage)) {
+      const missing = this.governanceGaps(orm);
+      if (missing.length > 0) {
+        throw new UnprocessableEntityException({
+          message: `Model cannot move to ${dto.stage} until governance is complete.`,
+          missing_fields: missing,
+        });
+      }
+    }
     const prev = orm.lifecycleStage;
     orm.lifecycleStage = dto.stage;
     orm.updatedAt = new Date();
@@ -197,10 +363,22 @@ export class InventoryService {
     return { model_id: modelId, stage: dto.stage, actor: dto.actor };
   }
 
-  async remove(modelId: string, permanent: boolean, actor: string): Promise<void> {
+  async remove(user: CurrentUser, modelId: string, permanent: boolean, actor: string): Promise<void> {
     const orm = await this.getOrThrow(modelId);
     if (permanent) {
-      await this.ledger.delete({ modelId });
+      // The ledger is append-only: purging a model removes the inventory row
+      // but its full event history — plus a tombstone — is kept for audit.
+      if (user.role !== Role.ADMIN && user.role !== Role.CISO) {
+        throw new ForbiddenException('Only ADMIN or CISO roles may permanently purge a model.');
+      }
+      await this.ledger.save(this.ledger.create({
+        id: uuidv4(),
+        modelId,
+        eventType: 'MODEL_PURGED',
+        eventData: { name: orm.name, risk_level: orm.riskLevel, purged_by_role: user.role },
+        actor,
+        occurredAt: new Date(),
+      }));
       await this.models.delete({ id: modelId });
     } else {
       orm.isActive = false;
@@ -294,10 +472,11 @@ export class InventoryService {
     }
 
     const finalEntry = modelEntityToEntry(orm);
+    const ctx = await this.buildValidationContext(modelId);
     const compliance = sutrasReportAsDict(validateSutrasCompliance(finalEntry));
-    compliance.nist_rmf = frameworkReportAsDict(validateNistRmf(finalEntry));
-    compliance.eu_ai_act = frameworkReportAsDict(validateEuAiAct(finalEntry));
-    compliance.iso_42001 = frameworkReportAsDict(validateIso42001(finalEntry));
+    compliance.nist_rmf = frameworkReportAsDict(validateNistRmf(finalEntry, ctx));
+    compliance.eu_ai_act = frameworkReportAsDict(validateEuAiAct(finalEntry, ctx));
+    compliance.iso_42001 = frameworkReportAsDict(validateIso42001(finalEntry, ctx));
 
     return {
       model_id: modelId,
@@ -310,11 +489,33 @@ export class InventoryService {
   async complianceCheck(modelId: string): Promise<Record<string, any>> {
     const orm = await this.getOrThrow(modelId);
     const entry = modelEntityToEntry(orm);
+    const ctx = await this.buildValidationContext(modelId);
     const res = sutrasReportAsDict(validateSutrasCompliance(entry));
-    res.nist_rmf = frameworkReportAsDict(validateNistRmf(entry));
-    res.eu_ai_act = frameworkReportAsDict(validateEuAiAct(entry));
-    res.iso_42001 = frameworkReportAsDict(validateIso42001(entry));
+    res.nist_rmf = frameworkReportAsDict(validateNistRmf(entry, ctx));
+    res.eu_ai_act = frameworkReportAsDict(validateEuAiAct(entry, ctx));
+    res.iso_42001 = frameworkReportAsDict(validateIso42001(entry, ctx));
     return res;
+  }
+
+  /** Attach an evidence artifact (bias-test report, red-team report, ...). */
+  async addEvidence(modelId: string, dto: { type: string; ref: string; description?: string }, actor: string) {
+    const orm = await this.getOrThrow(modelId);
+    const artifact: EvidenceArtifact = {
+      type: dto.type,
+      ref: dto.ref,
+      description: dto.description,
+      added_at: new Date().toISOString(),
+    };
+    orm.evidenceArtifacts = [...(orm.evidenceArtifacts ?? []), artifact];
+    orm.updatedAt = new Date();
+    await this.models.save(orm);
+    await this.recordLedger(modelId, 'EVIDENCE_ATTACHED', { type: dto.type, ref: dto.ref }, actor);
+    return { model_id: modelId, evidence_count: orm.evidenceArtifacts.length, artifact };
+  }
+
+  async listEvidence(modelId: string) {
+    const orm = await this.getOrThrow(modelId);
+    return { model_id: modelId, evidence: orm.evidenceArtifacts ?? [] };
   }
 
   async getLedger(modelId: string): Promise<any[]> {
@@ -330,7 +531,8 @@ export class InventoryService {
 
   async exportPdf(modelId: string): Promise<Buffer> {
     const orm = await this.getOrThrow(modelId);
-    return generateCompliancePdf(modelEntityToEntry(orm));
+    const ctx = await this.buildValidationContext(modelId);
+    return generateCompliancePdf(modelEntityToEntry(orm), ctx);
   }
 
   /**

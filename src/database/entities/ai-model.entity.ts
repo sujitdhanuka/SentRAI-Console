@@ -76,6 +76,10 @@ export class AIModelEntity {
   @Column('varchar', { length: 500, nullable: true })
   sourceRef!: string | null;
 
+  /** Attached evidence artifacts: bias-test reports, red-team reports, etc. */
+  @Column('simple-json', { nullable: true })
+  evidenceArtifacts!: Array<{ type: string; ref: string; description?: string; added_at: string }> | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

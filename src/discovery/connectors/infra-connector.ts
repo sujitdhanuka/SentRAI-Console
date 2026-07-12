@@ -56,11 +56,10 @@ export class InfrastructureDiscoveryConnector {
       }
       return candidates;
     } catch (e) {
-      logger.log(`Kubernetes client fallback: ${String(e)}`);
-      return [
-        { name: 'credit-risk-predictor', deployment_name: 'credit-predictor-deploy', replicas: 3, risk_level: 'HIGH' },
-        { name: 'customer-sentiment-analyzer', deployment_name: 'sentiment-deploy', replicas: 2, risk_level: 'MEDIUM' },
-      ];
+      // Never fabricate discoveries: an unreachable cluster returns an empty
+      // result with a status the caller can surface, not demo data.
+      logger.warn(`Kubernetes scan unavailable (${String(e)}); returning empty result`);
+      return [];
     }
   }
 }

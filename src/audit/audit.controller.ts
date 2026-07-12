@@ -1,6 +1,8 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums';
 import { AuditService } from './audit.service';
 import { AuditChecklistDto, AuditFindingDto, AuditResponse, ExplainabilityDto } from './audit.dto';
 
@@ -33,5 +35,21 @@ export class AuditController {
   @Post('explainability/record')
   recordExplainability(@Body() dto: ExplainabilityDto) {
     return this.audit.recordExplainability(dto);
+  }
+
+  @Get('explainability/records')
+  listExplainability(@Query('decision_ref') decisionRef?: string, @Query('limit') limit?: string) {
+    return this.audit.listExplainability(decisionRef, limit ? parseInt(limit, 10) : 50);
+  }
+
+  /** Global audit-event stream: one row per mutating API action, PII-masked. */
+  @Get('events')
+  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER)
+  listEvents(
+    @Query('actor') actor?: string,
+    @Query('path') path?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.audit.listEvents({ actor, path, limit: limit ? parseInt(limit, 10) : 100 });
   }
 }

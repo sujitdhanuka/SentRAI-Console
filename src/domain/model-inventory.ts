@@ -33,6 +33,20 @@ export interface AIModelEntry {
   updatedAt: Date;
   isActive: boolean;
   projectId: string | null;
+  /** Attached evidence artifacts (bias-test reports, red-team reports, ...). */
+  evidenceArtifacts?: EvidenceArtifact[];
+}
+
+export interface EvidenceArtifact {
+  type: string; // e.g. 'bias_test' | 'red_team' | 'model_card' | 'dpia'
+  ref: string; // URL or document reference
+  description?: string;
+  added_at: string;
+}
+
+/** True when the entry carries an attached evidence artifact of the given type. */
+export function hasEvidence(entry: AIModelEntry, type: string): boolean {
+  return (entry.evidenceArtifacts ?? []).some((a) => a.type === type);
 }
 
 const HIGH_USE_CASES = new Set([

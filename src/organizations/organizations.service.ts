@@ -5,7 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { OrganizationEntity } from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
-import { CreateOrganizationDto, OrganizationResponse } from './organizations.dto';
+import { CreateOrganizationDto, OrganizationResponse, UpdatePlanDto } from './organizations.dto';
+import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class OrganizationsService {
@@ -15,7 +16,26 @@ export class OrganizationsService {
   ) {}
 
   private toResponse(o: OrganizationEntity): OrganizationResponse {
-    return { organization_id: o.id, name: o.name, description: o.description, created_at: o.createdAt };
+    return {
+      organization_id: o.id,
+      name: o.name,
+      description: o.description,
+      plan: o.plan ?? 'COMMUNITY',
+      created_at: o.createdAt,
+    };
+  }
+
+  async updatePlan(user: CurrentUser, orgId: string, dto: UpdatePlanDto): Promise<OrganizationResponse> {
+    if (user.tenantId !== null) {
+      throw new ForbiddenException('Only Global Admins can change an organization plan');
+    }
+    const org = await this.orgs.findOne({ where: { id: orgId } });
+    if (!org) throw new NotFoundException('Organization not found');
+    org.plan = dto.plan;
+    org.limitNotifiedAt = null; // reset the grace/notification cycle on plan change
+    org.updatedAt = new Date();
+    await this.orgs.save(org);
+    return this.toResponse(org);
   }
 
   async list(user: CurrentUser): Promise<OrganizationResponse[]> {

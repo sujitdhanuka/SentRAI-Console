@@ -9,12 +9,13 @@ import PDFDocument from 'pdfkit';
 import { AIModelEntry } from '../domain/model-inventory';
 import {
   FrameworkComplianceReport,
+  ValidationContext,
   validateEuAiAct,
   validateIso42001,
   validateNistRmf,
 } from './frameworks.validator';
 
-export function generateCompliancePdf(entry: AIModelEntry): Promise<Buffer> {
+export function generateCompliancePdf(entry: AIModelEntry, ctx: ValidationContext = {}): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
     const chunks: Buffer[] = [];
@@ -45,9 +46,9 @@ export function generateCompliancePdf(entry: AIModelEntry): Promise<Buffer> {
       }
     };
 
-    const nist = validateNistRmf(entry);
-    const eu = validateEuAiAct(entry);
-    const iso = validateIso42001(entry);
+    const nist = validateNistRmf(entry, ctx);
+    const eu = validateEuAiAct(entry, ctx);
+    const iso = validateIso42001(entry, ctx);
 
     section('NIST AI RMF 1.0 Compliance Checklist', nist);
     section('EU AI Act Compliance Checklist', eu, `Assessed Risk Tier: ${eu.riskTier}`);

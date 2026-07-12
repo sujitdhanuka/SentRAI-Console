@@ -3,7 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AIAuditTrailEntity, AIModelEntity } from '../database/entities';
+import {
+  AIAuditTrailEntity,
+  AIModelEntity,
+  AuditEventEntity,
+  ExplainabilityRecordEntity,
+} from '../database/entities';
 import { RiskLevel } from '../common/enums';
 import { generateAuditTrailPayload } from '../domain/audit';
 import { AuditChecklistDto, AuditFindingDto, AuditResponse, ExplainabilityDto } from './audit.dto';
@@ -21,7 +26,29 @@ export class AuditService {
   constructor(
     @InjectRepository(AIAuditTrailEntity) private readonly audits: Repository<AIAuditTrailEntity>,
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
+    @InjectRepository(ExplainabilityRecordEntity)
+    private readonly explainability: Repository<ExplainabilityRecordEntity>,
+    @InjectRepository(AuditEventEntity) private readonly events: Repository<AuditEventEntity>,
   ) {}
+
+  /** Query the global audit-event stream (one row per mutating API action). */
+  async listEvents(opts: { actor?: string; path?: string; limit?: number }) {
+    const qb = this.events.createQueryBuilder('e').orderBy('e.occurredAt', 'DESC').take(opts.limit ?? 100);
+    if (opts.actor) qb.andWhere('e.actor LIKE :actor', { actor: `%${opts.actor}%` });
+    if (opts.path) qb.andWhere('e.path LIKE :path', { path: `%${opts.path}%` });
+    const rows = await qb.getMany();
+    return rows.map((r) => ({
+      event_id: r.id,
+      actor: r.actor,
+      actor_role: r.actorRole,
+      method: r.method,
+      path: r.path,
+      status_code: r.statusCode,
+      outcome: r.outcome,
+      payload_summary: r.payloadSummary,
+      occurred_at: r.occurredAt.toISOString(),
+    }));
+  }
 
   async list(modelId: string): Promise<any[]> {
     const rows = await this.audits.find({ where: { modelId }, order: { createdAt: 'DESC' } });
@@ -152,20 +179,47 @@ export class AuditService {
     return { audit_id: auditId, finding_id: finding.finding_id, verdict: audit.overallVerdict };
   }
 
-  recordExplainability(dto: ExplainabilityDto) {
-    const topFeature = Object.keys(dto.top_features).length
-      ? Object.entries(dto.top_features).sort((a, b) => b[1] - a[1])[0][0]
-      : null;
-    this.logger.log(
-      `explainability_recorded decision_ref=${dto.decision_ref} outcome=${dto.decision_outcome} ` +
-        `top_feature=${topFeature} contestable=${dto.is_contestable}`,
-    );
+  async recordExplainability(dto: ExplainabilityDto) {
+    const now = new Date();
+    const row = await this.explainability.save(this.explainability.create({
+      id: uuidv4(),
+      decisionRef: dto.decision_ref,
+      decisionOutcome: dto.decision_outcome,
+      confidenceScore: dto.confidence_score,
+      topFeatures: dto.top_features,
+      explanationMethod: dto.explanation_method ?? 'SHAP',
+      humanReadableSummary: dto.human_readable_summary,
+      isContestable: dto.is_contestable ?? true,
+      createdAt: now,
+    }));
+    this.logger.log(`explainability_recorded id=${row.id} decision_ref=${dto.decision_ref}`);
     return {
+      record_id: row.id,
       decision_ref: dto.decision_ref,
       outcome: dto.decision_outcome,
       confidence: dto.confidence_score,
-      is_contestable: dto.is_contestable,
-      generated_at: new Date().toISOString(),
+      is_contestable: row.isContestable,
+      generated_at: now.toISOString(),
     };
+  }
+
+  /** List persisted explainability records, newest first (REC 24 evidence). */
+  async listExplainability(decisionRef?: string, limit = 50) {
+    const rows = await this.explainability.find({
+      where: decisionRef ? { decisionRef } : {},
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+    return rows.map((r) => ({
+      record_id: r.id,
+      decision_ref: r.decisionRef,
+      outcome: r.decisionOutcome,
+      confidence: r.confidenceScore,
+      top_features: r.topFeatures,
+      explanation_method: r.explanationMethod,
+      human_readable_summary: r.humanReadableSummary,
+      is_contestable: r.isContestable,
+      created_at: r.createdAt.toISOString(),
+    }));
   }
 }

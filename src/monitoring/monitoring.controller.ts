@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { MonitoringService } from './monitoring.service';
-import { BcpActivateDto, DriftEvaluationDto, DriftReportResponse } from './monitoring.dto';
+import { BcpActivateDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
 
 @ApiTags('Model Monitoring & Drift')
 @ApiBearerAuth()
@@ -13,6 +13,12 @@ export class MonitoringController {
   @Post('drift/evaluate')
   evaluateDrift(@Body() dto: DriftEvaluationDto): Promise<DriftReportResponse> {
     return this.monitoring.evaluateDrift(dto);
+  }
+
+  /** Push a reference/live score window; the hourly job evaluates pending windows. */
+  @Post('scores/:modelId')
+  ingestScores(@Param('modelId') modelId: string, @Body() dto: ScoreIngestDto) {
+    return this.monitoring.ingestScores(modelId, dto);
   }
 
   @Get('drift/:modelId/history')

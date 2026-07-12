@@ -231,7 +231,7 @@
         </div>
         <div class="stat">
           <div class="num">100%</div><div class="lbl">Actions audit-logged</div>
-          <div class="det">append-only, exportable evidence</div>
+          <div class="det">every mutating action, PII-masked</div>
         </div>
       </div>
     </div>
@@ -276,9 +276,10 @@
             procurement alike.
           </p>
           <p class="checks">
-            <b>SentrAI validates:</b> that every model has the governance artifacts each function
-            expects — assigned accountability (Govern), documented context and purpose (Map),
-            drift and bias measurement (Measure), and incident response with SLAs (Manage).
+            <b>SentrAI validates:</b> ten controls across the four functions — ownership, board
+            policy and audit cadence (Govern); documented purpose, context and provenance (Map);
+            red-team recency and live drift measurement (Measure); oversight gates, fallback
+            plans and incident-reporting hygiene (Manage).
           </p>
         </div>
         <div class="juris">
@@ -293,9 +294,10 @@
             with duties for documentation, record-keeping, human oversight, and robustness.
           </p>
           <p class="checks">
-            <b>SentrAI validates:</b> each model's risk classification and the high-risk
-            obligations behind it — technical documentation, automatic record-keeping,
-            human-oversight mechanisms, and accuracy/robustness monitoring.
+            <b>SentrAI validates:</b> each model's risk classification (with a configurable
+            high-risk domain list) and six high-risk obligations — risk management, bias-tested
+            data governance, technical documentation, automatic record-keeping from its own
+            ledger and drift logs, human oversight, and robustness monitoring.
           </p>
         </div>
         <div class="juris">
@@ -347,7 +349,7 @@
         <div class="pipe-step">
           <div class="n">04 · MONITOR</div>
           <h3>Catch drift early</h3>
-          <p>PSI and Wasserstein drift detection with a business-continuity circuit breaker that pulls humans in before a drifting model does damage.</p>
+          <p>Your serving layer pushes score windows to the API; an hourly job runs PSI + Wasserstein drift checks, trips a persistent circuit breaker, and fires a webhook with a human-review ticket.</p>
         </div>
         <div class="pipe-step">
           <div class="n">05 · AUDIT</div>
@@ -377,7 +379,7 @@
             <span class="chip">🇪🇺 Art. 16 · provider duties</span>
             <span class="chip">🌐 ISO 42001</span>
           </div>
-          <div class="how"><b>Enforced by:</b> no model can exist in the inventory without a named owner and a risk tier. Incidents carry SLA clocks that are tracked to closure.</div>
+          <div class="how"><b>Enforced by:</b> no model can be promoted to a live stage without a named owner, a board policy reference, and a risk tier — the API refuses the promotion and lists exactly what's missing. Incidents carry SLA clocks tracked to closure.</div>
         </div>
         <div class="prin">
           <h3><span class="num">2</span>Human oversight</h3>
@@ -387,7 +389,7 @@
             <span class="chip">🇪🇺 Art. 14 · human oversight</span>
             <span class="chip">🌐 ISO 42001</span>
           </div>
-          <div class="how"><b>Enforced by:</b> when drift crosses the alert threshold, a circuit breaker trips and the model is flagged for mandatory human review before it keeps deciding.</div>
+          <div class="how"><b>Enforced by:</b> when drift crosses the alert threshold, a circuit breaker trips and persists (a restart can't reset it), a mandatory human-review ticket is issued, and your serving layer is notified by webhook to engage the rules fallback.</div>
         </div>
         <div class="prin">
           <h3><span class="num">3</span>Fairness &amp; non-discrimination</h3>
@@ -397,7 +399,7 @@
             <span class="chip">🇪🇺 Art. 10 · data governance</span>
             <span class="chip">🌐 ISO 42001</span>
           </div>
-          <div class="how"><b>Enforced by:</b> validators check every model for documented fairness testing and bias controls, and score exactly which gaps you still owe.</div>
+          <div class="how"><b>Enforced by:</b> MEDIUM/HIGH-risk models must carry an attached bias-test report as an evidence artifact — a self-declared checkbox does not pass. Validators score exactly which evidence you still owe.</div>
         </div>
         <div class="prin">
           <h3><span class="num">4</span>Transparency &amp; explainability</h3>
@@ -417,7 +419,7 @@
             <span class="chip">🇪🇺 Art. 15 · accuracy &amp; robustness</span>
             <span class="chip">🌐 ISO 42001</span>
           </div>
-          <div class="how"><b>Enforced by:</b> continuous PSI + Wasserstein drift monitoring with configurable warning/alert thresholds and a business-continuity breaker for hard failures.</div>
+          <div class="how"><b>Enforced by:</b> hourly PSI + Wasserstein drift evaluation over ingested score windows, configurable warning/alert thresholds, and a persistent business-continuity breaker for hard failures.</div>
         </div>
         <div class="prin">
           <h3><span class="num">6</span>Privacy &amp; data protection</h3>
@@ -427,7 +429,7 @@
             <span class="chip">🇪🇺 GDPR-aligned</span>
             <span class="chip">🌐 ISO 42001</span>
           </div>
-          <div class="how"><b>Enforced by:</b> PII masking across the console, and a fully self-hosted architecture — model metadata never leaves your infrastructure or your jurisdiction.</div>
+          <div class="how"><b>Enforced by:</b> automatic PII masking (India DPDP + GDPR patterns, credentials included) on every audit event, ledger entry, and notification — plus a fully self-hosted architecture, so model metadata never leaves your jurisdiction.</div>
         </div>
         <div class="prin">
           <h3><span class="num">7</span>Auditability &amp; documented trust</h3>
@@ -437,7 +439,7 @@
             <span class="chip">🇪🇺 Art. 12 · record-keeping</span>
             <span class="chip">🌐 ISO 42001</span>
           </div>
-          <div class="how"><b>Enforced by:</b> an append-only audit ledger of every model action, exportable as one-click PDF evidence packs you can hand to any supervisor.</div>
+          <div class="how"><b>Enforced by:</b> an append-only ledger plus a global audit-event stream covering every mutating action — even an admin purge leaves the model's full history and a tombstone behind. Exportable as one-click PDF evidence packs.</div>
         </div>
       </div>
     </div>
@@ -465,12 +467,12 @@
         <div class="feat">
           <div class="icon">📉</div>
           <h3>Statistical drift detection</h3>
-          <p>Population Stability Index and 1-D Wasserstein distance computed on every reference/current window, with configurable warning and alert thresholds.</p>
+          <p>Push score windows to <code>/monitoring/scores</code>; an hourly job computes Population Stability Index and 1-D Wasserstein distance against the reference window, with configurable thresholds.</p>
         </div>
         <div class="feat">
           <div class="icon">🛡️</div>
           <h3>Privacy-preserving by default</h3>
-          <p>Built-in PII masking (aligned with India's DPDP Act and GDPR expectations) applied across the console, so governance itself doesn't become a data leak.</p>
+          <p>PII masking with India DPDP and GDPR patterns (PAN, Aadhaar, emails, IBANs, credentials) automatically applied to audit events, ledger entries, and outbound notifications.</p>
         </div>
         <div class="feat">
           <div class="icon">🧾</div>
@@ -480,7 +482,7 @@
         <div class="feat">
           <div class="icon">🔌</div>
           <h3>Fits your stack</h3>
-          <p>JWT auth with role-based access, Prometheus <code>/metrics</code>, optional Neo4j lineage graphs, scheduled re-scans, and a full REST API with Swagger docs.</p>
+          <p>JWT auth with role-based access, Prometheus <code>/metrics</code>, outbound webhooks for breaker trips and overdue incidents, optional Neo4j lineage, daily re-scans that register new findings as drafts, and a full REST API with Swagger docs.</p>
         </div>
       </div>
     </div>

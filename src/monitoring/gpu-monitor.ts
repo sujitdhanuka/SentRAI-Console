@@ -10,9 +10,8 @@ export interface GpuStat {
 }
 
 /**
- * Gathers GPU stats via nvidia-smi, with a mock fallback when no GPU tooling is
- * present. Port of monitoring/gpu_monitor.py (NVML is unavailable on Node, so we
- * go straight to nvidia-smi then mock).
+ * Gathers GPU stats via nvidia-smi. Hosts without GPU tooling report an empty
+ * list — real telemetry or nothing. Port of monitoring/gpu_monitor.py.
  */
 export function getGpuUtilization(): GpuStat[] {
   try {
@@ -39,17 +38,9 @@ export function getGpuUtilization(): GpuStat[] {
     }
     if (gpus.length) return gpus;
   } catch {
-    // fall through to mock
+    // no GPU tooling on this host
   }
 
-  return [
-    {
-      gpu_id: 0,
-      name: 'NVIDIA H100 PCIe 80GB',
-      utilization_pct: 78.5,
-      memory_used_mb: 42100.0,
-      memory_total_mb: 81920.0,
-      temperature_c: 64.0,
-    },
-  ];
+  // Never fabricate hardware: no nvidia-smi means no GPUs to report.
+  return [];
 }
