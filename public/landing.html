@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SentrAI — Responsible AI Governance for Financial Services</title>
+  <meta name="description" content="SentrAI turns the RBI's FREE-AI framework into working software: discover your AI models, close governance gaps, monitor drift, and stay audit-ready." />
+  <link rel="icon" type="image/png" href="/static/logo.png" />
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --surface: #121829;
+      --surface-2: #1a2237;
+      --border: #263049;
+      --text: #e6e9f2;
+      --muted: #8b93a8;
+      --accent: #3b82f6;
+      --accent-2: #60a5fa;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --mono: "SFMono-Regular", "Fira Code", Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent-2); text-decoration: none; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    .mono { font-family: var(--mono); }
+
+    /* ---- Nav ---- */
+    .nav {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(11, 15, 26, 0.85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner { display: flex; align-items: center; gap: 28px; height: 64px; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 1.05rem; }
+    .nav-brand img { height: 32px; width: 32px; }
+    .nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; }
+    .nav-links a { color: var(--muted); font-size: 0.92rem; }
+    .nav-links a:hover { color: var(--text); }
+    .btn {
+      display: inline-block; padding: 10px 20px; border-radius: 8px;
+      font-weight: 600; font-size: 0.95rem; border: 1px solid transparent;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-2); }
+    .btn-ghost { border-color: var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--accent); }
+    .btn-sm { padding: 7px 16px; font-size: 0.88rem; }
+
+    /* ---- Hero ---- */
+    .hero { padding: 88px 0 72px; text-align: center; position: relative; overflow: hidden; }
+    .hero::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 60% 50% at 50% -10%, rgba(59, 130, 246, 0.18), transparent);
+    }
+    .hero-badge {
+      display: inline-block; padding: 5px 14px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--accent-2); font-size: 0.8rem; font-family: var(--mono);
+      margin-bottom: 24px;
+    }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.15; letter-spacing: -0.02em; max-width: 850px; margin: 0 auto 20px; }
+    .hero h1 .hl { color: var(--accent-2); }
+    .hero p.sub { font-size: 1.15rem; color: var(--muted); max-width: 680px; margin: 0 auto 36px; }
+    .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 56px; }
+    .hero-stats { display: flex; justify-content: center; gap: 0; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); max-width: 760px; margin: 0 auto; }
+    .stat { padding: 20px 32px; flex: 1; min-width: 160px; }
+    .stat + .stat { border-left: 1px solid var(--border); }
+    .stat .num { font-size: 1.6rem; font-weight: 700; color: var(--accent-2); font-family: var(--mono); }
+    .stat .lbl { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ---- Sections ---- */
+    section { padding: 72px 0; }
+    section.alt { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .kicker { font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-2); margin-bottom: 12px; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2.1rem); letter-spacing: -0.01em; margin-bottom: 14px; }
+    .section-sub { color: var(--muted); max-width: 640px; margin-bottom: 44px; font-size: 1.02rem; }
+    .center { text-align: center; }
+    .center .section-sub { margin-left: auto; margin-right: auto; }
+
+    /* ---- Pipeline ---- */
+    .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .pipe-step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 18px; position: relative; }
+    section.alt .pipe-step { background: var(--surface-2); }
+    .pipe-step .n { font-family: var(--mono); color: var(--accent-2); font-size: 0.78rem; margin-bottom: 8px; }
+    .pipe-step h3 { font-size: 1.02rem; margin-bottom: 6px; }
+    .pipe-step p { font-size: 0.86rem; color: var(--muted); line-height: 1.5; }
+
+    /* ---- Sutras ---- */
+    .sutra-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+    .sutra { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 22px; display: flex; gap: 16px; }
+    .sutra .idx {
+      flex-shrink: 0; height: 38px; width: 38px; border-radius: 10px;
+      background: rgba(59, 130, 246, 0.14); color: var(--accent-2);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-weight: 700;
+    }
+    .sutra h3 { font-size: 1rem; margin-bottom: 4px; }
+    .sutra .principle { font-size: 0.85rem; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+    .sutra .how { font-size: 0.88rem; color: var(--text); }
+    .sutra .how b { color: var(--accent-2); font-weight: 600; }
+
+    /* ---- Features ---- */
+    .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+    .feat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+    .feat .icon { font-size: 1.4rem; margin-bottom: 12px; }
+    .feat h3 { font-size: 1.05rem; margin-bottom: 8px; }
+    .feat p { font-size: 0.9rem; color: var(--muted); }
+    .feat code { font-family: var(--mono); font-size: 0.82rem; color: var(--accent-2); background: var(--surface-2); padding: 1px 6px; border-radius: 4px; }
+
+    /* ---- Pricing ---- */
+    .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; align-items: stretch; margin-bottom: 48px; }
+    .plan { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 30px 26px; display: flex; flex-direction: column; position: relative; }
+    .plan.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 18px 44px rgba(59, 130, 246, 0.15); }
+    .plan .flag {
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 700;
+      padding: 3px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .plan h3 { font-size: 1.12rem; }
+    .plan .for { font-size: 0.84rem; color: var(--muted); margin-bottom: 18px; }
+    .plan .price { font-size: 2rem; font-weight: 700; font-family: var(--mono); }
+    .plan .price small { font-size: 0.85rem; color: var(--muted); font-weight: 400; font-family: var(--sans); }
+    .plan .per { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; }
+    .plan ul { list-style: none; margin: 0 0 26px; flex: 1; }
+    .plan li { font-size: 0.9rem; padding: 6px 0 6px 26px; position: relative; color: var(--text); }
+    .plan li::before { content: "✓"; position: absolute; left: 2px; color: var(--success); font-weight: 700; }
+    .plan li.dim { color: var(--muted); }
+    .plan .btn { text-align: center; }
+
+    .policy { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 30px; }
+    .policy h3 { font-size: 1.1rem; margin-bottom: 18px; }
+    .policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 32px; }
+    .policy-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .policy-item b { display: block; color: var(--text); margin-bottom: 2px; }
+    .policy-item span { color: var(--muted); }
+
+    /* ---- Frameworks strip ---- */
+    .fw-strip { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .fw { font-family: var(--mono); font-size: 0.85rem; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 10px 18px; color: var(--muted); }
+    .fw b { color: var(--text); }
+
+    /* ---- CTA / Footer ---- */
+    .final-cta { text-align: center; padding: 88px 0; }
+    footer { border-top: 1px solid var(--border); padding: 36px 0; }
+    .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 0.85rem; }
+    .foot .links { display: flex; gap: 20px; }
+    .foot a { color: var(--muted); }
+    .foot a:hover { color: var(--text); }
+    .disclaimer { font-size: 0.78rem; color: var(--muted); margin-top: 14px; max-width: 760px; }
+
+    @media (max-width: 900px) {
+      .pipeline { grid-template-columns: 1fr 1fr; }
+      .nav-links a.nav-hide { display: none; }
+    }
+    @media (max-width: 560px) {
+      .pipeline { grid-template-columns: 1fr; }
+      .stat + .stat { border-left: none; border-top: 1px solid var(--border); }
+      .hero-stats { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="nav-brand" href="/">
+        <img src="/static/logo.png" alt="SentrAI logo" />
+        SentrAI
+      </a>
+      <div class="nav-links">
+        <a href="#product" class="nav-hide">Product</a>
+        <a href="#responsible-ai" class="nav-hide">Responsible AI</a>
+        <a href="#pricing">Pricing</a>
+        <a href="/docs" class="nav-hide">API Docs</a>
+        <a href="/console" class="btn btn-ghost btn-sm">Sign in</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <div class="hero-badge">Built for the RBI FREE-AI framework · August 2025</div>
+      <h1>Make every AI model in your bank <span class="hl">provably responsible</span></h1>
+      <p class="sub">
+        SentrAI turns the RBI's FREE-AI framework — the Framework for Responsible and Ethical
+        Enablement of AI — from a 26-recommendation report into software you actually run:
+        discover your models, close governance gaps, watch for drift, and walk into any audit ready.
+      </p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="/console">Launch the console</a>
+        <a class="btn btn-ghost" href="#pricing">See pricing</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><div class="num">7</div><div class="lbl">Sutras enforced</div></div>
+        <div class="stat"><div class="num">4</div><div class="lbl">Frameworks validated</div></div>
+        <div class="stat"><div class="num">26</div><div class="lbl">RBI recommendations</div></div>
+        <div class="stat"><div class="num">100%</div><div class="lbl">Actions audit-logged</div></div>
+      </div>
+    </div>
+  </header>
+
+  <section id="product">
+    <div class="container">
+      <div class="kicker">The product</div>
+      <h2>Governance that starts where your AI actually lives: the code</h2>
+      <p class="section-sub">
+        Most governance tools begin with a spreadsheet someone forgot to update. SentrAI begins
+        with a scan of your repositories and infrastructure, so the model inventory reflects
+        reality — then keeps it honest for the model's entire life.
+      </p>
+      <div class="pipeline">
+        <div class="pipe-step">
+          <div class="n">01 · DISCOVER</div>
+          <h3>Find every model</h3>
+          <p>Regex + AST scanning over local code, GitHub/GitLab repos, and Kubernetes/Triton infrastructure surfaces AI systems you didn't know you were running.</p>
+        </div>
+        <div class="pipe-step">
+          <div class="n">02 · REGISTER</div>
+          <h3>Build the inventory</h3>
+          <p>Every model gets an owner, a risk tier, a purpose, and a ledger entry — scoped per project, with lineage tracked across systems.</p>
+        </div>
+        <div class="pipe-step">
+          <div class="n">03 · VALIDATE</div>
+          <h3>Close the gaps</h3>
+          <p>Automated validators score each model against the 7 Sutras, NIST AI RMF, the EU AI Act, and ISO 42001 — and tell you exactly what's missing.</p>
+        </div>
+        <div class="pipe-step">
+          <div class="n">04 · MONITOR</div>
+          <h3>Catch drift early</h3>
+          <p>PSI and Wasserstein drift detection with a business-continuity circuit breaker that pulls humans in before a drifting model does damage.</p>
+        </div>
+        <div class="pipe-step">
+          <div class="n">05 · AUDIT</div>
+          <h3>Prove it</h3>
+          <p>Immutable audit trails, incident SLAs, and one-click PDF compliance reports — regulator-ready evidence, not screenshots of dashboards.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt" id="responsible-ai">
+    <div class="container">
+      <div class="kicker">Responsible AI, operationalized</div>
+      <h2>The 7 Sutras — as running software, not a poster on the wall</h2>
+      <p class="section-sub">
+        The RBI anchored FREE-AI in seven guiding principles. Here is how SentrAI turns each
+        one into something your team does every day, with evidence to show for it.
+      </p>
+      <div class="sutra-grid">
+        <div class="sutra">
+          <div class="idx">1</div>
+          <div>
+            <h3>Trust is the Foundation</h3>
+            <div class="principle">"Trust is non-negotiable and should remain uncompromised."</div>
+            <div class="how"><b>In SentrAI:</b> every model action — registration, edits, compliance runs, decommissioning — lands in an append-only audit ledger you can hand to a supervisor.</div>
+          </div>
+        </div>
+        <div class="sutra">
+          <div class="idx">2</div>
+          <div>
+            <h3>People First</h3>
+            <div class="principle">"AI should augment human decision-making but defer to human judgment."</div>
+            <div class="how"><b>In SentrAI:</b> when drift crosses the alert threshold, the circuit breaker trips and the model is flagged for mandatory human review before it keeps deciding.</div>
+          </div>
+        </div>
+        <div class="sutra">
+          <div class="idx">3</div>
+          <div>
+            <h3>Innovation over Restraint</h3>
+            <div class="principle">"Foster responsible innovation with purpose."</div>
+            <div class="how"><b>In SentrAI:</b> scanning a repo and registering a model takes minutes, not committee cycles — governance that keeps pace with shipping instead of blocking it.</div>
+          </div>
+        </div>
+        <div class="sutra">
+          <div class="idx">4</div>
+          <div>
+            <h3>Fairness and Equity</h3>
+            <div class="principle">"AI outcomes should be fair and non-discriminatory."</div>
+            <div class="how"><b>In SentrAI:</b> compliance validators check for documented fairness testing and bias controls on every model, and score the gaps you still owe.</div>
+          </div>
+        </div>
+        <div class="sutra">
+          <div class="idx">5</div>
+          <div>
+            <h3>Accountability</h3>
+            <div class="principle">"Accountability rests with the entities deploying AI."</div>
+            <div class="how"><b>In SentrAI:</b> no model exists without a named owner, and incidents carry SLA clocks — responsibility is assigned, timed, and tracked to closure.</div>
+          </div>
+        </div>
+        <div class="sutra">
+          <div class="idx">6</div>
+          <div>
+            <h3>Understandable by Design</h3>
+            <div class="principle">"Ensure explainability for trust."</div>
+            <div class="how"><b>In SentrAI:</b> each inventory entry records the model's purpose, data, and explainability evidence, so anyone can answer "what does this model do and why?"</div>
+          </div>
+        </div>
+        <div class="sutra">
+          <div class="idx">7</div>
+          <div>
+            <h3>Safety, Resilience &amp; Sustainability</h3>
+            <div class="principle">"AI systems should be secure, resilient and energy efficient."</div>
+            <div class="how"><b>In SentrAI:</b> continuous drift monitoring, a BCP circuit breaker, DPDP-compliant PII masking, and Prometheus metrics keep models observable and fail-safe.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="kicker">Under the hood</div>
+      <h2>Serious machinery for a serious mandate</h2>
+      <p class="section-sub">
+        SentrAI is a self-hostable console — your model metadata never has to leave your
+        infrastructure.
+      </p>
+      <div class="feat-grid">
+        <div class="feat">
+          <div class="icon">🔎</div>
+          <h3>Code-level discovery</h3>
+          <p>Regex plus <code>tree-sitter</code> AST analysis finds model definitions in real source, not self-reported forms. Scans local paths, GitHub, GitLab, and k8s/Triton serving infra.</p>
+        </div>
+        <div class="feat">
+          <div class="icon">📐</div>
+          <h3>Four frameworks, one score</h3>
+          <p>Pluggable validators for the RBI's 7 Sutras, <code>NIST AI RMF</code>, the <code>EU AI Act</code>, and <code>ISO 42001</code> — run them all against a model in one pass.</p>
+        </div>
+        <div class="feat">
+          <div class="icon">📉</div>
+          <h3>Statistical drift detection</h3>
+          <p>Population Stability Index and 1-D Wasserstein distance computed on every reference/current window, with configurable warning and alert thresholds.</p>
+        </div>
+        <div class="feat">
+          <div class="icon">🛡️</div>
+          <h3>DPDP-aware by default</h3>
+          <p>PII masking aligned with India's Digital Personal Data Protection Act is applied across the console, so governance itself doesn't become a data leak.</p>
+        </div>
+        <div class="feat">
+          <div class="icon">🧾</div>
+          <h3>Regulator-ready exports</h3>
+          <p>One-click PDF compliance reports per model, immutable audit trails, and incident histories with SLA status — evidence in the format audits actually want.</p>
+        </div>
+        <div class="feat">
+          <div class="icon">🔌</div>
+          <h3>Fits your stack</h3>
+          <p>JWT auth with role-based access, Prometheus <code>/metrics</code>, optional Neo4j lineage graphs, scheduled re-scans, and a full REST API with Swagger docs.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt" id="pricing">
+    <div class="container">
+      <div class="center">
+        <div class="kicker">Pricing</div>
+        <h2>Priced per organization. Never per seat.</h2>
+        <p class="section-sub">
+          Compliance works when everyone can see it — auditors, engineers, risk officers.
+          We will never charge you for adding the people who make your AI safer.
+        </p>
+      </div>
+
+      <div class="price-grid">
+        <div class="plan">
+          <h3>Community</h3>
+          <div class="for">For teams getting started with AI governance</div>
+          <div class="price">₹0</div>
+          <div class="per">self-hosted, forever</div>
+          <ul>
+            <li>1 project, up to 10 registered models</li>
+            <li>All 7-Sutra validators</li>
+            <li>Codebase &amp; repo discovery scans</li>
+            <li>Full audit ledger &amp; incident tracking</li>
+            <li>Community support</li>
+          </ul>
+          <a class="btn btn-ghost" href="/console">Start free</a>
+        </div>
+
+        <div class="plan featured">
+          <div class="flag">Most popular</div>
+          <h3>Growth</h3>
+          <div class="for">For regulated entities operationalizing FREE-AI</div>
+          <div class="price">₹34,999 <small>/ month</small></div>
+          <div class="per">per organization · billed annually · ₹41,999 billed monthly</div>
+          <ul>
+            <li>Unlimited projects, up to 100 models</li>
+            <li>NIST AI RMF, EU AI Act &amp; ISO 42001 validators</li>
+            <li>Drift monitoring with BCP circuit breaker</li>
+            <li>Scheduled re-scans &amp; k8s/Triton infra discovery</li>
+            <li>PDF compliance exports &amp; Prometheus metrics</li>
+            <li>Priority email support (next business day)</li>
+          </ul>
+          <a class="btn btn-primary" href="mailto:sales@sentrai.example?subject=SentrAI%20Growth%20plan">Start a 30-day pilot</a>
+        </div>
+
+        <div class="plan">
+          <h3>Enterprise</h3>
+          <div class="for">For banks and groups with supervisory obligations</div>
+          <div class="price">Custom</div>
+          <div class="per">annual agreement</div>
+          <ul>
+            <li>Unlimited models &amp; organizations</li>
+            <li>SSO / SAML and custom role policies</li>
+            <li>Air-gapped, on-prem or private-cloud deployment</li>
+            <li>Neo4j model lineage at scale</li>
+            <li>Custom framework plugins &amp; validator SLAs</li>
+            <li>Dedicated compliance success manager</li>
+          </ul>
+          <a class="btn btn-ghost" href="mailto:sales@sentrai.example?subject=SentrAI%20Enterprise">Talk to us</a>
+        </div>
+      </div>
+
+      <div class="policy">
+        <h3>Our pricing policy — in plain language</h3>
+        <div class="policy-grid">
+          <div class="policy-item">
+            <b>You pay for governed models, not people.</b>
+            <span>Plans are per organization with unlimited users. The only meter is the number of registered, active models.</span>
+          </div>
+          <div class="policy-item">
+            <b>Decommissioned models are free.</b>
+            <span>Retiring a model keeps its full audit history available forever at no charge. You are never billed for your own paper trail.</span>
+          </div>
+          <div class="policy-item">
+            <b>Soft limits, never hard stops.</b>
+            <span>If you cross your model limit we notify you and give you 30 days to upgrade or prune. Compliance monitoring is never switched off mid-cycle.</span>
+          </div>
+          <div class="policy-item">
+            <b>Your data stays yours.</b>
+            <span>SentrAI is self-hosted on every plan. Model metadata, scan results, and audit logs live in your database, in your infrastructure, in your jurisdiction.</span>
+          </div>
+          <div class="policy-item">
+            <b>Public prices, no games.</b>
+            <span>The prices on this page are the prices. Enterprise is custom only because deployment, integration, and SLA needs genuinely differ.</span>
+          </div>
+          <div class="policy-item">
+            <b>Leave whenever you want.</b>
+            <span>Cancel anytime; annual plans are refunded pro-rata for whole unused months. Your data exports (CSV, PDF, full DB) work on every plan, including after you cancel.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container center">
+      <div class="kicker">Standards coverage</div>
+      <h2>One inventory, every framework</h2>
+      <p class="section-sub">Validate the same model inventory against the frameworks your regulators — present and future — care about.</p>
+      <div class="fw-strip">
+        <div class="fw"><b>RBI FREE-AI</b> · 7 Sutras, 26 Recommendations</div>
+        <div class="fw"><b>NIST AI RMF</b> · Govern / Map / Measure / Manage</div>
+        <div class="fw"><b>EU AI Act</b> · risk-tier obligations</div>
+        <div class="fw"><b>ISO/IEC 42001</b> · AI management systems</div>
+        <div class="fw"><b>DPDP Act</b> · PII masking built in</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="final-cta">
+    <div class="container">
+      <h2>Responsible AI is a practice, not a promise.</h2>
+      <p class="section-sub" style="margin: 14px auto 32px;">
+        Scan your first repository and see your real model inventory in under ten minutes.
+      </p>
+      <div class="hero-ctas" style="margin-bottom: 0;">
+        <a class="btn btn-primary" href="/console">Launch the console</a>
+        <a class="btn btn-ghost" href="/docs">Explore the API</a>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <div class="foot">
+        <div>© 2026 SentrAI · Responsible AI governance for financial services</div>
+        <div class="links">
+          <a href="#product">Product</a>
+          <a href="#responsible-ai">Responsible AI</a>
+          <a href="#pricing">Pricing</a>
+          <a href="/console">Console</a>
+          <a href="/docs">API Docs</a>
+        </div>
+      </div>
+      <p class="disclaimer">
+        SentrAI is an independent product and is not affiliated with, endorsed by, or certified by
+        the Reserve Bank of India. "FREE-AI" refers to the RBI committee report <em>Framework for
+        Responsible and Ethical Enablement of AI</em> (August 2025), which this software helps
+        organizations operationalize. Use of SentrAI does not by itself constitute regulatory compliance.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

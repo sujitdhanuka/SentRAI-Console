@@ -21,7 +21,8 @@ npm install
 npm run start:dev            # http://localhost:8002
 ```
 
-Open http://localhost:8002 and sign in with the seeded admin:
+Open http://localhost:8002 for the public landing page (product, pricing, responsible-AI
+overview), then head to http://localhost:8002/console and sign in with the seeded admin:
 
 - **Email:** `admin@sentrai.local`
 - **Password:** `admin123`
@@ -95,7 +96,7 @@ src/
   domain/                       triage, drift math, incident SLA, audit-trail factory (pure logic)
   discovery/                    scanner, tree-sitter, connectors, agents, neo4j
   tasks/                        scheduled cron jobs
-public/                         the original dashboard (index.html, static/, docs/)
+public/                         landing page (landing.html, served at /) + the dashboard (index.html, served at /console) + static/, docs/
 ```
 
 ## Tests
