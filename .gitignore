@@ -20,3 +20,6 @@
 
 # temp scan dirs
 /tmp
+
+# uploaded project codebases (per-project scan workspaces)
+/workspaces

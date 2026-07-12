@@ -10,8 +10,14 @@ export class CreateProjectDto {
   @IsString()
   description: string = '';
 
+  /**
+   * A directory on the server's filesystem (self-hosted installs). Optional:
+   * omit it and upload a codebase ZIP instead — the project then scans its
+   * private workspace directory.
+   */
+  @IsOptional()
   @IsString()
-  root_directory!: string;
+  root_directory: string = '';
 }
 
 export class UpdateProjectDto {

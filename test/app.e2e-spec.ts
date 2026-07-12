@@ -322,6 +322,51 @@ describe('SentrAI Console (e2e)', () => {
     expect(evidence.body.evidence).toHaveLength(1);
   });
 
+  it('accepts a codebase ZIP upload and scans it from the project workspace', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    // Project with no server path — it will scan its upload workspace.
+    const proj = await request(http)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Uploaded App', description: 'zip onboarding' });
+    expect(proj.status).toBe(201);
+    const projectId = proj.body.project_id;
+    expect(proj.body.root_directory).toContain(projectId);
+
+    // Build a small in-memory zip containing an AI-looking source file plus
+    // junk (node_modules) that the extractor must skip.
+    const AdmZip = (await import('adm-zip')).default;
+    const zip = new AdmZip();
+    zip.addFile('app/model.py', Buffer.from(
+      'import openai\n\ndef score(candidate):\n    """LLM credit scoring."""\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n',
+    ));
+    zip.addFile('app/README.md', Buffer.from('docs'));
+    zip.addFile('node_modules/junk/index.js', Buffer.from('ignored'));
+
+    const upload = await request(http)
+      .post(`/api/v1/projects/${projectId}/codebase`)
+      .set('Authorization', `Bearer ${admin}`)
+      .attach('file', zip.toBuffer(), 'codebase.zip');
+    expect(upload.status).toBe(201);
+    expect(upload.body.files_extracted).toBe(2);
+    expect(upload.body.entries_skipped).toBe(1);
+
+    // The workspace is now scannable: rescan finds the project directory valid.
+    const rescan = await request(http)
+      .post('/api/v1/inventory/models/rescan')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId });
+    expect(rescan.status).toBe(200);
+
+    // Rejects non-zip payloads.
+    const bad = await request(http)
+      .post(`/api/v1/projects/${projectId}/codebase`)
+      .set('Authorization', `Bearer ${admin}`)
+      .attach('file', Buffer.from('not a zip'), 'notes.txt');
+    expect(bad.status).toBe(400);
+  });
+
   it('reports plan usage with soft limits', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const org = await request(http)

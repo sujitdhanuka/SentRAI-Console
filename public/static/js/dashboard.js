@@ -1528,38 +1528,76 @@ document.getElementById("btn-cancel-project").addEventListener("click", () => {
   document.getElementById("form-new-project").classList.add("hidden");
 });
 
+/** Multipart upload — auth header only; the browser sets the multipart boundary. */
+async function apiUpload(path, formData) {
+  const headers = AUTH_TOKEN ? { "Authorization": `Bearer ${AUTH_TOKEN}` } : {};
+  const res = await fetch(API + path, { method: "POST", headers, body: formData });
+  const text = await res.text();
+  let data;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (res.status === 401) {
+    _clearAuth();
+    showAuthOverlay();
+    throw new Error("Session expired — please sign in again");
+  }
+  if (!res.ok) {
+    const detail = (data && typeof data === 'object' && (data.message || data.detail)) || res.statusText;
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
 document.getElementById("project-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
   const obj = formToObject(form);
   const isEdit = !!obj.project_id;
+  const zipInput = document.getElementById("project-codebase-zip");
+  const zipFile = zipInput && zipInput.files.length ? zipInput.files[0] : null;
+
+  if (!isEdit && !zipFile && !(obj.root_directory || "").trim()) {
+    toast("Upload a codebase .zip or provide a server directory path", "error");
+    return;
+  }
+
+  const submitBtn = document.getElementById("project-form-submit");
+  submitBtn.disabled = true;
   try {
+    let projectId = obj.project_id;
     if (isEdit) {
-      await api(`/projects/${obj.project_id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: obj.name,
-          description: obj.description || "",
-          root_directory: obj.root_directory,
-        }),
-      });
-      toast("Project updated");
+      const body = { name: obj.name, description: obj.description || "" };
+      if ((obj.root_directory || "").trim()) body.root_directory = obj.root_directory;
+      await api(`/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(body) });
     } else {
-      await api("/projects", {
+      const created = await api("/projects", {
         method: "POST",
         body: JSON.stringify({
           name: obj.name,
           description: obj.description || "",
-          root_directory: obj.root_directory,
+          root_directory: (obj.root_directory || "").trim(),
         }),
       });
-      toast("Project created");
+      projectId = created.project_id;
     }
+
+    if (zipFile) {
+      toast("Uploading codebase…");
+      const fd = new FormData();
+      fd.append("file", zipFile);
+      const up = await apiUpload(`/projects/${projectId}/codebase`, fd);
+      toast(`Codebase uploaded — ${up.files_extracted} files ready to scan`);
+    } else {
+      toast(isEdit ? "Project updated" : "Project created");
+    }
+
     form.reset();
+    if (zipInput) zipInput.value = "";
     document.getElementById("form-new-project").classList.add("hidden");
     loadProjects();
   } catch (err) {
     toast(`Failed to ${isEdit ? "update" : "create"} project: ` + err.message, "error");
+  } finally {
+    submitBtn.disabled = false;
   }
 });
 

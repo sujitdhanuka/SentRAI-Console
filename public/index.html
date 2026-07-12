@@ -61,8 +61,8 @@
       </div>
       <p class="muted" style="margin:-10px 0 18px">
         Each project tracks one application's codebase — its own scan history and its own scoped model inventory.
-        Create a project per app you want to govern, point it at that app's source directory, then scan and track
-        its AI models independently of any other project.
+        Create a project per app you want to govern — upload its codebase as a .zip (or point at a directory on
+        this server for self-hosted installs), then scan and track its AI models independently of any other project.
       </p>
 
       <div class="card form-card hidden" id="form-new-project">
@@ -73,9 +73,16 @@
             <label>Project Name <input required name="name" placeholder="e.g. Dhancept Terminal" /></label>
             <label>Description (optional) <input name="description" placeholder="e.g. AI trading research platform" /></label>
           </div>
-          <label>Root Directory (on this server's filesystem)
+          <label>Codebase — upload a .zip of your application's source
+            <input type="file" id="project-codebase-zip" accept=".zip,application/zip" />
+            <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
+              The archive is extracted into this project's private workspace on the server and scanned there
+              (node_modules/.git are skipped, max 200&nbsp;MB). Alternatively, point at a directory below.
+            </span>
+          </label>
+          <label>…or a Root Directory already on this server (self-hosted installs)
             <div style="display:flex; gap:8px;">
-              <input name="root_directory" required placeholder="/Users/you/Documents/Projects/your-app" style="flex:1" />
+              <input name="root_directory" placeholder="/path/on/this/server/your-app" style="flex:1" />
               <button type="button" class="btn ghost" id="btn-browse-project-directory">📁 Browse…</button>
             </div>
           </label>

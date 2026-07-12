@@ -3,21 +3,28 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import AdmZip from 'adm-zip';
+import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { dirname, join, resolve, sep } from 'path';
 
 import { AIModelEntity, OrganizationEntity, ProjectEntity } from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
+import { WORKSPACES_DIR } from '../common/paths';
 import { modelEntityToEntry } from '../inventory/model.mapper';
 import { sutrasBlockingGaps, sutrasOverallPass, validateSutrasCompliance } from '../compliance/sutras.validator';
 import { CreateProjectDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
 
 @Injectable()
 export class ProjectsService {
+  private readonly logger = new Logger(ProjectsService.name);
+
   constructor(
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
@@ -63,18 +70,22 @@ export class ProjectsService {
   async create(user: CurrentUser, dto: CreateProjectDto): Promise<ProjectResponse> {
     // Any logged-in user can create projects; org membership is optional and,
     // when present, scopes the project to that organization.
-    this.validateDirectory(dto.root_directory);
+    const usesServerPath = Boolean(dto.root_directory && dto.root_directory.trim());
+    if (usesServerPath) this.validateDirectory(dto.root_directory);
 
     const existing = await this.projects.findOne({ where: { name: dto.name } });
     if (existing) throw new ConflictException(`A project named '${dto.name}' already exists`);
 
     const now = new Date();
+    const id = uuidv4();
     const project = await this.projects.save(
       this.projects.create({
-        id: uuidv4(),
+        id,
         name: dto.name,
         description: dto.description ?? '',
-        rootDirectory: expandAndResolve(dto.root_directory),
+        // Without a server path the project scans its private upload workspace,
+        // populated via POST /projects/:id/codebase.
+        rootDirectory: usesServerPath ? expandAndResolve(dto.root_directory) : join(WORKSPACES_DIR, id),
         lastScannedAt: null,
         tenantId: user.tenantId,
         createdAt: now,
@@ -82,6 +93,74 @@ export class ProjectsService {
       }),
     );
     return this.toResponse(project);
+  }
+
+  /**
+   * Receive a codebase ZIP from the browser and extract it into the project's
+   * private workspace, which becomes the scan root. This is how hosted users
+   * onboard code — a web page cannot hand the server local filesystem paths.
+   */
+  async uploadCodebase(
+    user: CurrentUser,
+    projectId: string,
+    file: { originalname?: string; size?: number; buffer?: Buffer } | undefined,
+  ) {
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+    if (user.tenantId !== null && project.tenantId !== user.tenantId) {
+      throw new ForbiddenException('Cannot upload into a project outside your organization');
+    }
+    if (!file?.buffer?.length) throw new BadRequestException('Attach a .zip file in the "file" field');
+    if (file.originalname && !file.originalname.toLowerCase().endsWith('.zip')) {
+      throw new BadRequestException('Only .zip archives are supported');
+    }
+
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(file.buffer);
+    } catch {
+      throw new BadRequestException('The uploaded file is not a readable ZIP archive');
+    }
+
+    const target = join(WORKSPACES_DIR, projectId);
+    rmSync(target, { recursive: true, force: true });
+    mkdirSync(target, { recursive: true });
+    const targetRoot = resolve(target) + sep;
+
+    let extracted = 0;
+    let skipped = 0;
+    for (const entry of zip.getEntries()) {
+      if (entry.isDirectory) continue;
+      const norm = entry.entryName.replace(/\\/g, '/');
+      // Zip-slip protection + junk we never want to scan or store.
+      if (norm.split('/').some((seg) => seg === '..') ||
+          /(^|\/)(node_modules|\.git|__MACOSX|\.venv|venv)(\/|$)/.test(norm)) {
+        skipped += 1;
+        continue;
+      }
+      const dest = join(target, norm);
+      if (!resolve(dest).startsWith(targetRoot)) {
+        skipped += 1;
+        continue;
+      }
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, entry.getData());
+      extracted += 1;
+    }
+    if (extracted === 0) throw new BadRequestException('The archive contained no usable files');
+
+    project.rootDirectory = target;
+    project.updatedAt = new Date();
+    await this.projects.save(project);
+    this.logger.log(`codebase uploaded project=${projectId} files=${extracted} skipped=${skipped} by=${user.email}`);
+
+    return {
+      project_id: projectId,
+      root_directory: target,
+      files_extracted: extracted,
+      entries_skipped: skipped,
+      uploaded_by: user.email,
+    };
   }
 
   async list(user: CurrentUser): Promise<ProjectResponse[]> {
