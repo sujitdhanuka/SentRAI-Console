@@ -20,6 +20,24 @@ export class CreateProjectDto {
   root_directory: string = '';
 }
 
+export class GithubImportDto {
+  @IsString()
+  @MinLength(1)
+  owner!: string;
+
+  @IsString()
+  @MinLength(1)
+  repo!: string;
+
+  @IsOptional()
+  @IsString()
+  branch?: string | null;
+
+  @IsOptional()
+  @IsString()
+  token?: string | null;
+}
+
 export class UpdateProjectDto {
   @IsOptional()
   @IsString()

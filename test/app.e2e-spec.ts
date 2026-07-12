@@ -389,6 +389,48 @@ describe('SentrAI Console (e2e)', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('accepts a folder upload (multiple files with relative paths)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const proj = await request(http)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Folder App', description: 'folder onboarding' });
+    const projectId = proj.body.project_id;
+
+    // Files carry only basenames over multipart; the true relative paths ride
+    // in a parallel `paths` field, matched by index (as the browser sends them).
+    const upload = await request(http)
+      .post(`/api/v1/projects/${projectId}/codebase/folder`)
+      .set('Authorization', `Bearer ${admin}`)
+      .attach('files', Buffer.from('import openai\n'), 'model.py')
+      .attach('files', Buffer.from('# docs\n'), 'README.md')
+      .attach('files', Buffer.from('junk'), 'index.js')
+      .field('paths', 'myapp/model.py')
+      .field('paths', 'myapp/README.md')
+      .field('paths', 'myapp/node_modules/dep/index.js');
+    expect(upload.status).toBe(201);
+    expect(upload.body.source).toBe('folder');
+    expect(upload.body.files_extracted).toBe(2); // node_modules skipped
+    expect(upload.body.entries_skipped).toBe(1);
+  });
+
+  it('reports a clear error when a GitHub repo cannot be fetched', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const proj = await request(http)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'GitHub App', description: 'gh onboarding' });
+    const projectId = proj.body.project_id;
+
+    // A repo that does not exist should surface a 400, not crash.
+    const res = await request(http)
+      .post(`/api/v1/projects/${projectId}/codebase/github`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ owner: 'sentrai-nonexistent-org', repo: 'does-not-exist-xyz', branch: 'main' });
+    expect(res.status).toBe(400);
+    expect(String(res.body.message)).toContain('GitHub');
+  });
+
   it('reports plan usage with soft limits', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const org = await request(http)

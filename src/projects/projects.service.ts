@@ -18,6 +18,7 @@ import { AIModelEntity, OrganizationEntity, ProjectEntity } from '../database/en
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
+import { RemoteRepoConnector } from '../discovery/connectors/repo-connector';
 import { modelEntityToEntry } from '../inventory/model.mapper';
 import { sutrasBlockingGaps, sutrasOverallPass, validateSutrasCompliance } from '../compliance/sutras.validator';
 import { CreateProjectDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
@@ -104,6 +105,76 @@ export class ProjectsService {
     return this.toResponse(project);
   }
 
+  // Never scan or store these — noise, VCS internals, or dependency trees.
+  private static readonly JUNK_RE = /(^|\/)(node_modules|\.git|__MACOSX|\.venv|venv)(\/|$)/;
+
+  private async loadProjectForUpload(user: CurrentUser, projectId: string): Promise<ProjectEntity> {
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+    if (user.tenantId !== null && project.tenantId !== user.tenantId) {
+      throw new ForbiddenException('Cannot upload into a project outside your organization');
+    }
+    return project;
+  }
+
+  /** Clear and recreate the project's private workspace directory. */
+  private prepareWorkspace(projectId: string): { target: string; targetRoot: string } {
+    const target = join(WORKSPACES_DIR, projectId);
+    rmSync(target, { recursive: true, force: true });
+    mkdirSync(target, { recursive: true });
+    return { target, targetRoot: resolve(target) + sep };
+  }
+
+  /**
+   * Write one file into the workspace, defending against path-traversal
+   * ("zip-slip") and skipping junk paths. Returns whether the file was written.
+   */
+  private writeWorkspaceFile(target: string, targetRoot: string, rawPath: string, data: Buffer): boolean {
+    const norm = rawPath.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!norm || norm.split('/').some((seg) => seg === '..') || ProjectsService.JUNK_RE.test(norm)) {
+      return false;
+    }
+    const dest = join(target, norm);
+    if (!resolve(dest).startsWith(targetRoot)) return false;
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, data);
+    return true;
+  }
+
+  private extractZipToWorkspace(zip: AdmZip, target: string, targetRoot: string): { extracted: number; skipped: number } {
+    let extracted = 0;
+    let skipped = 0;
+    for (const entry of zip.getEntries()) {
+      if (entry.isDirectory) continue;
+      if (this.writeWorkspaceFile(target, targetRoot, entry.entryName, entry.getData())) extracted += 1;
+      else skipped += 1;
+    }
+    return { extracted, skipped };
+  }
+
+  private async finalizeWorkspace(
+    project: ProjectEntity,
+    target: string,
+    extracted: number,
+    skipped: number,
+    source: string,
+    user: CurrentUser,
+  ) {
+    if (extracted === 0) throw new BadRequestException('No usable files were found in the codebase');
+    project.rootDirectory = target;
+    project.updatedAt = new Date();
+    await this.projects.save(project);
+    this.logger.log(`codebase loaded project=${project.id} source=${source} files=${extracted} skipped=${skipped} by=${user.email}`);
+    return {
+      project_id: project.id,
+      root_directory: target,
+      files_extracted: extracted,
+      entries_skipped: skipped,
+      source,
+      uploaded_by: user.email,
+    };
+  }
+
   /**
    * Receive a codebase ZIP from the browser and extract it into the project's
    * private workspace, which becomes the scan root. This is how hosted users
@@ -114,11 +185,7 @@ export class ProjectsService {
     projectId: string,
     file: { originalname?: string; size?: number; buffer?: Buffer } | undefined,
   ) {
-    const project = await this.projects.findOne({ where: { id: projectId } });
-    if (!project) throw new NotFoundException('Project not found');
-    if (user.tenantId !== null && project.tenantId !== user.tenantId) {
-      throw new ForbiddenException('Cannot upload into a project outside your organization');
-    }
+    const project = await this.loadProjectForUpload(user, projectId);
     if (!file?.buffer?.length) throw new BadRequestException('Attach a .zip file in the "file" field');
     if (file.originalname && !file.originalname.toLowerCase().endsWith('.zip')) {
       throw new BadRequestException('Only .zip archives are supported');
@@ -131,45 +198,73 @@ export class ProjectsService {
       throw new BadRequestException('The uploaded file is not a readable ZIP archive');
     }
 
-    const target = join(WORKSPACES_DIR, projectId);
-    rmSync(target, { recursive: true, force: true });
-    mkdirSync(target, { recursive: true });
-    const targetRoot = resolve(target) + sep;
+    const { target, targetRoot } = this.prepareWorkspace(projectId);
+    const { extracted, skipped } = this.extractZipToWorkspace(zip, target, targetRoot);
+    return this.finalizeWorkspace(project, target, extracted, skipped, 'zip', user);
+  }
 
+  /**
+   * Receive an entire folder from the browser (webkitdirectory upload): many
+   * files, each carrying its relative path in `originalname`. They are written
+   * into the project's private workspace, preserving structure.
+   */
+  async uploadCodebaseFolder(
+    user: CurrentUser,
+    projectId: string,
+    files: Array<{ originalname?: string; buffer?: Buffer }> | undefined,
+    paths?: string | string[],
+  ) {
+    const project = await this.loadProjectForUpload(user, projectId);
+    if (!files?.length) throw new BadRequestException('Select a folder to upload (no files received)');
+
+    // multer reduces originalname to a basename, losing folder structure and
+    // defeating junk filtering. The browser sends the true relative paths in a
+    // parallel `paths` field, matched to files by index.
+    const relPaths = Array.isArray(paths) ? paths : paths ? [paths] : [];
+
+    const { target, targetRoot } = this.prepareWorkspace(projectId);
     let extracted = 0;
     let skipped = 0;
-    for (const entry of zip.getEntries()) {
-      if (entry.isDirectory) continue;
-      const norm = entry.entryName.replace(/\\/g, '/');
-      // Zip-slip protection + junk we never want to scan or store.
-      if (norm.split('/').some((seg) => seg === '..') ||
-          /(^|\/)(node_modules|\.git|__MACOSX|\.venv|venv)(\/|$)/.test(norm)) {
-        skipped += 1;
-        continue;
-      }
-      const dest = join(target, norm);
-      if (!resolve(dest).startsWith(targetRoot)) {
-        skipped += 1;
-        continue;
-      }
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, entry.getData());
-      extracted += 1;
+    files.forEach((f, i) => {
+      const relPath = relPaths[i] || f.originalname || '';
+      if (f.buffer && this.writeWorkspaceFile(target, targetRoot, relPath, f.buffer)) extracted += 1;
+      else skipped += 1;
+    });
+    return this.finalizeWorkspace(project, target, extracted, skipped, 'folder', user);
+  }
+
+  /**
+   * Import a public or private GitHub repository by downloading its zipball
+   * and extracting it into the project's private workspace. The optional token
+   * is used once for the download and never stored.
+   */
+  async importCodebaseFromGithub(
+    user: CurrentUser,
+    projectId: string,
+    dto: { owner: string; repo: string; branch?: string | null; token?: string | null },
+  ) {
+    const project = await this.loadProjectForUpload(user, projectId);
+    const branch = (dto.branch && dto.branch.trim()) || 'main';
+
+    let buffer: Buffer;
+    try {
+      buffer = await RemoteRepoConnector.fetchGithubZipball(dto.owner, dto.repo, branch, dto.token ?? null);
+    } catch (e) {
+      throw new BadRequestException(
+        `Could not fetch GitHub repository ${dto.owner}/${dto.repo}@${branch}: ${String(e instanceof Error ? e.message : e)}`,
+      );
     }
-    if (extracted === 0) throw new BadRequestException('The archive contained no usable files');
 
-    project.rootDirectory = target;
-    project.updatedAt = new Date();
-    await this.projects.save(project);
-    this.logger.log(`codebase uploaded project=${projectId} files=${extracted} skipped=${skipped} by=${user.email}`);
+    let zip: AdmZip;
+    try {
+      zip = new AdmZip(buffer);
+    } catch {
+      throw new BadRequestException('GitHub returned an unreadable archive');
+    }
 
-    return {
-      project_id: projectId,
-      root_directory: target,
-      files_extracted: extracted,
-      entries_skipped: skipped,
-      uploaded_by: user.email,
-    };
+    const { target, targetRoot } = this.prepareWorkspace(projectId);
+    const { extracted, skipped } = this.extractZipToWorkspace(zip, target, targetRoot);
+    return this.finalizeWorkspace(project, target, extracted, skipped, `github:${dto.owner}/${dto.repo}@${branch}`, user);
   }
 
   async list(user: CurrentUser): Promise<ProjectResponse[]> {

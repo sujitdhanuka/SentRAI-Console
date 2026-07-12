@@ -1321,11 +1321,6 @@ document.getElementById("btn-browse-directory").addEventListener("click", () => 
   const existing = document.querySelector(sel).value.trim();
   openBrowseModal(existing || null, sel);
 });
-document.getElementById("btn-browse-project-directory").addEventListener("click", () => {
-  const sel = '#project-form input[name="root_directory"]';
-  const existing = document.querySelector(sel).value.trim();
-  openBrowseModal(existing || null, sel);
-});
 document.getElementById("btn-close-browse-modal").addEventListener("click", closeBrowseModal);
 document.getElementById("btn-cancel-browse").addEventListener("click", closeBrowseModal);
 document.getElementById("btn-browse-up").addEventListener("click", (e) => {
@@ -1497,17 +1492,33 @@ document.getElementById("btn-import-selected").addEventListener("click", async (
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
+/** Show only the codebase-source pane matching the selected radio. */
+function syncCodebaseSource() {
+  const sel = document.querySelector('#project-form input[name="codebase_source"]:checked');
+  const source = sel ? sel.value : "zip";
+  ["zip", "folder", "github"].forEach((s) => {
+    document.getElementById(`src-pane-${s}`).classList.toggle("hidden", s !== source);
+  });
+}
+document.querySelectorAll('#project-form input[name="codebase_source"]').forEach((r) =>
+  r.addEventListener("change", syncCodebaseSource),
+);
+
 function openProjectForm(project) {
   const panel = document.getElementById("form-new-project");
   const form = document.getElementById("project-form");
   form.reset();
+  ["project-codebase-zip", "project-codebase-folder", "gh-owner", "gh-repo", "gh-branch", "gh-token"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  syncCodebaseSource();
   if (project) {
     document.getElementById("project-form-title").textContent = `Edit Project — ${project.name}`;
     document.getElementById("project-form-submit").textContent = "Save Changes";
     form.project_id.value = project.project_id;
     form.name.value = project.name;
     form.description.value = project.description || "";
-    form.root_directory.value = project.root_directory;
   } else {
     document.getElementById("project-form-title").textContent = "New Project";
     document.getElementById("project-form-submit").textContent = "Create Project";
@@ -1547,16 +1558,69 @@ async function apiUpload(path, formData) {
   return data;
 }
 
+/** Upload the codebase for a project from whichever source is selected. */
+async function uploadProjectCodebase(projectId, source) {
+  if (source === "zip") {
+    const input = document.getElementById("project-codebase-zip");
+    const file = input && input.files.length ? input.files[0] : null;
+    if (!file) return null;
+    toast("Uploading codebase…");
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiUpload(`/projects/${projectId}/codebase`, fd);
+  }
+  if (source === "folder") {
+    const input = document.getElementById("project-codebase-folder");
+    const files = input && input.files.length ? input.files : null;
+    if (!files) return null;
+    toast(`Uploading ${files.length} files…`);
+    const fd = new FormData();
+    // Send the true relative path alongside each file — multer would otherwise
+    // reduce the filename to a basename, losing structure and junk filtering.
+    for (const f of files) {
+      fd.append("files", f);
+      fd.append("paths", f.webkitRelativePath || f.name);
+    }
+    return apiUpload(`/projects/${projectId}/codebase/folder`, fd);
+  }
+  if (source === "github") {
+    const owner = document.getElementById("gh-owner").value.trim();
+    const repo = document.getElementById("gh-repo").value.trim();
+    if (!owner || !repo) return null;
+    toast("Fetching GitHub repository…");
+    return api(`/projects/${projectId}/codebase/github`, {
+      method: "POST",
+      body: JSON.stringify({
+        owner,
+        repo,
+        branch: document.getElementById("gh-branch").value.trim() || undefined,
+        token: document.getElementById("gh-token").value.trim() || undefined,
+      }),
+    });
+  }
+  return null;
+}
+
+/** True when the selected source has enough input to attempt an upload. */
+function hasCodebaseInput(source) {
+  if (source === "zip") return document.getElementById("project-codebase-zip").files.length > 0;
+  if (source === "folder") return document.getElementById("project-codebase-folder").files.length > 0;
+  if (source === "github") {
+    return !!document.getElementById("gh-owner").value.trim() && !!document.getElementById("gh-repo").value.trim();
+  }
+  return false;
+}
+
 document.getElementById("project-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
   const obj = formToObject(form);
   const isEdit = !!obj.project_id;
-  const zipInput = document.getElementById("project-codebase-zip");
-  const zipFile = zipInput && zipInput.files.length ? zipInput.files[0] : null;
+  const source = (document.querySelector('#project-form input[name="codebase_source"]:checked') || {}).value || "zip";
+  const hasCode = hasCodebaseInput(source);
 
-  if (!isEdit && !zipFile && !(obj.root_directory || "").trim()) {
-    toast("Upload a codebase .zip or provide a server directory path", "error");
+  if (!isEdit && !hasCode) {
+    toast("Add a codebase: upload a .zip or folder, or enter a GitHub owner/repo", "error");
     return;
   }
 
@@ -1565,33 +1629,26 @@ document.getElementById("project-form").addEventListener("submit", async (e) => 
   try {
     let projectId = obj.project_id;
     if (isEdit) {
-      const body = { name: obj.name, description: obj.description || "" };
-      if ((obj.root_directory || "").trim()) body.root_directory = obj.root_directory;
-      await api(`/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(body) });
+      await api(`/projects/${projectId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: obj.name, description: obj.description || "" }),
+      });
     } else {
       const created = await api("/projects", {
         method: "POST",
-        body: JSON.stringify({
-          name: obj.name,
-          description: obj.description || "",
-          root_directory: (obj.root_directory || "").trim(),
-        }),
+        body: JSON.stringify({ name: obj.name, description: obj.description || "", root_directory: "" }),
       });
       projectId = created.project_id;
     }
 
-    if (zipFile) {
-      toast("Uploading codebase…");
-      const fd = new FormData();
-      fd.append("file", zipFile);
-      const up = await apiUpload(`/projects/${projectId}/codebase`, fd);
-      toast(`Codebase uploaded — ${up.files_extracted} files ready to scan`);
+    if (hasCode) {
+      const up = await uploadProjectCodebase(projectId, source);
+      toast(`Codebase ready — ${up.files_extracted} files added${up.entries_skipped ? `, ${up.entries_skipped} skipped` : ""}`);
     } else {
       toast(isEdit ? "Project updated" : "Project created");
     }
 
     form.reset();
-    if (zipInput) zipInput.value = "";
     document.getElementById("form-new-project").classList.add("hidden");
     loadProjects();
   } catch (err) {
@@ -1619,7 +1676,7 @@ async function loadProjects() {
       <div class="project-card">
         <div class="title">🗂 ${p.name}</div>
         ${p.description ? `<div class="desc">${p.description}</div>` : ""}
-        <div class="path">${p.root_directory}</div>
+        <div class="path">${/[\\/]workspaces[\\/]/.test(p.root_directory || "") ? "📦 uploaded codebase" : p.root_directory}</div>
         <div class="meta-row">
           <span class="badge neutral">${p.model_count} model(s)</span>
           ${p.model_count > 0

@@ -61,8 +61,8 @@
       </div>
       <p class="muted" style="margin:-10px 0 18px">
         Each project tracks one application's codebase — its own scan history and its own scoped model inventory.
-        Create a project per app you want to govern — upload its codebase as a .zip (or point at a directory on
-        this server for self-hosted installs), then scan and track its AI models independently of any other project.
+        Create a project per app you want to govern — add its codebase by uploading a .zip, uploading a folder, or
+        connecting a GitHub repository, then scan and track its AI models independently of any other project.
       </p>
 
       <div class="card form-card hidden" id="form-new-project">
@@ -73,19 +73,42 @@
             <label>Project Name <input required name="name" placeholder="e.g. Dhancept Terminal" /></label>
             <label>Description (optional) <input name="description" placeholder="e.g. AI trading research platform" /></label>
           </div>
-          <label>Codebase — upload a .zip of your application's source
-            <input type="file" id="project-codebase-zip" accept=".zip,application/zip" />
-            <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
-              The archive is extracted into this project's private workspace on the server and scanned there
-              (node_modules/.git are skipped, max 200&nbsp;MB). Alternatively, point at a directory below.
-            </span>
-          </label>
-          <label>…or a Root Directory already on this server (self-hosted installs)
-            <div style="display:flex; gap:8px;">
-              <input name="root_directory" placeholder="/path/on/this/server/your-app" style="flex:1" />
-              <button type="button" class="btn ghost" id="btn-browse-project-directory">📁 Browse…</button>
+          <div class="codebase-field">
+            <label style="margin-bottom:6px;">Codebase source</label>
+            <div class="source-tabs" role="tablist" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+              <label class="src-opt"><input type="radio" name="codebase_source" value="zip" checked /> Upload .zip</label>
+              <label class="src-opt"><input type="radio" name="codebase_source" value="folder" /> Upload folder</label>
+              <label class="src-opt"><input type="radio" name="codebase_source" value="github" /> GitHub repo</label>
             </div>
-          </label>
+
+            <div class="src-pane" id="src-pane-zip">
+              <input type="file" id="project-codebase-zip" accept=".zip,application/zip" />
+              <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
+                A .zip of your application's source. Extracted into the project's private workspace and scanned there
+                (node_modules/.git skipped, max 200&nbsp;MB).
+              </span>
+            </div>
+
+            <div class="src-pane hidden" id="src-pane-folder">
+              <input type="file" id="project-codebase-folder" webkitdirectory directory multiple />
+              <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
+                Select your application's folder — its files upload directly and are scanned in the project workspace
+                (node_modules/.git skipped).
+              </span>
+            </div>
+
+            <div class="src-pane hidden" id="src-pane-github">
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <input id="gh-owner" placeholder="owner (e.g. octocat)" style="flex:1; min-width:150px;" />
+                <input id="gh-repo" placeholder="repository (e.g. hello-world)" style="flex:1; min-width:150px;" />
+                <input id="gh-branch" placeholder="branch (default: main)" style="width:170px;" />
+              </div>
+              <input id="gh-token" type="password" autocomplete="off" placeholder="access token — only for private repos" style="width:100%; margin-top:8px;" />
+              <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
+                Public repositories need no token. Any token is used once to download and is never stored.
+              </span>
+            </div>
+          </div>
           <div class="form-actions">
             <button type="button" class="btn ghost" id="btn-cancel-project">Cancel</button>
             <button type="submit" class="btn primary" id="project-form-submit">Create Project</button>

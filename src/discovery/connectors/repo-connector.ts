@@ -35,10 +35,26 @@ export class RemoteRepoConnector {
   }
 
   static async downloadGithubRepo(owner: string, repo: string, branch = 'main', token?: string | null): Promise<string> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { 'User-Agent': 'SentrAI' };
     if (token) headers.Authorization = `token ${token}`;
     const url = `https://api.github.com/repos/${owner}/${repo}/zipball/${branch}`;
     return this.downloadAndExtract(url, headers);
+  }
+
+  /**
+   * Fetches a GitHub repository as a raw zipball buffer (for extraction into a
+   * project workspace). The host is fixed to api.github.com — owner/repo/branch
+   * are the only caller-controlled parts, so this is not an SSRF vector.
+   */
+  static async fetchGithubZipball(owner: string, repo: string, branch = 'main', token?: string | null): Promise<Buffer> {
+    const headers: Record<string, string> = { 'User-Agent': 'SentrAI' };
+    if (token) headers.Authorization = `token ${token}`;
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/zipball/${encodeURIComponent(branch)}`;
+    const res = await fetch(url, { headers, redirect: 'follow' });
+    if (!res.ok) {
+      throw new Error(`GitHub returned ${res.status} for ${owner}/${repo}@${branch}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
   }
 
   static async downloadGitlabRepo(

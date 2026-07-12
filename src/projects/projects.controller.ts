@@ -10,15 +10,16 @@ import {
   Post,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CurrentUser as CurrentUserType } from '../common/interfaces/current-user.interface';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
+import { CreateProjectDto, GithubImportDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
@@ -47,6 +48,32 @@ export class ProjectsController {
     @UploadedFile() file: { originalname?: string; size?: number; buffer?: Buffer },
   ) {
     return this.projects.uploadCodebase(user, projectId, file);
+  }
+
+  /**
+   * Upload an entire folder (webkitdirectory): many files, each carrying its
+   * relative path in the filename. Extracted into the project workspace.
+   */
+  @Post(':projectId/codebase/folder')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('files', 10000, { limits: { fileSize: 50 * 1024 * 1024 } }))
+  uploadCodebaseFolder(
+    @CurrentUser() user: CurrentUserType,
+    @Param('projectId') projectId: string,
+    @UploadedFiles() files: Array<{ originalname?: string; buffer?: Buffer }>,
+    @Body('paths') paths?: string | string[],
+  ) {
+    return this.projects.uploadCodebaseFolder(user, projectId, files, paths);
+  }
+
+  /** Import a GitHub repository into the project workspace by zipball download. */
+  @Post(':projectId/codebase/github')
+  importGithub(
+    @CurrentUser() user: CurrentUserType,
+    @Param('projectId') projectId: string,
+    @Body() dto: GithubImportDto,
+  ) {
+    return this.projects.importCodebaseFromGithub(user, projectId, dto);
   }
 
   @Get()
