@@ -130,11 +130,11 @@ async function handleRegister(e) {
   e.preventDefault();
   const btn = document.getElementById("btn-reg-submit");
   const errEl = document.getElementById("reg-error");
+  // Role is never chosen at signup — the server always creates a Viewer.
   const payload = {
     full_name: document.getElementById("reg-name").value,
     email: document.getElementById("reg-email").value,
     password: document.getElementById("reg-password").value,
-    role: document.getElementById("reg-role").value,
   };
   btn.textContent = "Creating account…";
   btn.disabled = true;

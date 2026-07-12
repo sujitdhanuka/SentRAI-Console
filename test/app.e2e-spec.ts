@@ -155,6 +155,28 @@ describe('SentrAI Console (e2e)', () => {
     await request(http).get('/api/v1/users').set('Authorization', `Bearer ${token}`).expect(403);
   });
 
+  it('SECURITY: public registration cannot self-assign a privileged role', async () => {
+    // Attacker attempts to register directly as ADMIN.
+    const reg = await request(http)
+      .post('/api/v1/auth/register')
+      .send({ email: 'attacker@x.test', full_name: 'Mallory', password: 'pw12345678', role: 'ADMIN' });
+    expect(reg.status).toBe(201);
+    expect(reg.body.role).toBe('VIEWER'); // role coerced, never ADMIN
+
+    // And the resulting account has no admin powers.
+    const token = await login('attacker@x.test', 'pw12345678');
+    const me = await request(http).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`);
+    expect(me.body.role).toBe('VIEWER');
+    await request(http).get('/api/v1/users').set('Authorization', `Bearer ${token}`).expect(403);
+  });
+
+  it('SECURITY: rejects weak registration passwords', async () => {
+    await request(http)
+      .post('/api/v1/auth/register')
+      .send({ email: 'weak@x.test', full_name: 'W', password: 'short' })
+      .expect(400);
+  });
+
   it('gates lifecycle promotion on governance completeness', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const model = await request(http)

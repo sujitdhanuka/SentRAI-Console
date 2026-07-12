@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -12,6 +13,8 @@ import { AuthUserResponse, LoginDto, RefreshDto, RegisterDto, TokenResponse } fr
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  // Tight limit on credential submission — resists brute-force / spraying.
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Public()
   @Post('token')
   @HttpCode(HttpStatus.OK)
@@ -31,6 +34,7 @@ export class AuthController {
     return this.auth.me(user);
   }
 
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)

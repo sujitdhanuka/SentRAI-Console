@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,9 +30,17 @@ export class ProjectsService {
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
+    private readonly config: ConfigService,
   ) {}
 
   private validateDirectory(path: string): void {
+    // Pointing a project at an arbitrary server path is server-filesystem
+    // access — disabled on hosted deployments, where code arrives via upload.
+    if (!this.config.get<boolean>('allowServerFs')) {
+      throw new ForbiddenException(
+        'Referencing a server directory is disabled on this deployment. Upload a codebase ZIP instead.',
+      );
+    }
     if (!isDirectory(path)) {
       throw new BadRequestException(`Not a directory the service can see: ${expandAndResolve(path)}`);
     }

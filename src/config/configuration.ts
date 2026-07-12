@@ -50,11 +50,53 @@ export interface AppConfig {
 
   // EU AI Act high-risk functional areas (comma-separated env override)
   euAiActHighRiskDomains: string[];
+
+  // Allow browsing/scanning arbitrary server filesystem paths. Dangerous on
+  // shared/hosted deployments (arbitrary directory read). Defaults OFF in
+  // production; hosted users onboard code via ZIP upload instead.
+  allowServerFs: boolean;
+
+  // Expose Swagger UI at /docs. Defaults OFF in production to avoid publishing
+  // the full API surface to unauthenticated visitors.
+  exposeDocs: boolean;
+
+  // True when NODE_ENV=production or DB_PROVIDER=mariadb.
+  productionLike: boolean;
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
+const DEV_FALLBACK_SECRET = 'CHANGE_ME_IN_PRODUCTION_secret_key_32chars';
+
+/**
+ * A deployment is treated as "production" when NODE_ENV=production OR it runs
+ * against MariaDB (the hosted DB) — either way, weak secrets are refused.
+ */
+function isProductionLike(): boolean {
+  return process.env.NODE_ENV === 'production' || (process.env.DB_PROVIDER ?? 'sqlite') === 'mariadb';
+}
+
+/**
+ * Resolves the JWT secret and fails fast in production if it is missing, the
+ * in-repo dev fallback, or too short to resist brute-forcing. A forgeable JWT
+ * secret means anyone can mint admin tokens, so this must never silently pass.
+ */
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET ?? process.env.SENTRAI_JWT_SECRET;
+  if (isProductionLike()) {
+    if (!secret || secret === DEV_FALLBACK_SECRET || secret.length < 32) {
+      throw new Error(
+        'FATAL: JWT_SECRET must be set to a strong value (>=32 chars) in production. ' +
+          'Refusing to start with a missing or default secret. Generate one with: ' +
+          "node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\"",
+      );
+    }
+    return secret;
+  }
+  return secret ?? DEV_FALLBACK_SECRET;
 }
 
 export default (): AppConfig => ({
@@ -79,10 +121,7 @@ export default (): AppConfig => ({
   },
 
   jwt: {
-    secret:
-      process.env.JWT_SECRET ??
-      process.env.SENTRAI_JWT_SECRET ??
-      'CHANGE_ME_IN_PRODUCTION_secret_key_32chars',
+    secret: resolveJwtSecret(),
     algorithm: 'HS256',
     accessTokenExpireMinutes: 60 * 8,
     refreshTokenExpireDays: 30,
@@ -119,4 +158,9 @@ export default (): AppConfig => ({
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
+
+  // Off by default in production unless explicitly opted in.
+  allowServerFs: bool(process.env.ALLOW_SERVER_FS, !isProductionLike()),
+  exposeDocs: bool(process.env.EXPOSE_DOCS, !isProductionLike()),
+  productionLike: isProductionLike(),
 });

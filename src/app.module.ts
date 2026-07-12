@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
@@ -28,6 +29,13 @@ import { TasksModule } from './tasks/tasks.module';
       isGlobal: true,
       load: [configuration],
     }),
+    // Global rate limiting: 300 requests / minute per IP (the SPA fires many
+    // calls on load). Auth endpoints tighten this with per-route @Throttle.
+    // Disabled under test so the e2e suite's rapid logins aren't throttled.
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 300 }],
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
     ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
@@ -49,7 +57,8 @@ import { TasksModule } from './tasks/tasks.module';
   ],
   controllers: [AppController],
   providers: [
-    // Order matters: authenticate first, then check roles.
+    // Rate limit first, then authenticate, then check roles.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

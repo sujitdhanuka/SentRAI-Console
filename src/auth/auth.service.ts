@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { UserEntity } from '../database/entities';
+import { Role } from '../common/enums';
 import { hashPassword, verifyPassword } from '../common/password';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { TokenService } from './token.service';
@@ -72,7 +73,9 @@ export class AuthService {
         email: dto.email,
         fullName: dto.full_name,
         hashedPassword: hashPassword(dto.password),
-        role: dto.role ?? 'VIEWER',
+        // Public self-registration is ALWAYS a VIEWER. Elevated roles are
+        // granted only by an admin via POST /users — never self-selected.
+        role: Role.VIEWER,
         tenantId: null,
         isActive: true,
         createdAt: now,

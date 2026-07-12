@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,7 +42,17 @@ export class DiscoveryService {
     @InjectRepository(AIAuditTrailEntity) private readonly audits: Repository<AIAuditTrailEntity>,
     private readonly treeSitter: TreeSitterService,
     private readonly neo4j: Neo4jClient,
+    private readonly config: ConfigService,
   ) {}
+
+  /** Server-filesystem access (browse / raw-path scan) is gated in production. */
+  private assertServerFsAllowed(): void {
+    if (!this.config.get<boolean>('allowServerFs')) {
+      throw new ForbiddenException(
+        'Server filesystem access is disabled on this deployment. Upload a codebase ZIP to a project instead.',
+      );
+    }
+  }
 
   private async resolveDirectory(
     directory?: string | null,
@@ -52,12 +63,18 @@ export class DiscoveryService {
       project = await this.projects.findOne({ where: { id: projectId } });
       if (!project) throw new NotFoundException('Project not found');
     }
-    if (directory) return { dir: directory, project };
+    // A raw directory path is arbitrary server-filesystem access — gated.
+    // Scanning a project's own (workspace) root is always allowed.
+    if (directory) {
+      this.assertServerFsAllowed();
+      return { dir: directory, project };
+    }
     if (project) return { dir: project.rootDirectory, project };
     throw new BadRequestException('Provide either a directory or a project_id');
   }
 
   browse(path?: string | null): BrowseResponse {
+    this.assertServerFsAllowed();
     const target = path ? expandAndResolve(path) : homedir();
     if (!existsSync(target)) throw new NotFoundException(`Path does not exist: ${target}`);
     let st;
