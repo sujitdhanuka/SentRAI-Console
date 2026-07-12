@@ -71,7 +71,9 @@ export default (): AppConfig => ({
     host: process.env.DB_HOST ?? 'localhost',
     port: parseInt(process.env.DB_PORT ?? '3306', 10),
     username: process.env.DB_USER ?? 'sentrai',
-    password: process.env.DB_PASSWORD ?? 'sentrai',
+    // MYSQL_PWD is the conventional MySQL/MariaDB client env var — supported so
+    // hosts (e.g. Hostinger hPanel) can keep the secret out of app-specific vars.
+    password: process.env.DB_PASSWORD ?? process.env.MYSQL_PWD ?? 'sentrai',
     database: process.env.DB_NAME ?? 'sentrai_compliance',
     synchronize: bool(process.env.DB_SYNCHRONIZE, true),
   },

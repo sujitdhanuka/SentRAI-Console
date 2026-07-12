@@ -57,20 +57,39 @@ npm run start:prod           # node dist/main
    Set the **application startup file** to `dist/main.js` and the **build command**
    to `npm run build`.
 2. Create a **MariaDB database** from hPanel and note its host/user/password/name.
-3. Set the app's environment variables in hPanel:
+3. Set the app's environment variables in hPanel (the current hosted site's values):
    ```
    DB_PROVIDER=mariadb
-   DB_HOST=<hostinger db host>
+   DB_HOST=82.25.121.7
    DB_PORT=3306
-   DB_USER=<db user>
-   DB_PASSWORD=<db password>
-   DB_NAME=<db name>
+   DB_USER=u709389505_sentrai
+   DB_NAME=u709389505_sentrai
+   MYSQL_PWD=<db password>      # or DB_PASSWORD — either is read; DB_PASSWORD wins
    DB_SYNCHRONIZE=true          # or false + run migrations (see below)
    JWT_SECRET=<a long random string>
    CORS_ORIGINS=https://<your-domain>
    ```
 4. Deploy. On first boot the schema is created (or run migrations) and the default admin is
    seeded. **Change the admin password immediately** via the Users tab.
+
+### Converting an existing SQLite deployment to MariaDB
+
+If the hosted site previously ran on SQLite and you want to keep its data, run the
+one-shot converter **on the host where the SQLite file lives** (it creates the schema
+on the target and copies every table, preserving IDs):
+
+```bash
+SQLITE_PATH=./dev.db \
+DB_HOST=82.25.121.7 DB_PORT=3306 \
+DB_USER=u709389505_sentrai DB_NAME=u709389505_sentrai \
+MYSQL_PWD=<db password> \
+npm run db:convert                       # or: node dist/scripts/sqlite-to-mariadb.js
+```
+
+The converter refuses to touch a target that already has users unless `FORCE=1` is set
+(re-runs upsert by primary key, so `FORCE=1` is idempotent). Starting fresh instead?
+Skip the converter — with `DB_SYNCHRONIZE=true` the schema is created and the admin
+seeded on first boot. Local development stays on SQLite (`DB_PROVIDER=sqlite`).
 
 ### Schema management
 
