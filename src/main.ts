@@ -25,6 +25,10 @@ async function bootstrap() {
         useDefaults: true,
         directives: {
           'script-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          // The console uses inline event handlers (onclick, onsubmit, ...);
+          // allow them, consistent with 'unsafe-inline' already on script-src.
+          // Helmet's default sets this to 'none', which would break the SPA.
+          'script-src-attr': ["'unsafe-inline'"],
           'style-src': ["'self'", "'unsafe-inline'"],
           'img-src': ["'self'", 'data:'],
           'connect-src': ["'self'"],
