@@ -26,7 +26,7 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { IncidentStatus, ModelLifecycleStage, RiskLevel, Role, SutraAlignment } from '../common/enums';
 import { maskDict } from '../common/dpdp';
 import { NotifierService } from '../common/notifier.service';
-import { AIModelEntry, EvidenceArtifact, triageAiModel } from '../domain/model-inventory';
+import { AIModelEntry, EvidenceArtifact, triageAiModel, floorRiskForSecurityFindings } from '../domain/model-inventory';
 import { ValidationContext } from '../compliance/frameworks.validator';
 import { modelEntityToEntry } from './model.mapper';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
@@ -141,6 +141,7 @@ export class InventoryService {
       autonomous_scope: orm.autonomousScope,
       last_red_team_date: orm.lastRedTeamDate,
       sutras_alignment: orm.sutrasAlignment ?? [],
+      security_findings: orm.securityFindings ?? [],
     };
   }
 
@@ -448,9 +449,11 @@ export class InventoryService {
 
     orm.updatedAt = new Date();
 
-    // Re-triage with updated facts — closing gaps can raise or lower risk.
+    // Re-triage with updated facts — closing gaps can raise or lower risk. But
+    // an unremediated hardcoded secret keeps the model floored at HIGH, so an
+    // unrelated edit can't quietly drop it back to LOW.
     const entry = modelEntityToEntry(orm);
-    const newRisk = triageAiModel(entry);
+    const newRisk = floorRiskForSecurityFindings(triageAiModel(entry), orm.securityFindings?.length ?? 0);
     if (newRisk !== (orm.riskLevel as RiskLevel)) {
       changes.risk_level = [orm.riskLevel, newRisk];
       orm.riskLevel = newRisk;

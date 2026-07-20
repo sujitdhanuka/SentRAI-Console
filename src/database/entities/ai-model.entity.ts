@@ -80,6 +80,14 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   evidenceArtifacts!: Array<{ type: string; ref: string; description?: string; added_at: string }> | null;
 
+  /**
+   * Hardcoded secrets / credentials found in the model's source at scan time
+   * (values are masked). Carried over from discovery so the security warning
+   * surfaced during the scan survives into the governed inventory record.
+   */
+  @Column('simple-json', { nullable: true })
+  securityFindings!: Array<{ type: string; masked_value: string; line: number }> | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

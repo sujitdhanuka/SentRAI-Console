@@ -90,6 +90,8 @@ export interface ModelResponse {
   autonomous_scope: string | null;
   last_red_team_date: Date | null;
   sutras_alignment: string[];
+  /** Hardcoded secrets found in the model's source at scan time (values masked). */
+  security_findings: Array<{ type: string; masked_value: string; line: number }>;
   /** Set when the org crossed its plan's soft model limit (registration never blocks). */
   plan_warning?: string | null;
 }

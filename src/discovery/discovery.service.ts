@@ -18,7 +18,7 @@ import {
 } from '../database/entities';
 import { ModelLifecycleStage, RiskLevel, Role } from '../common/enums';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
-import { AIModelEntry, triageAiModel } from '../domain/model-inventory';
+import { AIModelEntry, triageAiModel, floorRiskForSecurityFindings } from '../domain/model-inventory';
 import { expandAndResolve } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
 import { candidateAsDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
@@ -290,7 +290,10 @@ export class DiscoveryService {
       };
 
       const triaged = triageAiModel(entry);
-      const finalRisk = RISK_ORDER[triaged] >= RISK_ORDER[cand.riskHint] ? triaged : cand.riskHint;
+      const triagedOrHint = RISK_ORDER[triaged] >= RISK_ORDER[cand.riskHint] ? triaged : cand.riskHint;
+      // A hardcoded secret in the source is a material security finding — never
+      // let such a model land in the inventory below HIGH risk.
+      const finalRisk = floorRiskForSecurityFindings(triagedOrHint, cand.secrets.length);
 
       await this.models.save(this.models.create({
         id: entry.modelId,
@@ -316,6 +319,7 @@ export class DiscoveryService {
         grievanceCount: 0,
         grievanceResolutionNotes: '',
         sourceRef: entry.sourceRef,
+        securityFindings: cand.secrets.length ? cand.secrets : null,
         isActive: true,
         registeredAt: entry.registeredAt,
         updatedAt: entry.updatedAt,
@@ -342,6 +346,8 @@ export class DiscoveryService {
           triaged_risk_level: triaged,
           final_risk_level: finalRisk,
           confidence: cand.confidence,
+          security_findings: cand.secrets.length,
+          risk_floored_by_secrets: cand.secrets.length > 0 && RISK_ORDER[triagedOrHint] < RISK_ORDER[RiskLevel.HIGH],
         },
         actor: 'codebase_scanner',
         occurredAt: entry.registeredAt,

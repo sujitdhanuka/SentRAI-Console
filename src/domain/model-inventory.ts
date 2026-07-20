@@ -95,3 +95,27 @@ export function triageAiModel(entry: AIModelEntry): RiskLevel {
 
   return baseRisk;
 }
+
+const RISK_SEVERITY: Record<string, number> = {
+  [RiskLevel.MINIMAL]: 0,
+  [RiskLevel.LOW]: 0,
+  [RiskLevel.LIMITED]: 1,
+  [RiskLevel.MEDIUM]: 1,
+  [RiskLevel.HIGH]: 2,
+  [RiskLevel.CRITICAL]: 3,
+  [RiskLevel.PROHIBITED]: 4,
+};
+
+/**
+ * A hardcoded secret / credential in source is a material security finding, not
+ * a stylistic one. A model that still carries unremediated secrets must never be
+ * triaged below HIGH, regardless of its functional-area risk. Idempotent: once
+ * the secrets are removed from the code and the model is re-scanned/re-imported,
+ * `secretCount` is 0 and the normal triage risk applies again.
+ */
+export function floorRiskForSecurityFindings(risk: RiskLevel, secretCount: number): RiskLevel {
+  if (secretCount > 0 && (RISK_SEVERITY[risk] ?? 0) < RISK_SEVERITY[RiskLevel.HIGH]) {
+    return RiskLevel.HIGH;
+  }
+  return risk;
+}
