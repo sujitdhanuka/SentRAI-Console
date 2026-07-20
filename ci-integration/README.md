@@ -42,12 +42,57 @@ Developer PR ─► CI runs sentrai-gate.mjs ─► POST /api/v1/ci/scan (CI tok
    Store the token as the `SENTRAI_CI_TOKEN` secret and your API base URL as
    `SENTRAI_URL` in the pipeline.
 
+   Or mint it from the app with no curl: **CI Gate Ledger → “⚙ Set up CI
+   scanning”** (ADMIN/CISO) generates a token and a ready-to-run snippet.
+
 2. **Add a policy** — copy [`policy.example.yaml`](policy.example.yaml) to
    `.sentrai/policy.yaml` in the target repo and tune the gates.
 
 3. **Add the pipeline job** — copy [`github-workflow.yml`](github-workflow.yml)
-   to `.github/workflows/sentrai-gate.yml` and vendor
-   [`sentrai-gate.mjs`](sentrai-gate.mjs) to `.sentrai/sentrai-gate.mjs`.
+   to `.github/workflows/sentrai-gate.yml`. It references the **packaged action**
+   (below) — nothing to vendor.
+
+## GitHub Action (recommended)
+
+Reference the packaged action directly — no script to copy:
+
+```yaml
+- name: SentRAI Pre-Deployment Gate
+  id: gate
+  uses: sujitdhanuka/SentRAI-Console/ci-integration/sentrai-gate-action@v1
+  with:
+    sentrai-url: ${{ vars.SENTRAI_URL }}
+    ci-token: ${{ secrets.SENTRAI_CI_TOKEN }}
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sentrai-url` | yes | — | Base URL of your SentRAI Console. |
+| `ci-token` | yes | — | Project-scoped CI service token (a secret). |
+| `fail-on` | no | `fail` | `fail` blocks the deploy; `never` reports only. |
+| `max-mb` | no | `20` | Max total size of the scanned snapshot. |
+| `sarif-file` | no | `sentrai-results.sarif` | Where to write the SARIF report. |
+
+| Output | Description |
+|---|---|
+| `verdict` | `pass` or `fail`. |
+| `gate-event-id` | The immutable gate-event id in the ledger. |
+| `blocking-violations` | Count of blocking violations. |
+| `sarif-file` | Path to the SARIF report (feed to `upload-sarif`). |
+
+The action emits GitHub `::error::` annotations on the offending files and a job
+summary, and exits non-zero on `fail` so the deploy is blocked.
+
+### Versioning the action
+
+Consumers pin to a tag. To publish `v1`, tag this repo:
+
+```bash
+git tag -f v1 && git push -f origin v1   # move v1 to the current commit
+```
+
+Use `@v1` for a stable pin, or `@main` to always track the latest. (Optionally
+list it on the GitHub Marketplace from the repo's *Releases*.)
 
 ## Verdict semantics
 

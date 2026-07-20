@@ -1,0 +1,40 @@
+name: 'SentRAI Pre-Deployment Gate'
+description: 'Block deploys with ungoverned or non-compliant AI models. Scans the checked-out code against your SentRAI Console and fails the build on a gate failure.'
+author: 'SentRAI'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  sentrai-url:
+    description: 'Base URL of your SentRAI Console (e.g. https://sentraiconsole.com).'
+    required: true
+  ci-token:
+    description: 'Project-scoped SentRAI CI service token. Store it as an encrypted secret (e.g. secrets.SENTRAI_CI_TOKEN) and pass it here.'
+    required: true
+  fail-on:
+    description: 'Verdict that fails the job: "fail" (default, blocks the deploy) or "never" (report-only).'
+    required: false
+    default: 'fail'
+  max-mb:
+    description: 'Maximum total size of the scanned code snapshot, in MB.'
+    required: false
+    default: '20'
+  sarif-file:
+    description: 'Path to write the SARIF report (upload it with github/codeql-action/upload-sarif).'
+    required: false
+    default: 'sentrai-results.sarif'
+
+outputs:
+  verdict:
+    description: 'The gate verdict: "pass" or "fail".'
+  gate-event-id:
+    description: 'The immutable gate-event id recorded in the ledger.'
+  blocking-violations:
+    description: 'Number of blocking governance violations.'
+  sarif-file:
+    description: 'Path to the written SARIF report.'
+
+runs:
+  using: 'node20'
+  main: 'index.mjs'
