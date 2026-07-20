@@ -416,6 +416,12 @@ describe('SentrAI Console (e2e)', () => {
     expect(upload.status).toBe(201);
     expect(upload.body.files_extracted).toBe(2);
     expect(upload.body.entries_skipped).toBe(1);
+    // Scan-on-upload ran and persisted a result to the project.
+    expect(upload.body.models_discovered).toBeGreaterThanOrEqual(1);
+    const listed = await request(http).get('/api/v1/projects').set('Authorization', `Bearer ${admin}`);
+    const projRow = listed.body.find((p: any) => p.project_id === projectId);
+    expect(projRow.has_scan_result).toBe(true);
+    expect(projRow.models_discovered).toBeGreaterThanOrEqual(1);
 
     // The workspace is now scannable: rescan finds the project directory valid.
     const rescan = await request(http)

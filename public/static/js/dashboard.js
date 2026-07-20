@@ -1707,7 +1707,9 @@ async function loadProjects() {
           ${p.model_count > 0
             ? `<span class="badge ${p.open_gap_count === 0 ? "COMPLIANT" : "risk-HIGH"}">${p.compliant_count}/${p.model_count} compliant</span>`
             : ""}
-          ${p.last_scanned_at ? `<span class="badge neutral">scanned ${fmtDate(p.last_scanned_at)}</span>` : `<span class="badge neutral">never scanned</span>`}
+          ${p.has_scan_result
+            ? `<span class="badge ok">🔎 ${p.models_discovered} AI file(s) discovered</span>`
+            : `<span class="badge risk-HIGH">⚠ not scanned — upload a codebase</span>`}
         </div>
         <div class="actions">
           <button class="btn small primary select-project-btn" data-id="${p.project_id}">⚡ Select &amp; Activate Project</button>

@@ -79,6 +79,8 @@ export class ProjectsService {
       compliant_count: compliant,
       open_gap_count: openGaps,
       tenant_name: tenantName,
+      has_scan_result: orm.lastScanResult != null,
+      models_discovered: orm.lastScanResult ? orm.lastScanResult.files_flagged : null,
     };
   }
 

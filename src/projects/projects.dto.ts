@@ -63,4 +63,6 @@ export interface ProjectResponse {
   compliant_count: number;
   open_gap_count: number;
   tenant_name: string | null;
+  has_scan_result: boolean;
+  models_discovered: number | null;
 }
