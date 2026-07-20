@@ -20,6 +20,7 @@
       </div>
     </div>
     <div style="display: flex; align-items: center; gap: 12px;">
+      <button class="btn ghost small" id="btn-context-help" title="Help for the screen you're on (?)" style="cursor:pointer;">? Help</button>
       <button class="btn ghost small" id="btn-toggle-theme" style="cursor:pointer;">☀️ Light Mode</button>
       <div class="topbar-status" id="health-status">checking service…</div>
       <!-- User info chip — shown after login -->
@@ -672,6 +673,20 @@
         <button class="btn ghost small" id="btn-close-ci-detail">✕</button>
       </div>
       <div class="modal-body" id="ci-detail-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Context-sensitive Help Modal ── -->
+  <div class="modal-overlay hidden" id="help-modal-overlay">
+    <div class="modal ci-modal">
+      <div class="modal-head">
+        <h3 id="help-modal-title">Help</h3>
+        <button class="btn ghost small" id="btn-close-help-modal">✕</button>
+      </div>
+      <div class="modal-body help-body" id="help-modal-body"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="btn-help-full-guide">Open full guide →</button>
+      </div>
     </div>
   </div>
 
