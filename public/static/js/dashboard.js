@@ -211,8 +211,18 @@ async function api(path, options = {}) {
     throw new Error("Session expired — please sign in again");
   }
   if (!res.ok) {
-    const detail = (data && typeof data === 'object' && data.detail) ? JSON.stringify(data.detail) : (typeof data === 'string' ? data : res.statusText);
-    throw new Error(detail);
+    // NestJS errors carry `message` (string, or an array for validation
+    // failures); older FastAPI-style errors used `detail`. Surface whichever
+    // is present so the real reason is shown instead of a blank message.
+    let detail = "";
+    if (data && typeof data === "object") {
+      if (Array.isArray(data.message)) detail = data.message.join("; ");
+      else if (data.message) detail = String(data.message);
+      else if (data.detail) detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    } else if (typeof data === "string" && data) {
+      detail = data;
+    }
+    throw new Error(detail || res.statusText || `Request failed (HTTP ${res.status})`);
   }
   return data;
 }

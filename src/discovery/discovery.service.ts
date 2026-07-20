@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -33,6 +33,8 @@ const RISK_ORDER: Record<string, number> = { [RiskLevel.LOW]: 0, [RiskLevel.MEDI
 
 @Injectable()
 export class DiscoveryService {
+  private readonly logger = new Logger(DiscoveryService.name);
+
   constructor(
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
@@ -153,6 +155,18 @@ export class DiscoveryService {
     try {
       candidates = scanDirectory(resolved, this.treeSitter);
     } catch (e) {
+      // A live read error must never lose a prior result — serve the stored one.
+      if (project?.lastScanResult) {
+        this.logger.warn(`live scan failed for ${dir}; serving stored result: ${String(e)}`);
+        return {
+          directory: dir,
+          ast_coverage: project.lastScanResult.ast_coverage,
+          files_flagged: project.lastScanResult.files_flagged,
+          candidates: project.lastScanResult.candidates,
+          served_from: 'stored',
+          scanned_at: project.lastScanResult.scanned_at,
+        };
+      }
       throw new BadRequestException(`Scan failed while reading ${dir}: ${e instanceof Error ? e.message : String(e)}`);
     }
 
