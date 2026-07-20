@@ -1,4 +1,5 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { Role } from '../common/enums';
 
 export class AddUserDto {
   @IsString()
@@ -8,18 +9,34 @@ export class AddUserDto {
   full_name!: string;
 
   @IsString()
+  @MinLength(8, { message: 'password must be at least 8 characters' })
   password!: string;
 
-  @IsString()
-  role!: string;
+  @IsEnum(Role)
+  role!: Role;
 
   @IsOptional()
   @IsString()
   organization_id?: string | null;
 }
 
+export class UpdateUserDto {
+  @IsOptional()
+  @IsString()
+  full_name?: string;
+
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
+}
+
 export class ResetPasswordDto {
   @IsString()
+  @MinLength(8, { message: 'password must be at least 8 characters' })
   new_password!: string;
 }
 

@@ -170,6 +170,49 @@ describe('SentrAI Console (e2e)', () => {
     await request(http).get('/api/v1/users').set('Authorization', `Bearer ${token}`).expect(403);
   });
 
+  it('USERS: admin can change role, deactivate, and delete — with lockout guards', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    // Create a user.
+    const created = await request(http)
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'crud@x.test', full_name: 'Crud User', password: 'pw12345678', role: 'VIEWER' });
+    expect(created.status).toBe(201);
+    const uid = created.body.user_id;
+    expect(created.body.role).toBe('VIEWER');
+
+    // Change role.
+    const promoted = await request(http)
+      .patch(`/api/v1/users/${uid}`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ role: 'APPROVER' });
+    expect(promoted.status).toBe(200);
+    expect(promoted.body.role).toBe('APPROVER');
+
+    // Deactivate.
+    const deactivated = await request(http)
+      .patch(`/api/v1/users/${uid}`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ is_active: false });
+    expect(deactivated.body.is_active).toBe(false);
+
+    // A deactivated user cannot log in.
+    const blocked = await request(http).post('/api/v1/auth/token').type('form').send({ username: 'crud@x.test', password: 'pw12345678' });
+    expect(blocked.status).toBe(403);
+
+    // Guard: admin cannot demote or delete the last active admin (self).
+    const meList = await request(http).get('/api/v1/users').set('Authorization', `Bearer ${admin}`);
+    const adminRow = meList.body.find((u: any) => u.email === 'admin@sentrai.local');
+    await request(http).patch(`/api/v1/users/${adminRow.user_id}`).set('Authorization', `Bearer ${admin}`).send({ role: 'VIEWER' }).expect(403);
+    await request(http).delete(`/api/v1/users/${adminRow.user_id}`).set('Authorization', `Bearer ${admin}`).expect(403);
+
+    // Delete the created user.
+    await request(http).delete(`/api/v1/users/${uid}`).set('Authorization', `Bearer ${admin}`).expect(204);
+    const after = await request(http).get('/api/v1/users').set('Authorization', `Bearer ${admin}`);
+    expect(after.body.find((u: any) => u.email === 'crud@x.test')).toBeUndefined();
+  });
+
   it('SECURITY: rejects weak registration passwords', async () => {
     await request(http)
       .post('/api/v1/auth/register')

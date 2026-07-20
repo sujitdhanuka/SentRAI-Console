@@ -1954,10 +1954,12 @@ if (AUTH_TOKEN) {
 
 // ── Users Management ─────────────────────────────────────────────────────────
 
+const USER_ROLES = ["VIEWER", "OWNER", "REVIEWER", "APPROVER", "ADMIN", "CISO"];
+
 async function loadUsers() {
   const tbody = document.querySelector("#users-table tbody");
   if (!tbody) return;
-  tbody.innerHTML = "<tr><td colspan='5' class='muted'>Loading users…</td></tr>";
+  tbody.innerHTML = "<tr><td colspan='6' class='muted'>Loading users…</td></tr>";
   try {
     const users = await api("/users/");
     tbody.innerHTML = "";
@@ -1966,15 +1968,25 @@ async function loadUsers() {
       return;
     }
     users.forEach(u => {
+      const roleOptions = USER_ROLES
+        .map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${r}</option>`)
+        .join("");
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td><strong>${escapeHtml(u.full_name)}</strong></td>
         <td>${escapeHtml(u.email)}</td>
-        <td>${badge(u.role)}</td>
+        <td>
+          <select class="user-role-select" style="padding:5px 8px;background:var(--surface-2,#1a2237);color:var(--fg,#e6e9f2);border:1px solid var(--border,#263049);border-radius:6px;font-size:0.8rem;cursor:pointer;"
+            onchange="changeUserRole('${u.user_id}','${escapeHtml(u.email)}', this.value)">
+            ${roleOptions}
+          </select>
+        </td>
         <td>${u.organization_name ? escapeHtml(u.organization_name) : '<span class="muted">Global</span>'}</td>
         <td>${u.is_active ? badge("ACTIVE", "ok") : badge("INACTIVE", "critical")}</td>
-        <td>
+        <td style="white-space:nowrap;">
           <button class="btn ghost small" onclick="resetUserPassword('${u.user_id}', '${escapeHtml(u.email)}')">Reset Password</button>
+          <button class="btn ghost small" onclick="toggleUserActive('${u.user_id}', '${escapeHtml(u.email)}', ${u.is_active})">${u.is_active ? "Deactivate" : "Activate"}</button>
+          <button class="btn ghost small" style="color:#f87171;border-color:rgba(239,68,68,0.35);" onclick="deleteUser('${u.user_id}', '${escapeHtml(u.email)}')">Delete</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -1985,7 +1997,7 @@ async function loadUsers() {
 }
 
 async function resetUserPassword(userId, email) {
-  const newPwd = prompt(`Enter new password for ${email}:`);
+  const newPwd = prompt(`Enter new password for ${email} (min 8 characters):`);
   if (!newPwd) return;
   try {
     await api(`/users/${userId}/reset-password`, {
@@ -1993,6 +2005,40 @@ async function resetUserPassword(userId, email) {
       body: JSON.stringify({ new_password: newPwd })
     });
     toast(`Password reset for ${email}`, "ok");
+  } catch (err) {
+    toast(err.message, "critical");
+  }
+}
+
+async function changeUserRole(userId, email, role) {
+  try {
+    await api(`/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) });
+    toast(`Role updated to ${role} for ${email}`, "ok");
+    loadUsers();
+  } catch (err) {
+    toast(err.message, "critical");
+    loadUsers(); // revert the dropdown to the server's actual value
+  }
+}
+
+async function toggleUserActive(userId, email, isActive) {
+  const action = isActive ? "Deactivate" : "Activate";
+  if (!confirm(`${action} ${email}?`)) return;
+  try {
+    await api(`/users/${userId}`, { method: "PATCH", body: JSON.stringify({ is_active: !isActive }) });
+    toast(`${email} ${isActive ? "deactivated" : "activated"}`, "ok");
+    loadUsers();
+  } catch (err) {
+    toast(err.message, "critical");
+  }
+}
+
+async function deleteUser(userId, email) {
+  if (!confirm(`Permanently delete ${email}?\n\nThis cannot be undone. Their audit history is retained.`)) return;
+  try {
+    await api(`/users/${userId}`, { method: "DELETE" });
+    toast(`${email} deleted`, "ok");
+    loadUsers();
   } catch (err) {
     toast(err.message, "critical");
   }
