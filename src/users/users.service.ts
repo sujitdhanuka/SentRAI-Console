@@ -40,9 +40,34 @@ export class UsersService {
     return Promise.all(rows.map((u) => this.toResponse(u)));
   }
 
+  /**
+   * Role ceiling: only a global ADMIN may create or grant the ADMIN role. An
+   * OWNER administers their own org and can grant any role up to CISO, but never
+   * the global ADMIN role — that would be a privilege-escalation path out of the
+   * tenant. (ADMIN is tenant-less/global by design.)
+   */
+  private assertCanAssignRole(actor: CurrentUser, role: Role | undefined): void {
+    if (role === undefined) return;
+    if (role === Role.ADMIN && actor.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only a global administrator can grant the ADMIN role.');
+    }
+  }
+
+  /** Guard against removing the last active OWNER of an organization. */
+  private async assertNotLastActiveOwner(target: UserEntity): Promise<void> {
+    if (target.role !== Role.OWNER || !target.isActive || target.tenantId == null) return;
+    const activeOwners = await this.users.count({
+      where: { tenantId: target.tenantId, role: Role.OWNER, isActive: true },
+    });
+    if (activeOwners <= 1) {
+      throw new ForbiddenException('Cannot remove the last active OWNER of the organization — appoint another owner first.');
+    }
+  }
+
   async add(admin: CurrentUser, dto: AddUserDto): Promise<UserResponse> {
     const existing = await this.users.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('User already exists');
+    this.assertCanAssignRole(admin, dto.role);
 
     // Org admins can only create users in their own organization.
     const tenantId = admin.tenantId !== null ? admin.tenantId : (dto.organization_id ?? null);
@@ -95,18 +120,22 @@ export class UsersService {
   async update(admin: CurrentUser, userId: string, dto: UpdateUserDto): Promise<UserResponse> {
     const user = await this.getManageable(admin, userId);
     const isSelf = user.email === admin.email;
+    this.assertCanAssignRole(admin, dto.role);
 
     // Self-lockout guards.
-    if (isSelf && dto.role !== undefined && dto.role !== Role.ADMIN) {
-      throw new ForbiddenException('You cannot change your own admin role.');
+    if (isSelf && dto.role !== undefined && dto.role !== user.role) {
+      throw new ForbiddenException('You cannot change your own role.');
     }
     if (isSelf && dto.is_active === false) {
       throw new ForbiddenException('You cannot deactivate your own account.');
     }
-    // Last-admin guard: demoting or deactivating an admin.
-    const demoting = dto.role !== undefined && dto.role !== Role.ADMIN && user.role === Role.ADMIN;
+    // Last-admin / last-owner guards: demoting or deactivating.
+    const demoting = dto.role !== undefined && dto.role !== user.role;
     const deactivating = dto.is_active === false;
-    if (demoting || deactivating) await this.assertNotLastActiveAdmin(user);
+    if (demoting || deactivating) {
+      await this.assertNotLastActiveAdmin(user);
+      await this.assertNotLastActiveOwner(user);
+    }
 
     if (dto.full_name !== undefined) user.fullName = dto.full_name;
     if (dto.role !== undefined) user.role = dto.role;
@@ -121,6 +150,7 @@ export class UsersService {
     const user = await this.getManageable(admin, userId);
     if (user.email === admin.email) throw new ForbiddenException('You cannot delete your own account.');
     await this.assertNotLastActiveAdmin(user);
+    await this.assertNotLastActiveOwner(user);
     await this.users.delete({ id: userId });
   }
 }
