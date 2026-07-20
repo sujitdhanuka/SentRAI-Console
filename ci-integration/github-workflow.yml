@@ -1,0 +1,41 @@
+# Copy this into a customer repo as .github/workflows/sentrai-gate.yml
+# It runs the Sentrai-Console pre-deployment compliance gate on every PR and
+# push to main, blocks the build on a `fail` verdict, and uploads SARIF so
+# violations render in the GitHub Security tab.
+name: Sentrai AI Compliance Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write # upload SARIF
+
+jobs:
+  sentrai-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Vendor sentrai-gate.mjs into the repo (e.g. .sentrai/sentrai-gate.mjs)
+      # or fetch it from your Sentrai deployment. Then:
+      - name: Run Sentrai compliance gate
+        env:
+          SENTRAI_URL: ${{ secrets.SENTRAI_URL }}
+          SENTRAI_CI_TOKEN: ${{ secrets.SENTRAI_CI_TOKEN }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node .sentrai/sentrai-gate.mjs
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sentrai-results.sarif

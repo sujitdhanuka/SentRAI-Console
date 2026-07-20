@@ -34,15 +34,16 @@ export class AuditEventsInterceptor implements NestInterceptor {
 
   private summarize(body: any): Record<string, any> | null {
     if (!body || typeof body !== 'object' || Object.keys(body).length === 0) return null;
-    const masked = maskDict(body);
+    // Size-check the RAW body first — masking a large payload (e.g. a CI
+    // repository snapshot) just to discard it wastes CPU and memory.
     try {
-      if (JSON.stringify(masked).length > MAX_PAYLOAD_CHARS) {
-        return { truncated: true, keys: Object.keys(masked) };
+      if (JSON.stringify(body).length > MAX_PAYLOAD_CHARS) {
+        return { truncated: true, keys: Object.keys(body) };
       }
     } catch {
       return { unserializable: true };
     }
-    return masked;
+    return maskDict(body);
   }
 
   private record(req: any, statusCode: number, outcome: 'SUCCESS' | 'FAILURE'): void {

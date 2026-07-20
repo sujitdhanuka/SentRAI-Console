@@ -11,6 +11,8 @@ business rule of the Python backend.
 - **Discovery:** regex + **web-tree-sitter (WASM)** AST scanning, remote GitHub/GitLab scan, k8s/Triton infra scan
 - **Compliance:** 7-Sutras + NIST/EU-AI-Act/ISO-42001 validators, plugin registry
 - **Monitoring:** PSI + 1-D Wasserstein drift math (pure TS), BCP circuit breaker
+- **Shift-left CI gate:** stateless `/api/v1/ci/scan` endpoint + policy-as-code + append-only
+  gate ledger + SARIF — blocks shadow/ungoverned AI pre-deployment. See [`ci-integration/`](ci-integration/README.md).
 - **Extras:** PDF export (pdfkit), Prometheus `/metrics`, DPDP PII masking, scheduled jobs, Neo4j lineage
 
 ## Quick start (local, SQLite)

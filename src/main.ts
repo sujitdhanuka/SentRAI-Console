@@ -16,6 +16,12 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
 
+  // CI scan payloads carry a repository snapshot, so the default 100kb JSON
+  // limit is far too small — raise it (the CI token guard + rate limiter bound
+  // the abuse surface). Configurable via CI_MAX_PAYLOAD_MB.
+  const maxPayloadMb = parseInt(process.env.CI_MAX_PAYLOAD_MB ?? '25', 10);
+  app.useBodyParser('json', { limit: `${maxPayloadMb}mb` });
+
   // Security headers. The console is a self-contained SPA that loads two CDN
   // scripts (marked, cytoscape), so we allow those explicitly rather than
   // shipping a wide-open CSP.

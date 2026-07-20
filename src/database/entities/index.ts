@@ -11,6 +11,7 @@ import { BcpStateEntity } from './bcp-state.entity';
 import { ExplainabilityRecordEntity } from './explainability-record.entity';
 import { AuditEventEntity } from './audit-event.entity';
 import { ScoreWindowEntity } from './score-window.entity';
+import { DeploymentGateEventEntity } from './deployment-gate-event.entity';
 
 export {
   OrganizationEntity,
@@ -26,6 +27,7 @@ export {
   ExplainabilityRecordEntity,
   AuditEventEntity,
   ScoreWindowEntity,
+  DeploymentGateEventEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -42,4 +44,5 @@ export const ALL_ENTITIES = [
   ExplainabilityRecordEntity,
   AuditEventEntity,
   ScoreWindowEntity,
+  DeploymentGateEventEntity,
 ];

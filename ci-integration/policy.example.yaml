@@ -1,0 +1,29 @@
+# Place this at .sentrai/policy.yaml in the repository you want to gate.
+# The gate FAILS a build when a detected model of the given severity is missing
+# any of the listed governance requirements. If this file is absent, a safe
+# default policy is applied (block HIGH/CRITICAL shadow or ungoverned models).
+gates:
+  block_on:
+    # Any HIGH-risk AI asset must be a registered, owned, board-policy-backed
+    # model with a documented bias test — otherwise the build is blocked.
+    - severity: HIGH
+      missing:
+        - registered          # a governed model exists (not "shadow AI")
+        - owner_team          # a named accountable owner
+        - board_policy_ref    # linked to a board-approved AI policy
+        - bias_test_evidence  # an attached bias-test artifact
+
+    - severity: CRITICAL
+      missing:
+        - registered
+        - owner_team
+        - board_policy_ref
+        - human_oversight     # human-in-the-loop is enabled
+        - red_team_evidence
+
+  # Frameworks the compliance dashboard maps these gates against.
+  frameworks:
+    - eu_ai_act
+    - nist_ai_rmf
+    - rbi_free_ai
+    - iso_42001

@@ -459,4 +459,99 @@ describe('SentrAI Console (e2e)', () => {
       .set('Authorization', `Bearer ${admin}`);
     expect(upgraded.body.model_limit).toBe(100);
   });
+
+  it('CI GATE: blocks a shadow-AI model and passes once it is governed', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    const proj = await request(http)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'CI Gate App', description: 'ci gate test' });
+    const projectId = proj.body.project_id;
+
+    // Mint a project-scoped CI service token.
+    const tok = await request(http)
+      .post('/api/v1/ci/tokens')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId, label: 'ci-gate-test' });
+    expect(tok.status).toBe(201);
+    const ciToken = tok.body.token;
+    expect(typeof ciToken).toBe('string');
+
+    // A policy that blocks any detected model of any severity that isn't governed.
+    const policy = [
+      'gates:',
+      '  block_on:',
+      '    - severity: LOW',
+      '      missing: [registered, owner_team, board_policy_ref]',
+      '    - severity: MEDIUM',
+      '      missing: [registered, owner_team, board_policy_ref]',
+      '    - severity: HIGH',
+      '      missing: [registered, owner_team, board_policy_ref]',
+      '  frameworks: [eu_ai_act]',
+    ].join('\n');
+
+    const modelCode =
+      'import openai\n\n' +
+      'def score_credit(applicant):\n' +
+      '    """Credit underwriting via LLM."""\n' +
+      '    return openai.chat.completions.create(model="gpt-4", messages=[])\n';
+
+    const files = [
+      { path: '.sentrai/policy.yaml', content: policy },
+      { path: 'app/credit_model.py', content: modelCode },
+    ];
+
+    // 1) Shadow AI (no registered model) → FAIL, with SARIF + an audit record.
+    const fail = await request(http)
+      .post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${ciToken}`)
+      .send({ commit_sha: 'abc123', pr_number: '7', files });
+    expect(fail.status).toBe(200);
+    expect(fail.body.verdict).toBe('fail');
+    expect(fail.body.summary.shadow_assets).toBeGreaterThan(0);
+    expect(fail.body.sarif.runs[0].results.length).toBeGreaterThan(0);
+    expect(fail.body.gate_event_id).toBeTruthy();
+
+    // The interactive JWT must NOT be accepted on the CI endpoint.
+    await request(http)
+      .post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ commit_sha: 'x', files })
+      .expect(401);
+
+    // 2) Govern the model (matching source_ref) with owner + board policy.
+    await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Credit Model',
+        model_type: 'GENERATIVE_AI',
+        functional_area: 'credit_underwriting',
+        use_case_description: 'LLM credit underwriting assistant for retail lending.',
+        owner_team: 'Risk Analytics',
+        board_policy_ref: 'BOARD-AI-POLICY-2026',
+        source_ref: 'app/credit_model.py',
+        project_id: projectId,
+      })
+      .expect(201);
+
+    // 3) Same commit, now governed → PASS, no blocking violations.
+    const pass = await request(http)
+      .post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${ciToken}`)
+      .send({ commit_sha: 'abc123', pr_number: '7', files });
+    expect(pass.status).toBe(200);
+    expect(pass.body.verdict).toBe('pass');
+    expect(pass.body.blocking_violations.length).toBe(0);
+
+    // 4) The immutable gate trail records both decisions, newest first.
+    const history = await request(http)
+      .get(`/api/v1/ci/projects/${projectId}/gate-history`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(history.status).toBe(200);
+    expect(history.body.length).toBe(2);
+    expect(history.body[0].verdict).toBe('pass');
+    expect(history.body[1].verdict).toBe('fail');
+  });
 });
