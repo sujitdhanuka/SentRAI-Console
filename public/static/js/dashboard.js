@@ -2207,7 +2207,9 @@ async function loadProjects() {
             : ""}
           ${p.has_scan_result
             ? `<span class="badge ok">🔎 ${p.models_discovered} AI file(s) discovered</span>`
-            : `<span class="badge risk-HIGH">⚠ not scanned — upload a codebase</span>`}
+            : (p.model_count > 0 || p.last_scanned_at)
+              ? `<span class="badge ok">🔎 scanned</span>`
+              : `<span class="badge risk-HIGH">⚠ not scanned — upload a codebase</span>`}
         </div>
         <div class="actions">
           <button class="btn small primary select-project-btn" data-id="${p.project_id}">⚡ Select &amp; Activate Project</button>
