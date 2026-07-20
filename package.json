@@ -52,7 +52,7 @@
     "rxjs": "^7.8.1",
     "tree-sitter-wasms": "^0.1.13",
     "typeorm": "^0.3.20",
-    "uuid": "^11.0.5",
+    "uuid": "^11.1.1",
     "web-tree-sitter": "^0.24.4"
   },
   "devDependencies": {
@@ -77,6 +77,10 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "multer": "^2.2.0",
+    "uuid": "$uuid"
   },
   "jest": {
     "moduleFileExtensions": [
