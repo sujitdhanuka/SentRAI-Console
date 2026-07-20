@@ -120,14 +120,29 @@ export class DiscoveryService {
   }
 
   async scan(directory?: string | null, projectId?: string | null) {
-    const { dir, project } = await this.resolveDirectory(directory, projectId);
+    const { dir, project: resolvedProject } = await this.resolveDirectory(directory, projectId);
     const resolved = expandAndResolve(dir);
+
+    // Identify the owning project (by id, or by matching the workspace path) so
+    // we can fall back to the DB-stored scan when the files are gone.
+    const project =
+      resolvedProject ?? (directory ? await this.projects.findOne({ where: { rootDirectory: dir } }) : null);
+
     if (!existsSync(resolved)) {
-      // The usual hosted cause: workspaces live under the app root and are
-      // wiped on redeploy. Say so, and point at the persistent-path fix.
+      // Files gone (redeploy / ephemeral FS) but a stored scan exists → serve it.
+      if (project?.lastScanResult) {
+        return {
+          directory: dir,
+          ast_coverage: project.lastScanResult.ast_coverage,
+          files_flagged: project.lastScanResult.files_flagged,
+          candidates: project.lastScanResult.candidates,
+          served_from: 'stored',
+          scanned_at: project.lastScanResult.scanned_at,
+        };
+      }
       throw new BadRequestException(
         this.isManagedWorkspace(dir)
-          ? 'The uploaded codebase is no longer on disk — project workspaces are wiped on redeploy unless WORKSPACES_DIR points at a persistent path. Re-upload the codebase to this project, then scan again.'
+          ? 'No codebase found for this project. Upload a codebase (zip/folder/GitHub) — it is scanned on upload and the result is stored.'
           : `Directory does not exist: ${dir}`,
       );
     }
@@ -140,17 +155,27 @@ export class DiscoveryService {
     } catch (e) {
       throw new BadRequestException(`Scan failed while reading ${dir}: ${e instanceof Error ? e.message : String(e)}`);
     }
+
+    const dicts = candidates.map(candidateAsDict);
+    const astCoverage = this.treeSitter.ready ? 'full' : 'regex_only';
     if (project) {
       project.lastScannedAt = new Date();
+      project.lastScanResult = {
+        scanned_at: new Date().toISOString(),
+        ast_coverage: astCoverage,
+        files_flagged: dicts.length,
+        candidates: dicts,
+      };
       await this.projects.save(project);
     }
     return {
       directory: dir,
       // Surface scan assurance level so a degraded (regex-only) scan is never
       // silent — regulators and auditors can see when AST coverage was lost.
-      ast_coverage: this.treeSitter.ready ? 'full' : 'regex_only',
-      files_flagged: candidates.length,
-      candidates: candidates.map(candidateAsDict),
+      ast_coverage: astCoverage,
+      files_flagged: dicts.length,
+      candidates: dicts,
+      served_from: 'live',
     };
   }
 

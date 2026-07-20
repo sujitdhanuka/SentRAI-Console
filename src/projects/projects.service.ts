@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import AdmZip from 'adm-zip';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { dirname, join, resolve, sep } from 'path';
 
 import { AIModelEntity, OrganizationEntity, ProjectEntity } from '../database/entities';
@@ -20,6 +21,8 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
 import { RemoteRepoConnector } from '../discovery/connectors/repo-connector';
+import { TreeSitterService } from '../discovery/tree-sitter-parser';
+import { candidateAsDict, scanDirectory } from '../discovery/codebase-scanner';
 import { modelEntityToEntry } from '../inventory/model.mapper';
 import { sutrasBlockingGaps, sutrasOverallPass, validateSutrasCompliance } from '../compliance/sutras.validator';
 import { CreateProjectDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
@@ -33,6 +36,7 @@ export class ProjectsService {
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
     private readonly config: ConfigService,
+    private readonly treeSitter: TreeSitterService,
   ) {}
 
   private validateDirectory(path: string): void {
@@ -127,23 +131,28 @@ export class ProjectsService {
     return project;
   }
 
-  /** Clear and recreate the project's private workspace directory. */
+  /**
+   * Clear and recreate the project's workspace. Prefers WORKSPACES_DIR, but on
+   * a read-only / permission-restricted app root (common on shared hosting) it
+   * falls back to the OS temp dir — the extracted files are only needed for the
+   * scan-on-upload; the durable result is stored in the DB, not on disk.
+   */
   private prepareWorkspace(projectId: string): { target: string; targetRoot: string } {
-    const target = join(WORKSPACES_DIR, projectId);
-    try {
-      rmSync(target, { recursive: true, force: true });
-      mkdirSync(target, { recursive: true });
-    } catch (e) {
-      // A read-only / non-persistent app root is the usual hosted cause. Surface
-      // it clearly instead of a generic 500, and point at the WORKSPACES_DIR fix.
-      const reason = e instanceof Error ? e.message : String(e);
-      this.logger.error(`workspace write failed at ${WORKSPACES_DIR}: ${reason}`);
-      throw new InternalServerErrorException(
-        `Could not write the codebase workspace at "${WORKSPACES_DIR}" (${reason}). ` +
-          'Ensure that directory is writable, or set the WORKSPACES_DIR env var to a writable path.',
-      );
+    const candidates = [join(WORKSPACES_DIR, projectId), join(tmpdir(), 'sentrai-workspaces', projectId)];
+    let lastErr = '';
+    for (const target of candidates) {
+      try {
+        rmSync(target, { recursive: true, force: true });
+        mkdirSync(target, { recursive: true });
+        return { target, targetRoot: resolve(target) + sep };
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`workspace write failed at ${target}: ${lastErr}`);
+      }
     }
-    return { target, targetRoot: resolve(target) + sep };
+    throw new InternalServerErrorException(
+      `Could not write the codebase workspace (${lastErr}). Set WORKSPACES_DIR to a writable path.`,
+    );
   }
 
   /**
@@ -182,15 +191,38 @@ export class ProjectsService {
     user: CurrentUser,
   ) {
     if (extracted === 0) throw new BadRequestException('No usable files were found in the codebase');
+
+    // Scan immediately, while the files are guaranteed present, and persist the
+    // result to the DB. Discovery then never depends on the workspace surviving
+    // on disk (redeploys and ephemeral hosting filesystems wipe it).
+    const now = new Date();
+    let candidates: any[] = [];
+    try {
+      candidates = scanDirectory(target, this.treeSitter).map(candidateAsDict);
+    } catch (e) {
+      this.logger.warn(`scan-on-upload failed for project=${project.id}: ${String(e)}`);
+    }
+
     project.rootDirectory = target;
-    project.updatedAt = new Date();
+    project.lastScannedAt = now;
+    project.lastScanResult = {
+      scanned_at: now.toISOString(),
+      ast_coverage: this.treeSitter.ready ? 'full' : 'regex_only',
+      files_flagged: candidates.length,
+      candidates,
+    };
+    project.updatedAt = now;
     await this.projects.save(project);
-    this.logger.log(`codebase loaded project=${project.id} source=${source} files=${extracted} skipped=${skipped} by=${user.email}`);
+    this.logger.log(
+      `codebase loaded project=${project.id} source=${source} files=${extracted} skipped=${skipped} ` +
+        `models_discovered=${candidates.length} by=${user.email}`,
+    );
     return {
       project_id: project.id,
       root_directory: target,
       files_extracted: extracted,
       entries_skipped: skipped,
+      models_discovered: candidates.length,
       source,
       uploaded_by: user.email,
     };

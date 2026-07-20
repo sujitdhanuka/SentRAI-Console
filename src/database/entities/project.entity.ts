@@ -21,6 +21,14 @@ export class ProjectEntity {
   @Column('datetime', { nullable: true })
   lastScannedAt!: Date | null;
 
+  /**
+   * The candidates found the last time this project's codebase was scanned,
+   * persisted in the DB so discovery survives redeploys / ephemeral hosting
+   * filesystems (the extracted workspace may be wiped, but results remain).
+   */
+  @Column('simple-json', { nullable: true })
+  lastScanResult!: { scanned_at: string; ast_coverage: string; files_flagged: number; candidates: any[] } | null;
+
   @Column('datetime')
   createdAt!: Date;
 
