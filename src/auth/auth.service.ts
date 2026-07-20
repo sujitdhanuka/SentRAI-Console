@@ -41,6 +41,10 @@ export class AuthService {
     return {
       build: BUILD_TAG,
       production_mode: this.config.get<boolean>('productionLike'),
+      // Data-durability diagnostic: 'mariadb' + persistent=true means data
+      // survives redeploys; 'sqlite' + persistent=false means it does NOT.
+      db_provider: this.config.get<string>('dbProvider'),
+      db_persistent: this.config.get<boolean>('dbPersistent'),
       seed_admin_email: maskedEmail,
       seed_admin_exists: Boolean(existing),
       seed_admin_active: existing ? existing.isActive : null,

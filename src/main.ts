@@ -82,8 +82,16 @@ async function bootstrap() {
 
   const port = config.get<number>('port')!;
   await app.listen(port);
+  // Surface the data-durability posture on boot so a redeploy log makes it
+  // obvious whether data lands in the persistent DB or a disposable file.
+  const dbProvider = config.get<string>('dbProvider');
+  const dbPersistent = config.get<boolean>('dbPersistent');
   // eslint-disable-next-line no-console
   console.log(`SentrAI Console (NestJS) listening on http://localhost:${port}`);
+  // eslint-disable-next-line no-console
+  console.log(
+    `Database: ${dbProvider} (${dbPersistent ? 'persistent — data survives redeploys' : 'EPHEMERAL — data is wiped on every redeploy'})`,
+  );
 }
 
 void bootstrap();
