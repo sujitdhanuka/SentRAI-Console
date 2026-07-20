@@ -245,9 +245,34 @@
       </div>
 
       <div class="card">
+        <div class="table-filters" id="models-filters">
+          <input type="search" id="model-filter-text" placeholder="🔎 Filter by name, file, or description…" />
+          <select id="model-filter-risk" title="Filter by risk">
+            <option value="">All risk</option>
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+            <option value="CRITICAL">Critical</option>
+          </select>
+          <select id="model-filter-lifecycle" title="Filter by lifecycle">
+            <option value="">All lifecycle</option>
+            <option value="DESIGN">Design</option>
+            <option value="DEVELOPMENT">Development</option>
+            <option value="VALIDATION">Validation</option>
+            <option value="DEPLOYED">Deployed</option>
+            <option value="MONITORING">Monitoring</option>
+            <option value="DECOMMISSIONED">Decommissioned</option>
+          </select>
+          <select id="model-filter-compliance" title="Filter by compliance">
+            <option value="">All compliance</option>
+            <option value="compliant">Compliant</option>
+            <option value="gaps">Has gaps</option>
+          </select>
+          <span class="muted" id="models-count" style="margin-left:auto; font-size:0.72rem; white-space:nowrap;"></span>
+        </div>
         <table class="data-table" id="models-table">
           <thead>
-            <tr><th>Name</th><th>Risk</th><th>Compliance</th><th>Lifecycle</th><th>Oversight</th><th>Grievances</th><th>Registered</th><th>Actions</th></tr>
+            <tr><th data-sort="name">Name</th><th data-sort="risk">Risk</th><th data-sort="compliance">Compliance</th><th data-sort="lifecycle">Lifecycle</th><th data-sort="oversight">Oversight</th><th>Grievances</th><th data-sort="registered">Registered</th><th>Actions</th></tr>
           </thead>
           <tbody></tbody>
         </table>
