@@ -1083,6 +1083,15 @@ async function loadModels() {
   }
 }
 
+// Red chip listing hardcoded secrets found in the model's source at scan time.
+// The masked values + line numbers show on hover; nothing renders when clean.
+function securityChip(findings) {
+  if (!Array.isArray(findings) || !findings.length) return "";
+  const detail = findings.map((s) => `${s.type} — line ${s.line}: ${s.masked_value}`).join("\n");
+  const n = findings.length;
+  return `<br/><span class="badge risk-HIGH" style="font-size:0.6rem;margin-top:4px;display:inline-block;" title="${escapeHtml(detail)}">🔓 ${n} hardcoded secret${n > 1 ? "s" : ""} in source</span>`;
+}
+
 // ── Inventory table: sort + filter (client-side over MODELS_CACHE) ─────────────
 const RISK_RANK = { LOW: 0, MINIMAL: 0, MEDIUM: 1, LIMITED: 1, HIGH: 2, CRITICAL: 3, PROHIBITED: 4 };
 const LIFECYCLE_RANK = { DESIGN: 0, DEVELOPMENT: 1, VALIDATION: 2, DEPLOYED: 3, MONITORING: 4, DECOMMISSIONED: 5 };
@@ -1151,6 +1160,7 @@ function renderModelTable() {
           <strong>${m.name}</strong>
           ${m.use_case_description ? `<div style="font-size:0.7rem; color:var(--muted); max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;" title="${escapeHtml(m.use_case_description)}">${escapeHtml(m.use_case_description)}</div>` : ""}
           <br/><span class="muted">${shortId(m.model_id)}</span>${projectFilter ? "" : projectLabel(m.project_id)}${m.source_ref ? `<br/><span class="muted" style="font-size:0.62rem">📄 ${m.source_ref}</span>` : ""}
+          ${securityChip(m.security_findings)}
         </td>
         <td>${badge(m.risk_level, "risk-" + m.risk_level)}</td>
         <td>

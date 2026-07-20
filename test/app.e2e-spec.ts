@@ -604,6 +604,55 @@ describe('SentrAI Console (e2e)', () => {
       .send({ project_id: projA.project_id, file_paths: ['alpha_svc/model.py'] }).expect(403);
   });
 
+  it('SECURITY: a scanned hardcoded secret survives import — model is HIGH risk and keeps the finding', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const AdmZip = (await import('adm-zip')).default;
+
+    const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Secret Repo' });
+    const projectId = p.body.project_id;
+    // Rules-based file (no ML/LLM signals) → the scanner's risk hint is LOW …
+    // … but it carries a hardcoded credential that must elevate the saved model.
+    const zip = new AdmZip();
+    zip.addFile('fin/portfolio_checkpoint.py', Buffer.from(
+      '"""Core FinQuant portfolio checkpoint."""\n' +
+      'api_key = "q7HgSuperSecret9t66"\n\n' +
+      'def portfolio_decision_score(w, r):\n    return sum(a * b for a, b in zip(w, r))\n',
+    ));
+    await request(http).post(`/api/v1/projects/${projectId}/codebase`).set('Authorization', `Bearer ${admin}`)
+      .attach('file', zip.toBuffer(), 'c.zip').expect(201);
+
+    // Scan detects the secret; the static risk hint alone is only LOW.
+    const scan = await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId }).expect(201);
+    const cand = scan.body.candidates.find((c: any) => c.file_path === 'fin/portfolio_checkpoint.py');
+    expect(cand).toBeDefined();
+    expect(cand.risk_hint).toBe('LOW');
+    expect(cand.secrets).toHaveLength(1);
+
+    // Import: the finding is carried over AND the model is floored at HIGH.
+    const imported = await request(http).post('/api/v1/discovery/import').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId, file_paths: ['fin/portfolio_checkpoint.py'], overwrite: true }).expect(201);
+    const modelId = imported.body[0].model_id;
+    expect(imported.body[0].risk_level).toBe('HIGH');
+
+    const list = await request(http).get(`/api/v1/inventory/models?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    const saved = list.body.find((m: any) => m.model_id === modelId);
+    expect(saved.risk_level).toBe('HIGH');
+    expect(saved.security_findings).toHaveLength(1);
+    expect(saved.security_findings[0].type).toBe('Generic Secret Key');
+    expect(saved.security_findings[0].masked_value).not.toContain('SuperSecret'); // value is masked
+
+    // An unrelated governance edit re-triages the model, but the unremediated
+    // secret keeps it floored at HIGH — it must not silently drop to LOW.
+    await request(http).patch(`/api/v1/inventory/models/${modelId}/governance`).set('Authorization', `Bearer ${admin}`)
+      .send({ owner_team: 'Risk', actor: 'test' }).expect(200);
+    const after = await request(http).get(`/api/v1/inventory/models?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(after.body.find((m: any) => m.model_id === modelId).risk_level).toBe('HIGH');
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)
