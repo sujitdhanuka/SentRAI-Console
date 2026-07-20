@@ -16,7 +16,8 @@ import {
   ProjectEntity,
   PromptEntity,
 } from '../database/entities';
-import { ModelLifecycleStage, RiskLevel } from '../common/enums';
+import { ModelLifecycleStage, RiskLevel, Role } from '../common/enums';
+import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { AIModelEntry, triageAiModel } from '../domain/model-inventory';
 import { expandAndResolve } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
@@ -68,23 +69,43 @@ export class DiscoveryService {
     return roots.some((root) => resolved === root || resolved.startsWith(root + sep));
   }
 
+  /** Load a project and enforce org isolation (ADMIN is a global superuser). */
+  private async assertProjectAccess(user: CurrentUser, projectId: string): Promise<ProjectEntity> {
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+    if (user.role !== Role.ADMIN && project.tenantId !== (user.tenantId ?? null)) {
+      throw new ForbiddenException('Project is outside your organization');
+    }
+    return project;
+  }
+
+  /**
+   * Resolve the directory to scan for a caller. The path is ALWAYS derived from
+   * the caller's OWN (tenant-verified) project — a client-supplied `directory`
+   * is only honored for a global ADMIN operating with ALLOW_SERVER_FS. This is
+   * what stops a user from scanning another organization's managed workspace by
+   * passing its path: even a valid managed-workspace path is refused unless it
+   * belongs to a project the caller owns.
+   */
   private async resolveDirectory(
+    user: CurrentUser,
     directory?: string | null,
     projectId?: string | null,
   ): Promise<{ dir: string; project: ProjectEntity | null }> {
-    let project: ProjectEntity | null = null;
     if (projectId) {
-      project = await this.projects.findOne({ where: { id: projectId } });
-      if (!project) throw new NotFoundException('Project not found');
+      const project = await this.assertProjectAccess(user, projectId);
+      return { dir: project.rootDirectory, project };
     }
     if (directory) {
-      // An uploaded project's own workspace is app-managed and always safe to
-      // scan. Only arbitrary server paths require ALLOW_SERVER_FS.
-      if (!this.isManagedWorkspace(directory)) this.assertServerFsAllowed();
-      return { dir: directory, project };
+      // No project context: only a global admin may point at a raw server path,
+      // and only when ALLOW_SERVER_FS is enabled.
+      if (user.role !== Role.ADMIN) {
+        throw new ForbiddenException('Scanning requires a project_id — upload a codebase to a project first.');
+      }
+      this.assertServerFsAllowed();
+      return { dir: directory, project: null };
     }
-    if (project) return { dir: project.rootDirectory, project };
-    throw new BadRequestException('Provide either a directory or a project_id');
+    throw new BadRequestException('Provide a project_id to scan its uploaded codebase.');
   }
 
   browse(path?: string | null): BrowseResponse {
@@ -137,19 +158,11 @@ export class DiscoveryService {
     };
   }
 
-  async scan(directory?: string | null, projectId?: string | null) {
-    // Resolve the owning project first (by id, or by matching workspace path),
-    // so the DB-stored scan is authoritative regardless of filesystem state.
-    let project: ProjectEntity | null = null;
-    if (projectId) {
-      project = await this.projects.findOne({ where: { id: projectId } });
-      if (!project) throw new NotFoundException('Project not found');
-    } else if (directory) {
-      project = await this.projects.findOne({ where: { rootDirectory: directory } });
-    }
-
-    const dir = directory || project?.rootDirectory || null;
-    if (!dir) throw new BadRequestException('Provide either a directory or a project_id');
+  async scan(user: CurrentUser, directory?: string | null, projectId?: string | null) {
+    // Resolve the workspace from the caller's OWN (tenant-verified) project so
+    // the DB-stored scan is authoritative regardless of filesystem state — and
+    // a client-supplied directory can never redirect the scan to another org.
+    const { dir, project } = await this.resolveDirectory(user, directory, projectId);
     const resolved = expandAndResolve(dir);
 
     // A live scan is only possible when the files are present in a location we
@@ -219,8 +232,8 @@ export class DiscoveryService {
     await this.models.delete({ id: modelId });
   }
 
-  async import(dto: ImportDto): Promise<ImportedModel[]> {
-    const { dir, project } = await this.resolveDirectory(dto.directory, dto.project_id);
+  async import(user: CurrentUser, dto: ImportDto): Promise<ImportedModel[]> {
+    const { dir, project } = await this.resolveDirectory(user, dto.directory, dto.project_id);
     const candidates = scanDirectory(expandAndResolve(dir), this.treeSitter);
 
     const wanted = new Set(dto.file_paths);
