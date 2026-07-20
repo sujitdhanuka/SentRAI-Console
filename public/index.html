@@ -40,6 +40,7 @@
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="projects">Projects</button>
     <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="compliance">Compliance Rollup</button>
     <button class="tab" data-tab="inventory">Model Inventory</button>
     <button class="tab" data-tab="monitoring">Drift Monitoring</button>
     <button class="tab" data-tab="audit">Audit Trail</button>
@@ -135,6 +136,23 @@
         <h2>Compliance Snapshot</h2>
       </div>
       <div class="grid stat-grid" id="overview-stats"></div>
+    </section>
+
+    <!-- ── Compliance Rollup (executive) ── -->
+    <section class="panel" id="panel-compliance">
+      <div class="panel-head" style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+        <div>
+          <h2>Executive Compliance Rollup</h2>
+          <p class="muted">Portfolio-wide readiness across RBI FREE-AI, NIST AI RMF, the EU AI Act, and ISO/IEC 42001 — in plain language.</p>
+        </div>
+        <button class="btn ghost small" id="btn-export-portfolio-pdf" style="white-space:nowrap;">⬇ Readiness PDF</button>
+      </div>
+      <div id="compliance-headline" class="result-banner ok" style="display:none; margin-bottom:16px;"></div>
+      <div class="grid stat-grid" id="compliance-stats"></div>
+      <div class="panel-head" style="margin-top:28px"><h2 style="font-size:1.1rem;">Framework Readiness</h2></div>
+      <div class="grid cards" id="compliance-frameworks"></div>
+      <div class="panel-head" style="margin-top:28px"><h2 style="font-size:1.1rem;">Most Common Blocking Gaps</h2></div>
+      <div id="compliance-gaps"></div>
     </section>
 
     <!-- ── Inventory ── -->

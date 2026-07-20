@@ -480,6 +480,42 @@ describe('SentrAI Console (e2e)', () => {
     expect(String(res.body.message)).toContain('GitHub');
   });
 
+  it('COMPLIANCE: portfolio rollup aggregates frameworks + plain-language gaps', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Rollup Credit Model',
+        model_type: 'GENERATIVE_AI',
+        functional_area: 'credit_underwriting',
+        use_case_description: 'LLM credit underwriting assistant for retail lending decisions.',
+      })
+      .expect(201);
+
+    const res = await request(http)
+      .get('/api/v1/compliance/portfolio')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(res.status).toBe(200);
+    expect(res.body.summary.total_models).toBeGreaterThanOrEqual(1);
+    expect(typeof res.body.summary.headline).toBe('string');
+    // All four frameworks are present with readiness sentences.
+    const ids = res.body.frameworks.map((f: any) => f.id).sort();
+    expect(ids).toEqual(['eu_ai_act', 'iso_42001', 'nist_ai_rmf', 'rbi_free_ai']);
+    for (const f of res.body.frameworks) expect(typeof f.readiness).toBe('string');
+    // A HIGH-risk credit model with no governance yields plain-language gaps.
+    expect(res.body.top_gaps.length).toBeGreaterThan(0);
+    expect(res.body.top_gaps[0].statement).toMatch(/model/i);
+
+    // Readiness PDF renders.
+    const pdf = await request(http)
+      .get('/api/v1/compliance/portfolio/export-pdf')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    expect(pdf.body.length).toBeGreaterThan(1000);
+  });
+
   it('reports plan usage with soft limits', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const org = await request(http)
