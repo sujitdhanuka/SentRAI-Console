@@ -545,6 +545,65 @@ describe('SentrAI Console (e2e)', () => {
     expect(upgraded.body.model_limit).toBe(100);
   });
 
+  it('TENANT ISOLATION: a user cannot scan or see another organization\'s project', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const AdmZip = (await import('adm-zip')).default;
+
+    // Two orgs, one OWNER each.
+    const mkOrg = async (name: string) => (await request(http)
+      .post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`)
+      .send({ name })).body.organization_id;
+    const orgA = await mkOrg('Org Alpha');
+    const orgB = await mkOrg('Org Beta');
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'owner@alpha.test', full_name: 'A', password: 'pw123456', role: 'OWNER', organization_id: orgA }).expect(201);
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'owner@beta.test', full_name: 'B', password: 'pw123456', role: 'OWNER', organization_id: orgB }).expect(201);
+    const tokenA = await login('owner@alpha.test', 'pw123456');
+    const tokenB = await login('owner@beta.test', 'pw123456');
+
+    const uploadProject = async (token: string, name: string, file: string) => {
+      const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${token}`).send({ name });
+      const zip = new AdmZip();
+      zip.addFile(file, Buffer.from('import openai\n\ndef run(x):\n    """LLM scoring."""\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n'));
+      await request(http).post(`/api/v1/projects/${p.body.project_id}/codebase`).set('Authorization', `Bearer ${token}`)
+        .attach('file', zip.toBuffer(), 'c.zip').expect(201);
+      return p.body; // { project_id, root_directory, ... }
+    };
+    const projA = await uploadProject(tokenA, 'Alpha App', 'alpha_svc/model.py');
+    const projB = await uploadProject(tokenB, 'Beta App', 'beta_svc/model.py');
+
+    // 1) B's project list shows only B's project.
+    const bProjects = await request(http).get('/api/v1/projects').set('Authorization', `Bearer ${tokenB}`);
+    expect(bProjects.body.map((p: any) => p.project_id)).toEqual([projB.project_id]);
+
+    // 2) B scanning B's own project reads B's workspace.
+    const bScan = await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${tokenB}`)
+      .send({ project_id: projB.project_id });
+    expect(bScan.status).toBe(201);
+    expect(bScan.body.directory).toBe(projB.root_directory);
+
+    // 3) THE LEAK, fixed: B spoofs A's workspace path — it is IGNORED; the scan
+    //    still resolves to B's own project workspace, never A's.
+    const spoof = await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${tokenB}`)
+      .send({ project_id: projB.project_id, directory: projA.root_directory });
+    expect(spoof.status).toBe(201);
+    expect(spoof.body.directory).toBe(projB.root_directory);
+    expect(spoof.body.directory).not.toBe(projA.root_directory);
+
+    // 4) B cannot scan A's project by id (cross-org → 403).
+    await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${tokenB}`)
+      .send({ project_id: projA.project_id }).expect(403);
+
+    // 5) B cannot point a raw directory scan at A's workspace (needs a project).
+    await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${tokenB}`)
+      .send({ directory: projA.root_directory }).expect(403);
+
+    // 6) B cannot import candidates into A's project.
+    await request(http).post('/api/v1/discovery/import').set('Authorization', `Bearer ${tokenB}`)
+      .send({ project_id: projA.project_id, file_paths: ['alpha_svc/model.py'] }).expect(403);
+  });
+
   it('CI GATE: blocks a shadow-AI model and passes once it is governed', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
 
