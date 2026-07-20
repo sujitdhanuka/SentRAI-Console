@@ -3,4 +3,4 @@
  * public /api/v1/auth/bootstrap-status diagnostic so an operator (or support)
  * can confirm from the outside which build is actually running on a host.
  */
-export const BUILD_TAG = '2026-07-20.ci-p1.bootstrap-diag';
+export const BUILD_TAG = '2026-07-20.workspace-scan-fix';

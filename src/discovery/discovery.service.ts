@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { existsSync, readdirSync, rmSync, statSync } from 'fs';
-import { basename, dirname, join, resolve } from 'path';
+import { basename, dirname, join, resolve, sep } from 'path';
 import { homedir } from 'os';
 
 import {
@@ -19,6 +19,7 @@ import {
 import { ModelLifecycleStage, RiskLevel } from '../common/enums';
 import { AIModelEntry, triageAiModel } from '../domain/model-inventory';
 import { expandAndResolve } from '../common/fs-utils';
+import { WORKSPACES_DIR } from '../common/paths';
 import { candidateAsDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
 import { TreeSitterService } from './tree-sitter-parser';
 import { Neo4jClient } from './neo4j-client';
@@ -54,6 +55,13 @@ export class DiscoveryService {
     }
   }
 
+  /** True when a path is inside the app-managed per-project workspace tree. */
+  private isManagedWorkspace(dir: string): boolean {
+    const resolved = resolve(expandAndResolve(dir));
+    const root = resolve(WORKSPACES_DIR);
+    return resolved === root || resolved.startsWith(root + sep);
+  }
+
   private async resolveDirectory(
     directory?: string | null,
     projectId?: string | null,
@@ -63,10 +71,10 @@ export class DiscoveryService {
       project = await this.projects.findOne({ where: { id: projectId } });
       if (!project) throw new NotFoundException('Project not found');
     }
-    // A raw directory path is arbitrary server-filesystem access — gated.
-    // Scanning a project's own (workspace) root is always allowed.
     if (directory) {
-      this.assertServerFsAllowed();
+      // An uploaded project's own workspace is app-managed and always safe to
+      // scan. Only arbitrary server paths require ALLOW_SERVER_FS.
+      if (!this.isManagedWorkspace(directory)) this.assertServerFsAllowed();
       return { dir: directory, project };
     }
     if (project) return { dir: project.rootDirectory, project };
