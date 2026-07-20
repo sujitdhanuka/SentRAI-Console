@@ -645,10 +645,14 @@ function verdictBadge(ev) {
   return `<span class="badge ${ev.verdict === "pass" ? "PASS" : "FAIL"}">${ev.verdict.toUpperCase()}</span>`;
 }
 
+function canMintCiToken() { return !!(AUTH_USER && ["ADMIN", "CISO"].includes(AUTH_USER.role)); }
+
 async function loadCiLedger() {
   const tbody = document.getElementById("ci-ledger-rows");
   const empty = document.getElementById("ci-ledger-empty");
   const filter = document.getElementById("ci-ledger-filter");
+  const setupBtn = document.getElementById("btn-setup-ci");
+  if (setupBtn) setupBtn.style.display = canMintCiToken() ? "" : "none";
   const verdict = filter ? filter.value : "";
   tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading gate ledger…</td></tr>`;
   empty.classList.add("hidden");
@@ -894,6 +898,102 @@ document.addEventListener("keydown", (e) => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || e.target.isContentEditable) return;
   e.preventDefault();
   openContextHelp();
+});
+
+// ── Set up CI scanning (mint a token + a copy-run snippet) ─────────────────────
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand("copy"); } catch { /* ignore */ }
+    ta.remove(); return true;
+  }
+}
+
+// A ready-to-run scan example with the token + this host baked in.
+function ciScanSnippet(token) {
+  const base = window.location.origin;
+  return [
+    `curl -s -X POST ${base}/api/v1/ci/scan \\`,
+    `  -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' \\`,
+    `  -d '{`,
+    `    "commit_sha": "manual-test-001",`,
+    `    "files": [`,
+    `      { "path": ".sentrai/policy.yaml", "content": "gates:\\n  block_on:\\n    - severity: HIGH\\n      missing: [registered, owner_team, board_policy_ref]\\n  frameworks: [eu_ai_act]\\n" },`,
+    `      { "path": "app/model.py", "content": "import openai\\n\\ndef score(x):\\n    return openai.chat.completions.create(model=\\"gpt-4\\", messages=[])\\n" }`,
+    `    ]`,
+    `  }'`,
+  ].join("\n");
+}
+
+async function openCiSetup() {
+  const overlay = document.getElementById("ci-setup-overlay");
+  const body = document.getElementById("ci-setup-body");
+  body.innerHTML = `<div class="empty-state">Loading projects…</div>`;
+  overlay.classList.remove("hidden");
+  let projects = [];
+  try { projects = await api("/projects"); }
+  catch (e) { body.innerHTML = `<div class="empty-state">Couldn't load projects — ${escapeHtml(e.message)}</div>`; return; }
+  if (!projects.length) {
+    body.innerHTML = `<p>Create a project first (Projects tab), then come back to generate a CI token for it.</p>`;
+    return;
+  }
+  const opts = projects.map((p) =>
+    `<option value="${p.project_id}" ${p.project_id === ACTIVE_PROJECT_ID ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+  body.innerHTML = `
+    <p>Generate a long-lived <strong>CI service token</strong> for a project, then use it in your pipeline (or the ready-to-run snippet) to send scans to this gate.</p>
+    <label style="display:block; margin-bottom:12px;">Project
+      <select id="ci-setup-project" style="width:100%;">${opts}</select>
+    </label>
+    <button class="btn primary" id="btn-generate-ci-token">Generate CI token</button>
+    <div id="ci-setup-result" style="margin-top:16px;"></div>`;
+  document.getElementById("btn-generate-ci-token").addEventListener("click", generateCiToken);
+}
+
+async function generateCiToken() {
+  const sel = document.getElementById("ci-setup-project");
+  const projectId = sel.value;
+  const projectName = sel.options[sel.selectedIndex].text;
+  const btn = document.getElementById("btn-generate-ci-token");
+  const result = document.getElementById("ci-setup-result");
+  btn.disabled = true; btn.textContent = "Generating…";
+  try {
+    const res = await api("/ci/tokens", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, label: `${projectName} CI`.slice(0, 120) }),
+    });
+    const token = res.token;
+    const snippet = ciScanSnippet(token);
+    result.innerHTML = `
+      <div class="result-banner ok">✔ Token generated for <strong>${escapeHtml(projectName)}</strong>. Valid 365 days — store it now, it isn't shown again.</div>
+      <label style="display:block; margin:10px 0 6px;">CI service token — store as the <code>SENTRAI_CI_TOKEN</code> pipeline secret</label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input id="ci-token-value" readonly value="${escapeHtml(token)}" style="flex:1; font-family:var(--mono); font-size:0.72rem;" />
+        <button class="btn ghost small" id="btn-copy-ci-token">Copy</button>
+      </div>
+      <h4 style="margin:16px 0 6px; font-size:0.85rem;">Test it now — paste into a terminal</h4>
+      <pre id="ci-snippet-text" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; overflow-x:auto; font-family:var(--mono); font-size:0.7rem; white-space:pre; margin:0;"></pre>
+      <div style="margin-top:8px;"><button class="btn ghost small" id="btn-copy-ci-snippet">Copy snippet</button></div>
+      <p class="muted" style="margin-top:12px; font-size:0.72rem;">For real pipelines, wire the gate in with <code>ci-integration/</code> (GitHub Action + policy example), then refresh this ledger to see gate events.</p>`;
+    document.getElementById("ci-snippet-text").textContent = snippet;
+    document.getElementById("btn-copy-ci-token").addEventListener("click", async () => { await copyText(token); toast("Token copied", "ok"); });
+    document.getElementById("btn-copy-ci-snippet").addEventListener("click", async () => { await copyText(snippet); toast("Snippet copied", "ok"); });
+  } catch (e) {
+    result.innerHTML = `<div class="result-banner bad">Couldn't generate token — ${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Generate CI token";
+  }
+}
+
+function closeCiSetup() { document.getElementById("ci-setup-overlay").classList.add("hidden"); }
+
+document.getElementById("btn-setup-ci")?.addEventListener("click", openCiSetup);
+document.getElementById("btn-close-ci-setup")?.addEventListener("click", closeCiSetup);
+document.getElementById("ci-setup-overlay")?.addEventListener("click", (e) => {
+  if (e.target.id === "ci-setup-overlay") closeCiSetup();
 });
 
 // ── Inventory ────────────────────────────────────────────────────────────────
