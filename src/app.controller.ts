@@ -5,7 +5,7 @@ import { readFile } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
 
 import { Public } from './common/decorators/public.decorator';
-import { INDEX_HTML, LANDING_HTML, HELP_MD, GATE_SCRIPT } from './common/paths';
+import { INDEX_HTML, LANDING_HTML, HELP_MD, GATE_SCRIPT_CANDIDATES } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
 import { BUILD_TAG } from './common/build';
 
@@ -73,12 +73,14 @@ export class AppController {
   @Get('/api/v1/ci/gate.mjs')
   @ApiExcludeEndpoint()
   async gateScript(@Res() res: Response): Promise<void> {
-    try {
-      const src = await readFile(GATE_SCRIPT, 'utf-8');
-      res.set('Cache-Control', 'no-cache');
-      res.type('application/javascript').send(src);
-    } catch (e) {
-      res.status(404).type('text/plain').send(`// SentRAI gate runner unavailable: ${String(e)}`);
+    for (const path of GATE_SCRIPT_CANDIDATES) {
+      try {
+        const src = await readFile(path, 'utf-8');
+        res.set('Cache-Control', 'no-cache');
+        res.type('application/javascript').send(src);
+        return;
+      } catch { /* try the next candidate */ }
     }
+    res.status(404).type('text/plain').send('// SentRAI gate runner unavailable on this deployment.');
   }
 }

@@ -24,6 +24,11 @@ export const HELP_MD = join(DOCS_DIR, 'HELP.md');
 /**
  * The standalone CI gate runner, served publicly at /api/v1/ci/gate.mjs so any
  * pipeline (incl. private repos that can't reference a cross-repo Action) can
- * `curl … | node` it without vendoring a copy.
+ * `curl … | node` it without vendoring a copy. Read from public/ (which is
+ * always deployed) first, then the repo's ci-integration/ copy (dev / full
+ * checkouts) — hosts that deploy only dist/ + public/ still serve it.
  */
-export const GATE_SCRIPT = join(process.cwd(), 'ci-integration', 'sentrai-gate.mjs');
+export const GATE_SCRIPT_CANDIDATES = [
+  join(PUBLIC_DIR, 'ci-gate.mjs'),
+  join(process.cwd(), 'ci-integration', 'sentrai-gate.mjs'),
+];
