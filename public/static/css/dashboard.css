@@ -157,6 +157,12 @@ legend { font-size: 0.68rem; font-weight: 700; color: var(--accent-2); padding: 
 
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
 .data-table th { text-align: left; color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+.data-table th[data-sort] { user-select: none; }
+.data-table th[data-sort]:hover { color: var(--text); }
+.table-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.table-filters input[type="search"] { flex: 1 1 240px; min-width: 180px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.74rem; padding: 7px 10px; }
+.table-filters select { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.72rem; padding: 7px 8px; }
+.table-filters input:focus, .table-filters select:focus { outline: none; border-color: var(--accent); }
 .data-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .data-table tr:hover td { background: var(--surface-2); }
 .data-table tr.detail-row:hover td { background: none; }

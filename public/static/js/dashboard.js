@@ -1076,17 +1076,76 @@ async function loadModels() {
   try {
     const projectFilter = ACTIVE_PROJECT_ID;
     const qs = projectFilter ? `?project_id=${encodeURIComponent(projectFilter)}` : "";
-    const models = await api(`/inventory/models${qs}`);
-    MODELS_CACHE = models;
-    const tbody = document.querySelector("#models-table tbody");
-    const empty = document.getElementById("models-empty");
-    if (!models.length) {
-      tbody.innerHTML = "";
-      empty.classList.remove("hidden");
-      return;
-    }
-    empty.classList.add("hidden");
-    tbody.innerHTML = models.map((m) => `
+    MODELS_CACHE = await api(`/inventory/models${qs}`);
+    renderModelTable();
+  } catch (e) {
+    toast("Failed to load models: " + e.message, "error");
+  }
+}
+
+// ── Inventory table: sort + filter (client-side over MODELS_CACHE) ─────────────
+const RISK_RANK = { LOW: 0, MINIMAL: 0, MEDIUM: 1, LIMITED: 1, HIGH: 2, CRITICAL: 3, PROHIBITED: 4 };
+const LIFECYCLE_RANK = { DESIGN: 0, DEVELOPMENT: 1, VALIDATION: 2, DEPLOYED: 3, MONITORING: 4, DECOMMISSIONED: 5 };
+let MODEL_SORT = { col: "name", dir: 1 };
+const MODEL_FILTER = { text: "", risk: "", lifecycle: "", compliance: "" };
+
+function modelMatchesFilter(m) {
+  const f = MODEL_FILTER;
+  if (f.risk && m.risk_level !== f.risk) return false;
+  if (f.lifecycle && m.lifecycle_stage !== f.lifecycle) return false;
+  if (f.compliance === "compliant" && !m.compliance_pass) return false;
+  if (f.compliance === "gaps" && m.compliance_pass) return false;
+  if (f.text) {
+    const hay = `${m.name} ${m.source_ref || ""} ${m.use_case_description || ""}`.toLowerCase();
+    if (!hay.includes(f.text.toLowerCase())) return false;
+  }
+  return true;
+}
+
+function compareModels(a, b) {
+  let av, bv;
+  switch (MODEL_SORT.col) {
+    case "risk": av = RISK_RANK[a.risk_level] ?? 0; bv = RISK_RANK[b.risk_level] ?? 0; break;
+    case "compliance": av = a.compliance_pass ? -1 : (a.open_gap_count || 0); bv = b.compliance_pass ? -1 : (b.open_gap_count || 0); break;
+    case "lifecycle": av = LIFECYCLE_RANK[a.lifecycle_stage] ?? 0; bv = LIFECYCLE_RANK[b.lifecycle_stage] ?? 0; break;
+    case "oversight": av = a.human_oversight_required ? 1 : 0; bv = b.human_oversight_required ? 1 : 0; break;
+    case "registered": av = new Date(a.registered_at).getTime() || 0; bv = new Date(b.registered_at).getTime() || 0; break;
+    default: av = (a.name || "").toLowerCase(); bv = (b.name || "").toLowerCase();
+  }
+  if (av < bv) return -MODEL_SORT.dir;
+  if (av > bv) return MODEL_SORT.dir;
+  return 0;
+}
+
+function updateModelSortIndicators() {
+  document.querySelectorAll("#models-table thead th[data-sort]").forEach((th) => {
+    if (!th.dataset.label) th.dataset.label = th.textContent.trim();
+    const active = MODEL_SORT.col === th.dataset.sort;
+    th.textContent = th.dataset.label + (active ? (MODEL_SORT.dir === 1 ? " ▲" : " ▼") : "");
+  });
+}
+
+function renderModelTable() {
+  const projectFilter = ACTIVE_PROJECT_ID;
+  const tbody = document.querySelector("#models-table tbody");
+  const empty = document.getElementById("models-empty");
+  const countEl = document.getElementById("models-count");
+  updateModelSortIndicators();
+
+  if (!MODELS_CACHE.length) {
+    tbody.innerHTML = "";
+    empty.classList.remove("hidden");
+    if (countEl) countEl.textContent = "";
+    return;
+  }
+  empty.classList.add("hidden");
+  const rows = MODELS_CACHE.filter(modelMatchesFilter).sort(compareModels);
+  if (countEl) countEl.textContent = `${rows.length} of ${MODELS_CACHE.length} model(s)`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No models match the current filter.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((m) => `
       <tr data-model-id="${m.model_id}">
         <td>
           <strong>${m.name}</strong>
@@ -1164,10 +1223,31 @@ async function loadModels() {
     tbody.querySelectorAll(".ledger-btn").forEach((btn) => {
       btn.addEventListener("click", () => showLedger(btn.dataset.id, btn.dataset.name));
     });
-  } catch (e) {
-    toast("Failed to load models: " + e.message, "error");
-  }
 }
+
+// Sort on header click; filter on control input (wired once).
+document.querySelectorAll("#models-table thead th[data-sort]").forEach((th) => {
+  th.style.cursor = "pointer";
+  th.addEventListener("click", () => {
+    const col = th.dataset.sort;
+    if (MODEL_SORT.col === col) MODEL_SORT.dir *= -1;
+    else { MODEL_SORT.col = col; MODEL_SORT.dir = 1; }
+    renderModelTable();
+  });
+});
+["model-filter-text", "model-filter-risk", "model-filter-lifecycle", "model-filter-compliance"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const apply = () => {
+    MODEL_FILTER.text = (document.getElementById("model-filter-text") || {}).value || "";
+    MODEL_FILTER.risk = (document.getElementById("model-filter-risk") || {}).value || "";
+    MODEL_FILTER.lifecycle = (document.getElementById("model-filter-lifecycle") || {}).value || "";
+    MODEL_FILTER.compliance = (document.getElementById("model-filter-compliance") || {}).value || "";
+    renderModelTable();
+  };
+  el.addEventListener("input", apply);
+  el.addEventListener("change", apply);
+});
 
 // ── Inline expandable detail row (gaps / ledger) ──────────────────────────────
 // Renders directly under the clicked model's row in the table, instead of a
