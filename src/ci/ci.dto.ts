@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 
 /** One source file in a CI scan payload (path relative to repo root + its content). */
 export class CiFileDto {
@@ -14,6 +22,7 @@ export class CiFileDto {
 export class CiScanDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(100)
   commit_sha!: string;
 
   @IsOptional()
@@ -39,5 +48,15 @@ export class CiTokenDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   label?: string;
+}
+
+/** Auditor sign-off to override a failed gate. Justification is mandatory and
+ *  becomes part of the permanent record — hence a real minimum length. */
+export class CiOverrideDto {
+  @IsString()
+  @MinLength(10)
+  @MaxLength(1000)
+  reason!: string;
 }

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
-import { AIModelEntity, ProjectEntity } from '../database/entities';
+import { AIModelEntity, DeploymentGateEventEntity, ProjectEntity } from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
@@ -33,6 +33,13 @@ export interface PortfolioReport {
     readiness: string;
   }>;
   top_gaps: Array<{ framework: string; control: string; count: number; statement: string }>;
+  /** Shift-left signal from the CI pre-deployment gate ledger. */
+  ci_gate: {
+    events_recorded: number;
+    gate_readiness_score: number | null; // effective pass ratio (override counts as pass)
+    active_blocked_gates: number; // failed gates not yet overridden
+    shadow_ai_assets: number; // distinct ungoverned assets in active blocks
+  };
 }
 
 @Injectable()
@@ -40,6 +47,8 @@ export class ComplianceService {
   constructor(
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
+    @InjectRepository(DeploymentGateEventEntity)
+    private readonly gates: Repository<DeploymentGateEventEntity>,
     private readonly inventory: InventoryService,
   ) {}
 
@@ -112,6 +121,8 @@ export class ComplianceService {
         statement: gapStatement(g.control, g.count, g.name),
       }));
 
+    const ciGate = await this.ciGateMetrics(user, projectId);
+
     const rate = total ? fullyCompliant / total : 0;
     const headline =
       total === 0
@@ -141,6 +152,49 @@ export class ComplianceService {
         readiness: frameworkReadiness(id, fw[id].passing, fw[id].assessed, fw[id].open_gaps),
       })),
       top_gaps: topGaps,
+      ci_gate: ciGate,
+    };
+  }
+
+  /**
+   * Aggregate the CI pre-deployment gate ledger into the executive rollup.
+   * Tenant-scoped (ADMIN sees all); an override counts a failed gate as an
+   * *effective* pass for the readiness score, but a not-yet-overridden failure
+   * remains an "active blocked gate".
+   */
+  private async ciGateMetrics(user: CurrentUser, projectId?: string | null): Promise<PortfolioReport['ci_gate']> {
+    const empty = { events_recorded: 0, gate_readiness_score: null, active_blocked_gates: 0, shadow_ai_assets: 0 };
+    const qb = this.gates.createQueryBuilder('g');
+    if (user.role !== Role.ADMIN) {
+      const owned = await this.projects.find({ where: { tenantId: user.tenantId ?? IsNull() }, select: ['id'] });
+      let ids = owned.map((p) => p.id);
+      if (projectId) ids = ids.filter((id) => id === projectId);
+      if (ids.length === 0) return empty;
+      qb.where('g.projectId IN (:...ids)', { ids });
+    } else if (projectId) {
+      qb.where('g.projectId = :pid', { pid: projectId });
+    }
+
+    const rows = await qb.getMany();
+    const total = rows.length;
+    let effectivePass = 0;
+    let activeBlocked = 0;
+    const shadowAssets = new Set<string>();
+    for (const r of rows) {
+      const overridden = r.overriddenAt != null;
+      if (overridden || r.verdict === 'pass') effectivePass += 1;
+      if (r.verdict === 'fail' && !overridden) {
+        activeBlocked += 1;
+        for (const g of r.blockingGaps ?? []) {
+          if (g.shadow) shadowAssets.add(`${r.projectId}:${g.file_location}`);
+        }
+      }
+    }
+    return {
+      events_recorded: total,
+      gate_readiness_score: total ? Number((effectivePass / total).toFixed(3)) : null,
+      active_blocked_gates: activeBlocked,
+      shadow_ai_assets: shadowAssets.size,
     };
   }
 }

@@ -639,4 +639,99 @@ describe('SentrAI Console (e2e)', () => {
     expect(history.body[0].verdict).toBe('pass');
     expect(history.body[1].verdict).toBe('fail');
   });
+
+  it('CI LEDGER: org-wide events carry line-level evidence; override is additive (verdict preserved)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    const proj = await request(http)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Ledger App', description: 'ledger test' });
+    const projectId = proj.body.project_id;
+
+    const tok = await request(http)
+      .post('/api/v1/ci/tokens')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId, label: 'ledger-test' });
+    const ciToken = tok.body.token;
+
+    const policy = [
+      'gates:',
+      '  block_on:',
+      '    - severity: LOW',
+      '      missing: [registered, owner_team]',
+      '    - severity: MEDIUM',
+      '      missing: [registered, owner_team]',
+      '    - severity: HIGH',
+      '      missing: [registered, owner_team]',
+      '  frameworks: [eu_ai_act]',
+    ].join('\n');
+    // The rogue aliased import is exactly the kind of AST signal the viewer shows.
+    const rogue =
+      'from transformers import Pipeline as rogue_ai\n' +
+      'import openai\n\n' +
+      'def score_credit(applicant):\n' +
+      '    """Credit underwriting via LLM."""\n' +
+      '    clf = rogue_ai("text-classification")\n' +
+      '    return openai.chat.completions.create(model="gpt-4", messages=[])\n';
+    const files = [
+      { path: '.sentrai/policy.yaml', content: policy },
+      { path: 'svc/rogue.py', content: rogue },
+    ];
+
+    const fail = await request(http)
+      .post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${ciToken}`)
+      .send({ commit_sha: 'deadbeefcafe', pr_number: '42', files });
+    expect(fail.status).toBe(200);
+    expect(fail.body.verdict).toBe('fail');
+    const eventId = fail.body.gate_event_id;
+
+    // Org-wide ledger surfaces the event with line-level evidence for the viewer.
+    const ledger = await request(http)
+      .get('/api/v1/ci/events?verdict=fail')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(ledger.status).toBe(200);
+    const row = ledger.body.find((e: any) => e.gate_event_id === eventId);
+    expect(row).toBeTruthy();
+    expect(row.effective_verdict).toBe('fail');
+    expect(row.project_name).toBe('Ledger App');
+    const gap = row.blocking_violations[0];
+    expect(Array.isArray(gap.evidence)).toBe(true);
+    expect(gap.evidence.length).toBeGreaterThan(0);
+    expect(gap.evidence[0]).toHaveProperty('line');
+    expect(gap.evidence[0]).toHaveProperty('snippet');
+
+    // A short justification is rejected.
+    await request(http)
+      .post(`/api/v1/ci/events/${eventId}/override`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ reason: 'ok' })
+      .expect(400);
+
+    // Auditor sign-off override.
+    const ov = await request(http)
+      .post(`/api/v1/ci/events/${eventId}/override`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ reason: 'Compensating control approved under ticket GRC-123.' });
+    expect(ov.status).toBe(200);
+    expect(ov.body.overridden).toBe(true);
+    expect(ov.body.overridden_by).toBe('admin@sentrai.local');
+    // Immutability: the ORIGINAL verdict is preserved; only effective flips.
+    expect(ov.body.verdict).toBe('fail');
+    expect(ov.body.effective_verdict).toBe('pass');
+
+    // Double-override is refused.
+    await request(http)
+      .post(`/api/v1/ci/events/${eventId}/override`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ reason: 'Trying to override again, should fail.' })
+      .expect(403);
+
+    // The immutable audit_events ledger captured the override action + actor.
+    const audit = await request(http)
+      .get('/api/v1/audit/events?path=/override')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(audit.status).toBe(200);
+  });
 });

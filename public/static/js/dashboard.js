@@ -273,6 +273,9 @@ function updateTabVisibility(hasActiveProject) {
       // Portfolio-wide executive rollup — always available; it aggregates across
       // every project you can see, and narrows to the active project when one is set.
       tab.style.display = "";
+    } else if (name === "ci-ledger") {
+      // Org-wide auditor ledger — visible to sign-off / audit roles only.
+      tab.style.display = canViewLedger() ? "" : "none";
     } else if (name !== "projects" && name !== "docs") {
       tab.style.display = hasActiveProject ? "" : "none";
     }
@@ -300,6 +303,7 @@ function switchToTab(tabName) {
   }
   if (tabName === "overview") loadOverview();
   if (tabName === "compliance") loadCompliance();
+  if (tabName === "ci-ledger") loadCiLedger();
   if (tabName === "inventory") {
     const btnNewModel = document.getElementById("btn-new-model");
     if (btnNewModel) {
@@ -557,6 +561,19 @@ async function loadCompliance() {
     statsEl.innerHTML = stats.map((s) =>
       `<div class="stat-box ${s.cls || ""}"><div class="value">${s.value}</div><div class="label">${s.label}</div></div>`).join("");
 
+    // Shift-left CI gate signal (folded in from the gate ledger).
+    const ci = p.ci_gate || {};
+    const readiness = ci.gate_readiness_score == null ? "—" : Math.round(ci.gate_readiness_score * 100) + "%";
+    const ciStats = [
+      { label: "Gate Readiness", value: readiness, cls: ci.gate_readiness_score == null ? "" : (ci.active_blocked_gates ? "danger" : "success") },
+      { label: "Active Blocked Gates", value: ci.active_blocked_gates ?? 0, cls: ci.active_blocked_gates ? "danger" : "success" },
+      { label: "Shadow AI Assets", value: ci.shadow_ai_assets ?? 0, cls: ci.shadow_ai_assets ? "danger" : "success" },
+      { label: "Gate Events", value: ci.events_recorded ?? 0 },
+    ];
+    const ciStatsEl = document.getElementById("compliance-ci-stats");
+    if (ciStatsEl) ciStatsEl.innerHTML = ciStats.map((s) =>
+      `<div class="stat-box ${s.cls || ""}"><div class="value">${s.value}</div><div class="label">${s.label}</div></div>`).join("");
+
     fwEl.innerHTML = p.frameworks.map((f) => {
       const pct = Math.round(f.pass_rate * 100);
       const ok = f.open_gaps === 0 && f.models_assessed > 0;
@@ -598,6 +615,198 @@ async function downloadPortfolioPdf() {
     toast("PDF export failed: " + e.message, "error");
   }
 }
+
+// ── CI/CD Pre-Deployment Gate Ledger ──────────────────────────────────────────
+
+let CI_EVENTS_CACHE = [];
+const LEDGER_ROLES = ["ADMIN", "CISO", "REVIEWER", "APPROVER"];
+const OVERRIDE_ROLES = ["ADMIN", "CISO", "APPROVER"];
+function canViewLedger() { return !!(AUTH_USER && LEDGER_ROLES.includes(AUTH_USER.role)); }
+function canOverride() { return !!(AUTH_USER && OVERRIDE_ROLES.includes(AUTH_USER.role)); }
+
+function timeAgo(iso) {
+  if (!iso) return "—";
+  const then = new Date(iso).getTime();
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return secs <= 1 ? "just now" : `${secs} secs ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+// Effective verdict badge (original FAIL that was signed off shows OVERRIDDEN).
+function verdictBadge(ev) {
+  if (ev.overridden) return `<span class="badge OVERRIDDEN" title="Original verdict: FAIL — signed off by ${escapeHtml(ev.overridden_by || "")}">OVERRIDDEN</span>`;
+  return `<span class="badge ${ev.verdict === "pass" ? "PASS" : "FAIL"}">${ev.verdict.toUpperCase()}</span>`;
+}
+
+async function loadCiLedger() {
+  const tbody = document.getElementById("ci-ledger-rows");
+  const empty = document.getElementById("ci-ledger-empty");
+  const filter = document.getElementById("ci-ledger-filter");
+  const verdict = filter ? filter.value : "";
+  tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Loading gate ledger…</td></tr>`;
+  empty.classList.add("hidden");
+  try {
+    const qs = verdict ? `?verdict=${verdict}` : "";
+    const events = await api("/ci/events" + qs);
+    CI_EVENTS_CACHE = Array.isArray(events) ? events : [];
+    if (CI_EVENTS_CACHE.length === 0) {
+      tbody.innerHTML = "";
+      empty.classList.remove("hidden");
+      return;
+    }
+    renderCiRows(CI_EVENTS_CACHE);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Failed to load ledger — ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderCiRows(events) {
+  const tbody = document.getElementById("ci-ledger-rows");
+  tbody.innerHTML = events.map((ev) => {
+    const sha = (ev.commit_sha || "").slice(0, 8);
+    const gaps = ev.blocking_violations || [];
+    const triage = gaps.length === 0
+      ? `<span class="muted">—</span>`
+      : gaps.slice(0, 2).map((g) =>
+          `<div>${g.shadow ? `<span class="badge risk-HIGH" style="margin-right:4px;">SHADOW</span>` : ""}<span title="${escapeHtml(g.reason)}">${escapeHtml(g.model_name)} — missing ${escapeHtml((g.missing || []).join(", "))}</span></div>`
+        ).join("") + (gaps.length > 2 ? `<div class="muted">+${gaps.length - 2} more…</div>` : "");
+    return `<tr data-event-id="${ev.gate_event_id}">
+      <td><code title="${escapeHtml(ev.commit_sha || "")}">${escapeHtml(sha) || "—"}</code>${ev.pr_number ? `<div class="muted" style="font-size:0.65rem;">PR #${escapeHtml(ev.pr_number)}</div>` : ""}</td>
+      <td>${escapeHtml(ev.project_name || ev.project_id.slice(0, 8))}</td>
+      <td><span class="time-ago" title="${escapeHtml(ev.occurred_at)}">${timeAgo(ev.occurred_at)}</span></td>
+      <td>${verdictBadge(ev)}</td>
+      <td>${ev.models_detected}</td>
+      <td style="font-size:0.72rem;">${triage}</td>
+      <td><button class="btn ghost small btn-audit-event">Audit →</button></td>
+    </tr>`;
+  }).join("");
+  tbody.querySelectorAll(".btn-audit-event").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const id = e.target.closest("tr").dataset.eventId;
+      openCiDetail(id);
+    });
+  });
+}
+
+// Renders one file's flagged lines as a mini code viewer, highlighting the
+// exact AST-flagged lines (imports / aliases that tripped the policy).
+function renderCodeViewer(evidence) {
+  if (!evidence || evidence.length === 0) {
+    return `<div class="override-note">No line-level evidence captured for this asset.</div>`;
+  }
+  return `<div class="code-viewer">` + evidence.map((sig) =>
+    `<div class="code-line flagged"><span class="ln">${sig.line}</span><span class="lc">${escapeHtml(sig.snippet || "")}</span></div>`
+  ).join("") + `</div>`;
+}
+
+function openCiDetail(eventId) {
+  const ev = CI_EVENTS_CACHE.find((e) => e.gate_event_id === eventId);
+  if (!ev) return;
+  const overlay = document.getElementById("ci-detail-overlay");
+  const title = document.getElementById("ci-detail-title");
+  const body = document.getElementById("ci-detail-body");
+  title.innerHTML = `Gate ${verdictBadge(ev)} · <code>${escapeHtml((ev.commit_sha || "").slice(0, 8))}</code>`;
+
+  const gaps = ev.blocking_violations || [];
+  const gapsHtml = gaps.length === 0
+    ? `<div class="result-banner ok">No blocking violations — this commit passed the gate.</div>`
+    : gaps.map((g) => `
+        <div class="gap-card">
+          <div class="gap-head">
+            <span class="badge ${g.severity ? "risk-" + g.severity : "neutral"}">${escapeHtml(g.severity || "")}</span>
+            ${g.shadow ? `<span class="badge risk-HIGH">SHADOW AI</span>` : ""}
+            <span class="gap-file">${escapeHtml(g.file_location)}</span>
+          </div>
+          <div class="gap-reason">${escapeHtml(g.reason)}</div>
+          <div class="override-note" style="margin-bottom:6px;">Missing controls: <strong>${escapeHtml((g.missing || []).join(", "))}</strong></div>
+          ${renderCodeViewer(g.evidence)}
+        </div>`).join("");
+
+  let overrideHtml = "";
+  if (ev.overridden) {
+    overrideHtml = `<div class="override-box">
+      <strong>✔ Auditor sign-off recorded</strong>
+      <div class="override-note">By <strong>${escapeHtml(ev.overridden_by || "")}</strong> · ${escapeHtml(ev.overridden_at ? new Date(ev.overridden_at).toLocaleString() : "")}</div>
+      <div class="override-note" style="margin-top:6px;">Justification: “${escapeHtml(ev.override_reason || "")}”</div>
+      <div class="override-note" style="margin-top:6px;">The original verdict <strong>FAIL</strong> remains on the immutable record.</div>
+    </div>`;
+  } else if (ev.verdict === "fail" && canOverride()) {
+    overrideHtml = `<div class="override-box">
+      <strong>Grant Auditing Sign-Off Override</strong>
+      <div class="override-note">This does not erase the failure — it records your identity and justification alongside the original verdict.</div>
+      <textarea id="ci-override-reason" placeholder="Justification (required, min 10 chars) — e.g. compensating control X approved under ticket GRC-123."></textarea>
+      <button class="btn danger" id="btn-submit-override" data-event-id="${ev.gate_event_id}">Grant Override & Sign Off</button>
+    </div>`;
+  } else if (ev.verdict === "fail") {
+    overrideHtml = `<div class="override-note">A failed gate can only be signed off by an ADMIN, CISO, or APPROVER.</div>`;
+  }
+
+  body.innerHTML = `
+    <div class="metric-row" style="margin-bottom:14px;">
+      <div class="metric"><span class="v">${escapeHtml(ev.project_name || "—")}</span><span class="k">Project</span></div>
+      <div class="metric"><span class="v">${escapeHtml(ev.triggered_by || "—")}</span><span class="k">Triggered by</span></div>
+      <div class="metric"><span class="v">${timeAgo(ev.occurred_at)}</span><span class="k">When</span></div>
+      <div class="metric"><span class="v">${ev.models_detected}</span><span class="k">Models detected</span></div>
+    </div>
+    <h3 style="font-size:0.85rem; margin:0 0 10px;">Blocking Violations & Flagged Code</h3>
+    ${gapsHtml}
+    ${overrideHtml}
+  `;
+  overlay.classList.remove("hidden");
+
+  const submitBtn = document.getElementById("btn-submit-override");
+  if (submitBtn) submitBtn.addEventListener("click", () => submitOverride(ev.gate_event_id));
+}
+
+function closeCiDetail() {
+  document.getElementById("ci-detail-overlay").classList.add("hidden");
+}
+
+async function submitOverride(eventId) {
+  const ta = document.getElementById("ci-override-reason");
+  const btn = document.getElementById("btn-submit-override");
+  const reason = (ta ? ta.value : "").trim();
+  if (reason.length < 10) {
+    toast("Justification must be at least 10 characters.", "error");
+    if (ta) ta.focus();
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = "Signing off…"; }
+  try {
+    const updated = await api(`/ci/events/${eventId}/override`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+    // Update state in place — no hard refresh.
+    const idx = CI_EVENTS_CACHE.findIndex((e) => e.gate_event_id === eventId);
+    if (idx >= 0) CI_EVENTS_CACHE[idx] = updated;
+    renderCiRows(CI_EVENTS_CACHE);
+    openCiDetail(eventId); // re-render modal in its overridden state
+    toast("Override recorded — original failure preserved.", "ok");
+  } catch (e) {
+    toast("Override failed: " + e.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Grant Override & Sign Off"; }
+  }
+}
+
+// Ledger controls
+document.getElementById("btn-refresh-ci-ledger")?.addEventListener("click", loadCiLedger);
+document.getElementById("ci-ledger-filter")?.addEventListener("change", loadCiLedger);
+document.getElementById("btn-close-ci-detail")?.addEventListener("click", closeCiDetail);
+document.getElementById("ci-detail-overlay")?.addEventListener("click", (e) => {
+  if (e.target.id === "ci-detail-overlay") closeCiDetail();
+});
+document.getElementById("link-open-ci-ledger")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  if (canViewLedger()) switchToTab("ci-ledger");
+  else toast("The gate ledger is available to audit roles (ADMIN, CISO, REVIEWER, APPROVER).", "error");
+});
 
 // ── Inventory ────────────────────────────────────────────────────────────────
 
