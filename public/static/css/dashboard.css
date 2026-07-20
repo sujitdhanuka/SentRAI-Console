@@ -264,6 +264,22 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-
 .modal.ci-modal { max-width: 780px; }
 .modal-body { overflow-y: auto; padding: 16px 18px; }
 
+/* Context-sensitive help modal — rendered markdown */
+.help-body { font-size: 0.85rem; line-height: 1.55; }
+.help-body h3 { font-size: 1.05rem; margin: 0 0 10px; }
+.help-body h4 { font-size: 0.9rem; margin: 16px 0 6px; color: var(--accent-2); }
+.help-body p { margin: 0 0 10px; }
+.help-body ul, .help-body ol { margin: 0 0 12px; padding-left: 20px; }
+.help-body li { margin: 3px 0; }
+.help-body strong { color: var(--text); }
+.help-body em { color: var(--muted); }
+.help-body code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+.help-body a { color: var(--accent-2); }
+.help-body blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 6px 6px 0; color: var(--muted); }
+.help-body table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 10px 0; }
+.help-body th, .help-body td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.help-body th { color: var(--muted); text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.4px; }
+
 /* CI gate verdict badges */
 .badge.PASS { background: rgba(34,197,94,0.15); color: var(--success); }
 .badge.FAIL { background: rgba(239,68,68,0.15); color: var(--danger); }

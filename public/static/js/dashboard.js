@@ -3,6 +3,8 @@ const API = "/api/v1";
 let MODELS_CACHE = [];
 let PROJECTS_CACHE = [];
 let ACTIVE_PROJECT_ID = localStorage.getItem("sentrai_active_project_id") || "";
+let CURRENT_TAB = "projects";       // the tab currently shown (for context-sensitive help)
+let DOCS_MARKDOWN_CACHE = null;     // the help doc, fetched once and reused
 
 // ── Auth state ───────────────────────────────────────────────────────────
 let AUTH_TOKEN = localStorage.getItem("sentrai_access_token") || "";
@@ -289,6 +291,7 @@ function updateTabVisibility(hasActiveProject) {
 }
 
 function switchToTab(tabName) {
+  CURRENT_TAB = tabName; // remember where we are so "? Help" is context-sensitive
   document.querySelectorAll(".tab").forEach((t) => {
     if (t.dataset.tab === tabName) t.classList.add("active");
     else t.classList.remove("active");
@@ -804,6 +807,93 @@ document.getElementById("link-open-ci-ledger")?.addEventListener("click", (e) =>
   e.preventDefault();
   if (canViewLedger()) switchToTab("ci-ledger");
   else toast("The gate ledger is available to audit roles (ADMIN, CISO, REVIEWER, APPROVER).", "error");
+});
+
+// ── Context-sensitive help ────────────────────────────────────────────────────
+// The "? Help" button (and the "?" key) opens the help doc's section for whatever
+// tab you're currently on. The doc (public/docs/HELP.md) is the single source of
+// truth — this just slices out the relevant section and renders it inline.
+
+const CONTEXT_HELP_SECTIONS = {
+  projects: "Projects",
+  overview: "Overview",
+  compliance: "Compliance Rollup",
+  "ci-ledger": "CI Gate Ledger",
+  inventory: "Model Inventory",
+  monitoring: "Drift Monitoring",
+  audit: "Audit Trail",
+  incidents: "Incidents",
+  lineage: "Lineage Graph",
+  docs: "Docs",
+  users: "Users",
+  orgs: "Organizations",
+};
+
+async function getDocsMarkdown() {
+  if (DOCS_MARKDOWN_CACHE != null) return DOCS_MARKDOWN_CACHE;
+  const data = await api("/docs");
+  DOCS_MARKDOWN_CACHE = data && data.content ? data.content : "";
+  return DOCS_MARKDOWN_CACHE;
+}
+
+// Slice one "### N. Title" section (heading + body, up to the next ## or ###) out
+// of the help markdown.
+function extractHelpSection(md, title) {
+  const lines = md.split("\n");
+  const esc = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp("^###\\s+\\d+\\.\\s*" + esc + "\\s*$", "i");
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (re.test(lines[i].trim())) { start = i; break; }
+  }
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^###?\s+\S/.test(lines[i])) { end = i; break; } // next ## or ### heading
+  }
+  return lines.slice(start, end).join("\n").trim();
+}
+
+async function openContextHelp() {
+  const title = CONTEXT_HELP_SECTIONS[CURRENT_TAB] || null;
+  const overlay = document.getElementById("help-modal-overlay");
+  const body = document.getElementById("help-modal-body");
+  const titleEl = document.getElementById("help-modal-title");
+  titleEl.textContent = title ? `Help · ${title}` : "Help";
+  body.innerHTML = `<div class="empty-state">Loading help…</div>`;
+  overlay.classList.remove("hidden");
+  try {
+    const md = await getDocsMarkdown();
+    const section = title ? extractHelpSection(md, title) : null;
+    body.innerHTML = section
+      ? marked.parse(section)
+      : `<p>No screen-specific help here yet — open the full guide for details.</p>`;
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state">Couldn't load help — ${escapeHtml(e.message)}. Try the full guide.</div>`;
+  }
+}
+
+function closeContextHelp() {
+  document.getElementById("help-modal-overlay").classList.add("hidden");
+}
+
+document.getElementById("btn-context-help")?.addEventListener("click", openContextHelp);
+document.getElementById("btn-close-help-modal")?.addEventListener("click", closeContextHelp);
+document.getElementById("help-modal-overlay")?.addEventListener("click", (e) => {
+  if (e.target.id === "help-modal-overlay") closeContextHelp();
+});
+document.getElementById("btn-help-full-guide")?.addEventListener("click", () => {
+  closeContextHelp();
+  switchToTab("docs");
+});
+// "?" opens context help; Esc closes it. Ignore while typing in a field.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { closeContextHelp(); return; }
+  if (e.key !== "?" || !AUTH_USER) return;
+  const tag = e.target.tagName || "";
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || e.target.isContentEditable) return;
+  e.preventDefault();
+  openContextHelp();
 });
 
 // ── Inventory ────────────────────────────────────────────────────────────────
