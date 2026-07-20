@@ -87,8 +87,9 @@
             <div class="src-pane" id="src-pane-zip">
               <input type="file" id="project-codebase-zip" accept=".zip,application/zip" />
               <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
-                A .zip of your application's source. Extracted into the project's private workspace and scanned there
-                (node_modules/.git skipped, max 200&nbsp;MB).
+                A .zip of your application's source. <b>Exclude node_modules and build folders before zipping</b> — a
+                large archive can be rejected by the host's request-size limit. For big or dependency-heavy projects,
+                use <b>Upload folder</b> (sends source files only) or <b>GitHub repo</b> (no upload).
               </span>
             </div>
 

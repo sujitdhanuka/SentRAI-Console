@@ -1561,11 +1561,29 @@ async function apiUpload(path, formData) {
     showAuthOverlay();
     throw new Error("Session expired — please sign in again");
   }
+  if (res.status === 413) {
+    throw new Error(
+      "Upload too large for the server's request limit. Exclude node_modules/build folders, " +
+      "use the Upload folder option (it sends only source files), or connect the GitHub repo instead."
+    );
+  }
   if (!res.ok) {
     const detail = (data && typeof data === 'object' && (data.message || data.detail)) || res.statusText;
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
   }
   return data;
+}
+
+// Skip these directories and only keep scannable source files — this keeps a
+// folder upload tiny and clear of hosting request-size limits.
+const CODEBASE_SKIP_DIR_RE = /(^|\/)(node_modules|\.git|\.next|dist|build|out|__pycache__|\.venv|venv|env|vendor|coverage|\.turbo|\.cache|target|\.idea|\.vscode|\.pytest_cache|\.mypy_cache)(\/|$)/;
+const CODEBASE_SCAN_EXT = new Set([".py",".ipynb",".ts",".tsx",".js",".jsx",".mjs",".cjs",".go",".java",".rb",".yaml",".yml",".json",".toml",".md",".txt",".env",".cfg",".ini"]);
+function shouldUploadCodebaseFile(relPath) {
+  if (CODEBASE_SKIP_DIR_RE.test(relPath)) return false;
+  const base = relPath.split("/").pop() || "";
+  const dot = base.lastIndexOf(".");
+  const ext = dot >= 0 ? base.slice(dot).toLowerCase() : "";
+  return CODEBASE_SCAN_EXT.has(ext);
 }
 
 /** Upload the codebase for a project from whichever source is selected. */
@@ -1574,6 +1592,9 @@ async function uploadProjectCodebase(projectId, source) {
     const input = document.getElementById("project-codebase-zip");
     const file = input && input.files.length ? input.files[0] : null;
     if (!file) return null;
+    if (file.size > 40 * 1024 * 1024) {
+      toast("Large .zip — if the upload is rejected, exclude node_modules or use the folder/GitHub option.", "info");
+    }
     toast("Uploading codebase…");
     const fd = new FormData();
     fd.append("file", file);
@@ -1581,9 +1602,15 @@ async function uploadProjectCodebase(projectId, source) {
   }
   if (source === "folder") {
     const input = document.getElementById("project-codebase-folder");
-    const files = input && input.files.length ? input.files : null;
-    if (!files) return null;
-    toast(`Uploading ${files.length} files…`);
+    const all = input && input.files.length ? [...input.files] : null;
+    if (!all) return null;
+    // Filter to source files only, client-side, so we never upload dependency
+    // trees or binaries (avoids the server request-size limit entirely).
+    const files = all.filter((f) => shouldUploadCodebaseFile(f.webkitRelativePath || f.name));
+    if (files.length === 0) {
+      throw new Error("No source files found in that folder (only node_modules/binaries were present).");
+    }
+    toast(`Uploading ${files.length} source files (of ${all.length})…`);
     const fd = new FormData();
     // Send the true relative path alongside each file — multer would otherwise
     // reduce the filename to a basename, losing structure and junk filtering.
