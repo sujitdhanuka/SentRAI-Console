@@ -20,6 +20,12 @@ export interface AppConfig {
     synchronize: boolean;
   };
 
+  // Safe (secret-free) DB descriptor for the public bootstrap diagnostic, so an
+  // operator can confirm from the outside whether data lands in the persistent
+  // MariaDB or a disposable SQLite file.
+  dbProvider: 'sqlite' | 'mariadb';
+  dbPersistent: boolean;
+
   jwt: {
     secret: string;
     algorithm: 'HS256';
@@ -80,11 +86,43 @@ function bool(value: string | undefined, fallback: boolean): boolean {
 const DEV_FALLBACK_SECRET = 'CHANGE_ME_IN_PRODUCTION_secret_key_32chars';
 
 /**
+ * Choose the database engine. An explicit DB_PROVIDER wins; otherwise, if
+ * MariaDB credentials are present, prefer the persistent database — so a host
+ * that only sets MYSQL_PWD + DB_HOST never silently falls back to a disposable
+ * SQLite file that is wiped on every redeploy.
+ */
+function resolveDbProvider(): 'sqlite' | 'mariadb' {
+  const explicit = (process.env.DB_PROVIDER ?? '').toLowerCase();
+  if (explicit === 'mariadb' || explicit === 'mysql') return 'mariadb';
+  if (explicit === 'sqlite') return 'sqlite';
+  const hasMariaCreds = Boolean((process.env.MYSQL_PWD || process.env.DB_PASSWORD) && process.env.DB_HOST);
+  return hasMariaCreds ? 'mariadb' : 'sqlite';
+}
+
+/**
  * A deployment is treated as "production" when NODE_ENV=production OR it runs
  * against MariaDB (the hosted DB) — either way, weak secrets are refused.
  */
 function isProductionLike(): boolean {
-  return process.env.NODE_ENV === 'production' || (process.env.DB_PROVIDER ?? 'sqlite') === 'mariadb';
+  return process.env.NODE_ENV === 'production' || resolveDbProvider() === 'mariadb';
+}
+
+/**
+ * Refuse to boot a production deployment against ephemeral SQLite. Its file
+ * lives inside the container/app directory and is wiped on every redeploy —
+ * silently destroying all data. Fail loudly instead, with the fix. An operator
+ * who genuinely mounts SQLITE_PATH on a persistent volume can opt out.
+ */
+function assertPersistentDbInProduction(provider: 'sqlite' | 'mariadb'): void {
+  if (provider === 'mariadb') return;
+  if (process.env.NODE_ENV !== 'production') return;
+  if (bool(process.env.ALLOW_EPHEMERAL_SQLITE, false)) return;
+  throw new Error(
+    'FATAL: production is configured to use SQLite, whose file is wiped on every redeploy — ' +
+      'this is why data disappears after each update. Point the app at the persistent database: set ' +
+      'DB_PROVIDER=mariadb with DB_HOST, DB_USER, DB_NAME and MYSQL_PWD (or DB_PASSWORD). ' +
+      'Only if SQLITE_PATH is on a mounted, persistent volume, set ALLOW_EPHEMERAL_SQLITE=true to override.',
+  );
 }
 
 /**
@@ -107,7 +145,13 @@ function resolveJwtSecret(): string {
   return secret ?? DEV_FALLBACK_SECRET;
 }
 
-export default (): AppConfig => ({
+export default (): AppConfig => {
+  const dbProvider = resolveDbProvider();
+  // Guard BEFORE we hand connection options to TypeORM, so a misconfigured
+  // production never quietly writes to a throwaway SQLite file.
+  assertPersistentDbInProduction(dbProvider);
+
+  return {
   port: parseInt(process.env.PORT ?? '8000', 10),
   corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:8000')
     .split(',')
@@ -116,7 +160,7 @@ export default (): AppConfig => ({
   appName: 'RBI SentrAI Compliance Service',
 
   db: {
-    provider: (process.env.DB_PROVIDER ?? 'sqlite') as 'sqlite' | 'mariadb',
+    provider: dbProvider,
     sqlitePath: process.env.SQLITE_PATH ?? './dev.db',
     host: process.env.DB_HOST ?? 'localhost',
     port: parseInt(process.env.DB_PORT ?? '3306', 10),
@@ -125,8 +169,13 @@ export default (): AppConfig => ({
     // hosts (e.g. Hostinger hPanel) can keep the secret out of app-specific vars.
     password: process.env.DB_PASSWORD ?? process.env.MYSQL_PWD ?? 'sentrai',
     database: process.env.DB_NAME ?? 'sentrai_compliance',
+    // On a persistent MariaDB, schema changes here are additive (new tables /
+    // nullable columns). Removing an entity column would drop it — don't.
     synchronize: bool(process.env.DB_SYNCHRONIZE, true),
   },
+
+  dbProvider,
+  dbPersistent: dbProvider === 'mariadb',
 
   jwt: {
     secret: resolveJwtSecret(),
@@ -177,4 +226,5 @@ export default (): AppConfig => ({
     password: process.env.SEED_ADMIN_PASSWORD?.trim() || null,
     reset: bool(process.env.SEED_ADMIN_RESET, false),
   },
-});
+  };
+};
