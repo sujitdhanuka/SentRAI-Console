@@ -250,6 +250,12 @@ export class CiEvaluationService {
     };
   }
 
+  /** Public guard for minting a CI token: the project must exist and belong to
+   *  the caller's organization (ADMIN bypasses the org check). */
+  async assertProjectForToken(user: CurrentUser, projectId: string): Promise<void> {
+    await this.assertProjectAccess(user, projectId);
+  }
+
   /** Load a project and enforce org isolation (ADMIN is a global superuser). */
   private async assertProjectAccess(user: CurrentUser, projectId: string): Promise<ProjectEntity> {
     const project = await this.projects.findOne({ where: { id: projectId } });

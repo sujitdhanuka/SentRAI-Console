@@ -34,12 +34,16 @@ export class CiController {
     return this.ci.runScanAndEvaluate(projectId, actor, dto);
   }
 
-  /** Admin mints a long-lived CI service token to store as a pipeline secret. */
+  /** Admin/CISO mints a long-lived CI service token to store as a pipeline secret. */
   @ApiBearerAuth()
   @Roles(Role.ADMIN, Role.CISO)
   @Post('tokens')
   @HttpCode(HttpStatus.CREATED)
-  mintToken(@CurrentUser() _admin: CurrentUserType, @Body() dto: CiTokenDto) {
+  async mintToken(@CurrentUser() user: CurrentUserType, @Body() dto: CiTokenDto) {
+    // Validate the project exists AND belongs to the caller's org BEFORE minting,
+    // so a bad/foreign project_id fails clearly here instead of producing a token
+    // that mysteriously 401s ("project no longer exists") at scan time.
+    await this.ci.assertProjectForToken(user, dto.project_id);
     const token = this.tokens.mint(dto.project_id, dto.label);
     return {
       project_id: dto.project_id,
