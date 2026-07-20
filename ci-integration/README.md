@@ -118,6 +118,32 @@ git tag -f v1 && git push -f origin v1   # move v1 to the current commit
 Use `@v1` for a stable pin, or `@main` to always track the latest. (Optionally
 list it on the GitHub Marketplace from the repo's *Releases*.)
 
+## Sync models from your app's database
+
+Static discovery finds models *used in code*. Models whose only reference is a
+row in your app's database are invisible to the scan — register them with
+[`sync-models.mjs`](sync-models.mjs), which pushes them into the inventory via
+the API and is **idempotent** (re-run it on a schedule / in CI to stay in sync).
+
+```bash
+# 1) Export your model table to models.json (or wire the DB directly — see the
+#    Prisma / mysql2 / pg snippets at the bottom of sync-models.mjs), each row:
+#      { "name": "...", "model_type": "MACHINE_LEARNING", "functional_area": "...",
+#        "use_case_description": "...", "owner_team": "...", "board_policy_ref": "..." }
+
+# 2) Run it (uses an ADMIN/OWNER login — NOT the CI scan token):
+SENTRAI_URL=https://sentraiconsole.com \
+SENTRAI_PROJECT_ID=<project-uuid> \
+SENTRAI_EMAIL=you@org SENTRAI_PASSWORD=secret \
+MODELS_FILE=models.json \
+node ci-integration/sync-models.mjs
+```
+
+`model_type` must be one of `MACHINE_LEARNING`, `DEEP_LEARNING`, `NLP`,
+`GENERATIVE_AI`, `RULES_BASED`, `HYBRID`, `AGENT`, `TOOL`, `MCP_SERVER` (the
+script normalizes common variants like `machine-learning`). Only `name`,
+`model_type`, `functional_area`, and `use_case_description` are required.
+
 ## Verdict semantics
 
 | Verdict | Exit | Meaning |
