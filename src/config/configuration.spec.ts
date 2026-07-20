@@ -3,7 +3,7 @@ import configuration from './configuration';
 /** Snapshot & restore the env vars this suite mutates. */
 const KEYS = [
   'NODE_ENV', 'DB_PROVIDER', 'JWT_SECRET', 'ALLOW_SERVER_FS', 'EXPOSE_DOCS',
-  'ALLOW_EPHEMERAL_SQLITE', 'MYSQL_PWD', 'DB_PASSWORD', 'DB_HOST', 'DB_USER', 'DB_NAME',
+  'ALLOW_EPHEMERAL_SQLITE', 'REQUIRE_PERSISTENT_DB', 'MYSQL_PWD', 'DB_PASSWORD', 'DB_HOST', 'DB_USER', 'DB_NAME',
 ];
 const STRONG = 'a'.repeat(48);
 
@@ -48,11 +48,21 @@ describe('configuration security guards', () => {
     expect(cfg.jwt.secret).toHaveLength(48);
   });
 
-  it('refuses to boot in production on ephemeral SQLite (data loss on redeploy)', () => {
+  it('warns (but does not crash) in production on ephemeral SQLite', () => {
     process.env.NODE_ENV = 'production';
     process.env.JWT_SECRET = STRONG;
-    // No MariaDB creds, no opt-out → must fail loudly rather than lose data.
-    expect(() => configuration()).toThrow(/SQLite|persistent|redeploy/i);
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    // A durability config choice must never take a live site down — warn, boot.
+    expect(() => configuration()).not.toThrow();
+    expect(spy).toHaveBeenCalledWith(expect.stringMatching(/DATA DURABILITY WARNING/));
+    spy.mockRestore();
+  });
+
+  it('hard-fails on ephemeral SQLite only when REQUIRE_PERSISTENT_DB is opted in', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = STRONG;
+    process.env.REQUIRE_PERSISTENT_DB = 'true';
+    expect(() => configuration()).toThrow(/SQLite|persist|redeploy/i);
   });
 
   it('auto-selects the persistent MariaDB when its credentials are present', () => {

@@ -108,21 +108,24 @@ function isProductionLike(): boolean {
 }
 
 /**
- * Refuse to boot a production deployment against ephemeral SQLite. Its file
- * lives inside the container/app directory and is wiped on every redeploy —
- * silently destroying all data. Fail loudly instead, with the fix. An operator
- * who genuinely mounts SQLITE_PATH on a persistent volume can opt out.
+ * A production deployment on ephemeral SQLite loses all data on every redeploy
+ * (the file lives in the app directory). Flag it LOUDLY — but do NOT crash the
+ * app by default: a data-durability config choice must never take a live site
+ * down. Operators who want a hard guarantee opt in with REQUIRE_PERSISTENT_DB.
  */
-function assertPersistentDbInProduction(provider: 'sqlite' | 'mariadb'): void {
+function checkDbDurabilityInProduction(provider: 'sqlite' | 'mariadb'): void {
   if (provider === 'mariadb') return;
   if (process.env.NODE_ENV !== 'production') return;
-  if (bool(process.env.ALLOW_EPHEMERAL_SQLITE, false)) return;
-  throw new Error(
-    'FATAL: production is configured to use SQLite, whose file is wiped on every redeploy — ' +
-      'this is why data disappears after each update. Point the app at the persistent database: set ' +
-      'DB_PROVIDER=mariadb with DB_HOST, DB_USER, DB_NAME and MYSQL_PWD (or DB_PASSWORD). ' +
-      'Only if SQLITE_PATH is on a mounted, persistent volume, set ALLOW_EPHEMERAL_SQLITE=true to override.',
-  );
+  if (bool(process.env.ALLOW_EPHEMERAL_SQLITE, false)) return; // intentional (mounted volume)
+  const message =
+    'production is using SQLite, whose file is wiped on every redeploy — data will NOT persist. ' +
+    'Point the app at the persistent database: set DB_PROVIDER=mariadb with DB_HOST, DB_USER, DB_NAME ' +
+    'and MYSQL_PWD (or DB_PASSWORD). If SQLITE_PATH is on a mounted volume, set ALLOW_EPHEMERAL_SQLITE=true.';
+  if (bool(process.env.REQUIRE_PERSISTENT_DB, false)) {
+    throw new Error(`FATAL: ${message}`);
+  }
+  // eslint-disable-next-line no-console
+  console.error(`⚠️  DATA DURABILITY WARNING: ${message}`);
 }
 
 /**
@@ -147,9 +150,9 @@ function resolveJwtSecret(): string {
 
 export default (): AppConfig => {
   const dbProvider = resolveDbProvider();
-  // Guard BEFORE we hand connection options to TypeORM, so a misconfigured
-  // production never quietly writes to a throwaway SQLite file.
-  assertPersistentDbInProduction(dbProvider);
+  // Surface (don't crash on) an ephemeral-SQLite production, so a durability
+  // config choice never silently loses data — nor takes the site down.
+  checkDbDurabilityInProduction(dbProvider);
 
   return {
   port: parseInt(process.env.PORT ?? '8000', 10),
