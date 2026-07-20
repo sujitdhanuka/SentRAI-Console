@@ -28,6 +28,7 @@ import {
   ModelResponse,
   RescanDto,
   RescanSummary,
+  SummarizeResponse,
 } from './inventory.dto';
 
 @ApiTags('AI Model Inventory')
@@ -86,6 +87,13 @@ export class InventoryController {
   @Patch('models/:modelId/governance')
   updateGovernance(@Param('modelId') modelId: string, @Body() dto: GovernanceUpdateDto) {
     return this.inventory.updateGovernance(modelId, dto);
+  }
+
+  /** Regenerate the model's description as a plain-language governance summary. */
+  @Post('models/:modelId/summarize')
+  @HttpCode(HttpStatus.OK)
+  summarize(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string): Promise<SummarizeResponse> {
+    return this.inventory.summarizeModel(user, modelId);
   }
 
   @Get('models/:modelId/compliance-check')

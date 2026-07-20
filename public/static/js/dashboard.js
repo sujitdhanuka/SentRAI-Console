@@ -1092,6 +1092,28 @@ function securityChip(findings) {
   return `<br/><span class="badge risk-HIGH" style="font-size:0.6rem;margin-top:4px;display:inline-block;" title="${escapeHtml(detail)}">🔓 ${n} hardcoded secret${n > 1 ? "s" : ""} in source</span>`;
 }
 
+// Provenance tag for a model's description. Flags an AI/auto draft that a human
+// hasn't confirmed yet; nothing for human-written or plain docstring text.
+function descProvenanceTag(model) {
+  const src = model?.description_source;
+  if (src === "ai") {
+    const m = model.description_model ? ` (${escapeHtml(model.description_model)})` : "";
+    return `<span class="badge" style="background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed55;font-size:0.6rem;">✨ AI-drafted${m} — review</span>`;
+  }
+  if (src === "heuristic") {
+    return `<span class="badge" style="background:#6b728022;color:var(--muted);border:1px solid var(--border);font-size:0.6rem;">⚙ Auto-summary — review</span>`;
+  }
+  return "";
+}
+
+// Tiny inline glyph for the inventory row, so unreviewed AI/auto descriptions are
+// visible at a glance without opening the panel.
+function descProvenanceGlyph(model) {
+  if (model?.description_source === "ai") return `<span title="AI-drafted — review">✨ </span>`;
+  if (model?.description_source === "heuristic") return `<span title="Auto-summary — review">⚙ </span>`;
+  return "";
+}
+
 // ── Inventory table: sort + filter (client-side over MODELS_CACHE) ─────────────
 const RISK_RANK = { LOW: 0, MINIMAL: 0, MEDIUM: 1, LIMITED: 1, HIGH: 2, CRITICAL: 3, PROHIBITED: 4 };
 const LIFECYCLE_RANK = { DESIGN: 0, DEVELOPMENT: 1, VALIDATION: 2, DEPLOYED: 3, MONITORING: 4, DECOMMISSIONED: 5 };
@@ -1158,7 +1180,7 @@ function renderModelTable() {
       <tr data-model-id="${m.model_id}">
         <td>
           <strong>${m.name}</strong>
-          ${m.use_case_description ? `<div style="font-size:0.7rem; color:var(--muted); max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;" title="${escapeHtml(m.use_case_description)}">${escapeHtml(m.use_case_description)}</div>` : ""}
+          ${m.use_case_description ? `<div style="font-size:0.7rem; color:var(--muted); max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;" title="${escapeHtml(m.use_case_description)}">${descProvenanceGlyph(m)}${escapeHtml(m.use_case_description)}</div>` : ""}
           <br/><span class="muted">${shortId(m.model_id)}</span>${projectFilter ? "" : projectLabel(m.project_id)}${m.source_ref ? `<br/><span class="muted" style="font-size:0.62rem">📄 ${m.source_ref}</span>` : ""}
           ${securityChip(m.security_findings)}
         </td>
@@ -1389,7 +1411,13 @@ async function openGovernancePanel(modelId, name) {
         <label>Last Red-Team Date <input type="date" name="last_red_team_date" value="${formattedDate}" /></label>
       </div>
       <label>Autonomous Scope (if any) <input name="autonomous_scope" value="${escapeHtml(model?.autonomous_scope || '')}" placeholder="e.g. routine FAQ responses" /></label>
-      <label>Use Case Description <textarea name="use_case_description" rows="2">${escapeHtml(model?.use_case_description || '')}</textarea></label>
+      <label>
+        <span style="display:flex; align-items:center; gap:10px; justify-content:space-between; flex-wrap:wrap;">
+          <span>Use Case Description <span id="desc-provenance">${descProvenanceTag(model)}</span></span>
+          <button type="button" class="btn small ghost" id="btn-summarize" data-id="${modelId}" title="Rewrite as a plain-language governance summary you can review before saving">✨ Summarize</button>
+        </span>
+        <textarea name="use_case_description" rows="3">${escapeHtml(model?.use_case_description || '')}</textarea>
+      </label>
       <fieldset>
         <legend>Sutras Declared</legend>
         <div class="checkbox-grid">${sutrasCheckboxesHtml('data-gov-sutra', model?.sutras_alignment)}</div>
@@ -1403,6 +1431,34 @@ async function openGovernancePanel(modelId, name) {
   if (!tr) return;
 
   tr.querySelector("#btn-close-governance").addEventListener("click", closeDetailRow);
+
+  tr.querySelector("#btn-summarize").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const textarea = tr.querySelector('textarea[name="use_case_description"]');
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "✨ Summarizing…";
+    try {
+      const res = await api(`/inventory/models/${modelId}/summarize`, { method: "POST" });
+      textarea.value = res.summary;
+      // Keep the cache + provenance tag in sync so a Save right after is a no-op edit.
+      const cached = MODELS_CACHE.find((m) => m.model_id === modelId);
+      if (cached) {
+        cached.use_case_description = res.summary;
+        cached.description_source = res.description_source;
+        cached.description_model = res.description_model;
+      }
+      const tag = tr.querySelector("#desc-provenance");
+      if (tag) tag.innerHTML = descProvenanceTag(cached || { description_source: res.description_source, description_model: res.description_model });
+      toast(res.ai_enabled ? `Summarized with ${res.provider} — review and Save` : "Summarized with the local rule-based engine (no AI provider configured) — review and Save");
+    } catch (err) {
+      toast("Summarize failed: " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
   tr.querySelector("#governance-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;

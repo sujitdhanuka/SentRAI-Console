@@ -32,6 +32,11 @@ import { modelEntityToEntry } from './model.mapper';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { DiscoveredCandidate, scanDirectory } from '../discovery/codebase-scanner';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
+import { SummarizerService } from '../summarizer/summarizer.service';
+import { SummarizationContext } from '../summarizer/summarizer.types';
+import { redactSecrets } from '../summarizer/redact';
+import { existsSync, readFileSync, statSync } from 'fs';
+import { join, sep } from 'path';
 import {
   sutrasBlockingGaps,
   sutrasOverallPass,
@@ -81,6 +86,7 @@ export class InventoryService {
     private readonly treeSitter: TreeSitterService,
     private readonly notifier: NotifierService,
     private readonly config: ConfigService,
+    private readonly summarizer: SummarizerService,
   ) {}
 
   /** Append a ledger event; eventData is PII-masked before persistence. */
@@ -142,6 +148,8 @@ export class InventoryService {
       last_red_team_date: orm.lastRedTeamDate,
       sutras_alignment: orm.sutrasAlignment ?? [],
       security_findings: orm.securityFindings ?? [],
+      description_source: orm.descriptionSource ?? 'static',
+      description_model: orm.descriptionModel ?? null,
     };
   }
 
@@ -318,6 +326,72 @@ export class InventoryService {
   }
 
   /**
+   * Reads a bounded, secret-masked excerpt of the model's source — only used by
+   * the AI summariser (the heuristic works from metadata). Defensive: returns
+   * null if the file is gone (ephemeral workspace) or the path escapes the
+   * project root. The secret masking happens *here*, before the text is handed
+   * to any provider, so a plaintext credential can never reach an external API.
+   */
+  private async readMaskedSnippet(orm: AIModelEntity): Promise<string | null> {
+    try {
+      if (!this.summarizer.aiEnabled || !orm.projectId || !orm.sourceRef) return null;
+      const project = await this.projects.findOne({ where: { id: orm.projectId } });
+      if (!project?.rootDirectory) return null;
+      const root = expandAndResolve(project.rootDirectory);
+      const full = expandAndResolve(join(root, orm.sourceRef));
+      if (full !== root && !full.startsWith(root + sep)) return null; // path-traversal guard
+      if (!existsSync(full) || !statSync(full).isFile()) return null;
+      const max = (this.config.get('aiSummarizer') as { maxSnippetChars: number })?.maxSnippetChars ?? 4000;
+      return redactSecrets(readFileSync(full, 'utf-8')).slice(0, max);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Regenerates a model's use-case description as a plain-language governance
+   * summary. Persists it with provenance (source + model) so the UI can flag an
+   * unreviewed AI/auto draft; a later human edit flips provenance to 'human'.
+   */
+  async summarizeModel(user: CurrentUser, modelId: string) {
+    const orm = await this.getOrThrow(modelId);
+    const ctx: SummarizationContext = {
+      name: orm.name,
+      modelType: orm.modelType,
+      functionalArea: orm.functionalArea,
+      existingDescription: orm.useCaseDescription || '',
+      signals: [],
+      domainTags: [],
+      humanOversightRequired: orm.humanOversightRequired,
+      hasHardcodedSecret: Boolean(orm.securityFindings?.length),
+      snippet: await this.readMaskedSnippet(orm),
+    };
+    const result = await this.summarizer.summarize(ctx);
+
+    orm.useCaseDescription = result.text;
+    orm.descriptionSource = result.source;
+    orm.descriptionModel = result.model;
+    orm.updatedAt = new Date();
+    await this.models.save(orm);
+
+    await this.recordLedger(
+      modelId,
+      'DESCRIPTION_SUMMARIZED',
+      { source: result.source, model: result.model ?? 'n/a' },
+      user?.email ?? 'dashboard_user',
+    );
+
+    return {
+      model_id: modelId,
+      summary: result.text,
+      description_source: result.source,
+      description_model: result.model,
+      ai_enabled: this.summarizer.aiEnabled,
+      provider: this.summarizer.activeProvider,
+    };
+  }
+
+  /**
    * Governance gate (REC 14/16): a model cannot be promoted to a live stage
    * (DEPLOYED / MONITORING) until its accountability chain is complete.
    * Discovery may create ungoverned drafts, but nothing ungoverned goes live.
@@ -444,6 +518,11 @@ export class InventoryService {
       orm.lastRedTeamDate = d;
     }
     if (dto.use_case_description !== undefined && dto.use_case_description !== null) {
+      if (dto.use_case_description !== orm.useCaseDescription) {
+        // A human edited/confirmed the text — provenance is now 'human'.
+        orm.descriptionSource = 'human';
+        orm.descriptionModel = null;
+      }
       orm.useCaseDescription = dto.use_case_description;
     }
 

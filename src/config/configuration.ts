@@ -76,6 +76,17 @@ export interface AppConfig {
     password: string | null;
     reset: boolean;
   };
+
+  // AI-assisted model-description summariser. Off-box by default: the 'heuristic'
+  // provider runs fully locally (no network). Switch to 'anthropic' only with an
+  // explicit key — that sends a secret-masked snippet to Claude. See SummarizerService.
+  aiSummarizer: {
+    provider: 'heuristic' | 'anthropic';
+    model: string;
+    apiKey: string | null;
+    baseUrl: string;
+    maxSnippetChars: number;
+  };
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -228,6 +239,18 @@ export default (): AppConfig => {
     email: process.env.SEED_ADMIN_EMAIL?.trim() || 'admin@sentrai.local',
     password: process.env.SEED_ADMIN_PASSWORD?.trim() || null,
     reset: bool(process.env.SEED_ADMIN_RESET, false),
+  },
+
+  aiSummarizer: {
+    // 'heuristic' = local, no network (the shipped default / stub). Set
+    // AI_SUMMARIZER_PROVIDER=anthropic + ANTHROPIC_API_KEY to send a masked
+    // snippet to Claude. baseUrl lets a bank point at a VPC/Bedrock endpoint.
+    provider: (process.env.AI_SUMMARIZER_PROVIDER?.trim() as 'heuristic' | 'anthropic')
+      || (process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'heuristic'),
+    model: process.env.AI_SUMMARIZER_MODEL?.trim() || 'claude-sonnet-5',
+    apiKey: process.env.ANTHROPIC_API_KEY?.trim() || null,
+    baseUrl: process.env.AI_SUMMARIZER_BASE_URL?.trim() || 'https://api.anthropic.com',
+    maxSnippetChars: parseInt(process.env.AI_SUMMARIZER_MAX_SNIPPET_CHARS ?? '4000', 10),
   },
   };
 };

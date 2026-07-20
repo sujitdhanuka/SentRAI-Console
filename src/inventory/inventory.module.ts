@@ -15,6 +15,7 @@ import { NotifierService } from '../common/notifier.service';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 import { DiscoveryModule } from '../discovery/discovery.module';
+import { SummarizerModule } from '../summarizer/summarizer.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { DiscoveryModule } from '../discovery/discovery.module';
       OrganizationEntity,
     ]),
     DiscoveryModule, // provides the shared TreeSitterService
+    SummarizerModule,
   ],
   controllers: [InventoryController],
   providers: [InventoryService, NotifierService],
