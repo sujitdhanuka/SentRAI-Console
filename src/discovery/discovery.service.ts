@@ -121,10 +121,25 @@ export class DiscoveryService {
 
   async scan(directory?: string | null, projectId?: string | null) {
     const { dir, project } = await this.resolveDirectory(directory, projectId);
-    if (!statSync(expandAndResolve(dir)).isDirectory()) {
-      throw new BadRequestException(`${dir} is not a directory or does not exist`);
+    const resolved = expandAndResolve(dir);
+    if (!existsSync(resolved)) {
+      // The usual hosted cause: workspaces live under the app root and are
+      // wiped on redeploy. Say so, and point at the persistent-path fix.
+      throw new BadRequestException(
+        this.isManagedWorkspace(dir)
+          ? 'The uploaded codebase is no longer on disk — project workspaces are wiped on redeploy unless WORKSPACES_DIR points at a persistent path. Re-upload the codebase to this project, then scan again.'
+          : `Directory does not exist: ${dir}`,
+      );
     }
-    const candidates = scanDirectory(expandAndResolve(dir), this.treeSitter);
+    if (!statSync(resolved).isDirectory()) {
+      throw new BadRequestException(`${dir} is not a directory`);
+    }
+    let candidates: DiscoveredCandidate[];
+    try {
+      candidates = scanDirectory(resolved, this.treeSitter);
+    } catch (e) {
+      throw new BadRequestException(`Scan failed while reading ${dir}: ${e instanceof Error ? e.message : String(e)}`);
+    }
     if (project) {
       project.lastScannedAt = new Date();
       await this.projects.save(project);
