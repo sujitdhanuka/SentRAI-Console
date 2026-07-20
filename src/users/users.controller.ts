@@ -8,9 +8,12 @@ import { Role } from '../common/enums';
 import { UsersService } from './users.service';
 import { AddUserDto, ResetPasswordDto, UpdateUserDto, UserResponse } from './users.dto';
 
+// ADMIN is a global user administrator; OWNER administers users within their
+// own organization. All tenant-scoping and the role ceiling (no OWNER-minted
+// ADMINs) are enforced in the service.
 @ApiTags('Users')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.OWNER)
 @Controller('api/v1/users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}

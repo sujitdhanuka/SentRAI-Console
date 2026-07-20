@@ -604,6 +604,53 @@ describe('SentrAI Console (e2e)', () => {
       .send({ project_id: projA.project_id, file_paths: ['alpha_svc/model.py'] }).expect(403);
   });
 
+  it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const mkOrg = async (name: string) => (await request(http)
+      .post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`).send({ name })).body.organization_id;
+    const orgX = await mkOrg('Org X');
+    const orgY = await mkOrg('Org Y');
+
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'owner@x.test', full_name: 'OX', password: 'pw123456', role: 'OWNER', organization_id: orgX }).expect(201);
+    const yUser = await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'viewer@y.test', full_name: 'VY', password: 'pw123456', role: 'VIEWER', organization_id: orgY });
+    const ownerX = await login('owner@x.test', 'pw123456');
+
+    // OWNER creates a user — org is forced to their own (the passed orgY is ignored),
+    // and CISO is within an OWNER's ceiling.
+    const created = await request(http).post('/api/v1/users').set('Authorization', `Bearer ${ownerX}`)
+      .send({ email: 'ciso@x.test', full_name: 'CX', password: 'pw123456', role: 'CISO', organization_id: orgY });
+    expect(created.status).toBe(201);
+    expect(created.body.organization_id).toBe(orgX);
+    expect(created.body.role).toBe('CISO');
+
+    // OWNER cannot mint an ADMIN (create or promote).
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${ownerX}`)
+      .send({ email: 'a2@x.test', full_name: 'A2', password: 'pw123456', role: 'ADMIN' }).expect(403);
+    await request(http).patch(`/api/v1/users/${created.body.user_id}`).set('Authorization', `Bearer ${ownerX}`)
+      .send({ role: 'ADMIN' }).expect(403);
+
+    // OWNER's user list is org-scoped — no global admin, no other org.
+    const list = await request(http).get('/api/v1/users').set('Authorization', `Bearer ${ownerX}`);
+    const emails = list.body.map((u: any) => u.email);
+    expect(emails).toContain('owner@x.test');
+    expect(emails).toContain('ciso@x.test');
+    expect(emails).not.toContain('admin@sentrai.local');
+    expect(emails).not.toContain('viewer@y.test');
+
+    // OWNER cannot manage another org's user.
+    await request(http).patch(`/api/v1/users/${yUser.body.user_id}`).set('Authorization', `Bearer ${ownerX}`)
+      .send({ role: 'REVIEWER' }).expect(403);
+    await request(http).delete(`/api/v1/users/${yUser.body.user_id}`).set('Authorization', `Bearer ${ownerX}`).expect(403);
+
+    // Last-owner guard: even a global admin cannot demote the only OWNER of org X.
+    const allUsers = await request(http).get('/api/v1/users').set('Authorization', `Bearer ${admin}`);
+    const ownerRow = allUsers.body.find((u: any) => u.email === 'owner@x.test');
+    await request(http).patch(`/api/v1/users/${ownerRow.user_id}`).set('Authorization', `Bearer ${admin}`)
+      .send({ role: 'VIEWER' }).expect(403);
+  });
+
   it('CI GATE: blocks a shadow-AI model and passes once it is governed', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
 

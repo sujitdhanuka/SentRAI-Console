@@ -268,7 +268,8 @@ function updateTabVisibility(hasActiveProject) {
   document.querySelectorAll(".tab").forEach((tab) => {
     const name = tab.dataset.tab;
     if (name === "users") {
-      tab.style.display = (AUTH_USER && AUTH_USER.role === "ADMIN") ? "" : "none";
+      // Global ADMIN or an org OWNER (who administers their own org's users).
+      tab.style.display = (AUTH_USER && (AUTH_USER.role === "ADMIN" || AUTH_USER.role === "OWNER")) ? "" : "none";
     } else if (name === "compliance") {
       // Portfolio-wide executive rollup — always available; it aggregates across
       // every project you can see, and narrows to the active project when one is set.
@@ -331,18 +332,10 @@ function switchToTab(tabName) {
   }
   if (tabName === "lineage") loadLineageGraph();
   if (tabName === "docs") loadDocs();
-  if (tabName === "users" && AUTH_USER && AUTH_USER.role === "ADMIN") {
+  // Users tab: global ADMIN or an org OWNER. Org tab visibility is handled in
+  // updateTabVisibility (global admins only), so it isn't gated on this click.
+  if (tabName === "users" && AUTH_USER && (AUTH_USER.role === "ADMIN" || AUTH_USER.role === "OWNER")) {
     const tabUsers = document.getElementById("tab-users");
-    const tabOrgs = document.getElementById("tab-orgs");
-    
-    // Only Global Admins see Organizations tab
-    if (tabOrgs && !AUTH_USER.tenant_id) {
-      tabOrgs.style.display = "inline-block";
-      loadOrgs();
-    } else if (tabOrgs) {
-      tabOrgs.style.display = "none";
-    }
-
     if (tabUsers) tabUsers.style.display = "inline-block";
     loadUsers();
   }
@@ -2283,6 +2276,14 @@ if (AUTH_TOKEN) {
 
 const USER_ROLES = ["VIEWER", "OWNER", "REVIEWER", "APPROVER", "ADMIN", "CISO"];
 
+// Roles the current user may assign. Only a global ADMIN can grant ADMIN; an
+// OWNER administers their org and can grant any role up to CISO. Mirrors the
+// server-side ceiling — the API rejects an over-reach regardless.
+function assignableRoles() {
+  if (AUTH_USER && AUTH_USER.role === "ADMIN") return USER_ROLES;
+  return USER_ROLES.filter((r) => r !== "ADMIN");
+}
+
 async function loadUsers() {
   const tbody = document.querySelector("#users-table tbody");
   if (!tbody) return;
@@ -2294,8 +2295,12 @@ async function loadUsers() {
       tbody.innerHTML = "<tr><td colspan='6' class='muted'>No users found.</td></tr>";
       return;
     }
+    const roles = assignableRoles();
     users.forEach(u => {
-      const roleOptions = USER_ROLES
+      // Always include the user's current role in the list (even if above the
+      // actor's ceiling) so the dropdown renders the real value.
+      const options = roles.includes(u.role) ? roles : [u.role, ...roles];
+      const roleOptions = options
         .map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${r}</option>`)
         .join("");
       const tr = document.createElement("tr");
@@ -2381,12 +2386,19 @@ if (btnNewUser && formNewUser) {
     formNewUser.classList.remove("hidden");
     document.getElementById("new-user-name").focus();
     
-    // Hide Organization dropdown for Org Admins
+    // Hide Organization dropdown for org OWNERs — they only create in their org.
     const orgLabel = document.getElementById("new-user-org").parentElement;
     if (AUTH_USER && AUTH_USER.tenant_id) {
       orgLabel.style.display = "none";
     } else {
       orgLabel.style.display = "block";
+    }
+    // Rebuild the role options from the caller's ceiling (`hidden` on <option>
+    // is unreliable across browsers, so we omit ADMIN from the DOM entirely).
+    const roleSel = document.getElementById("new-user-role");
+    if (roleSel) {
+      const labels = { VIEWER: "Viewer", OWNER: "Model Owner", REVIEWER: "Reviewer", APPROVER: "Approver", ADMIN: "Admin", CISO: "CISO" };
+      roleSel.innerHTML = assignableRoles().map((r) => `<option value="${r}">${labels[r] || r}</option>`).join("");
     }
   });
 }
