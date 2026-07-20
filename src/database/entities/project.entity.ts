@@ -1,5 +1,7 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
+import { largeJsonColumnType, safeJsonTransformer } from '../json-transformer';
+
 /**
  * A tracked application/codebase. Each project owns its own scan history and
  * scoped model inventory.
@@ -25,8 +27,13 @@ export class ProjectEntity {
    * The candidates found the last time this project's codebase was scanned,
    * persisted in the DB so discovery survives redeploys / ephemeral hosting
    * filesystems (the extracted workspace may be wiped, but results remain).
+   *
+   * `mediumtext` (16 MB) not `simple-json`/`text` (64 KB) — a large codebase's
+   * scan result overran the 64 KB TEXT limit on MariaDB and truncated to invalid
+   * JSON, which then crashed every read. The safe transformer additionally reads
+   * a corrupt value back as `null` rather than throwing.
    */
-  @Column('simple-json', { nullable: true })
+  @Column({ type: largeJsonColumnType(), nullable: true, transformer: safeJsonTransformer })
   lastScanResult!: { scanned_at: string; ast_coverage: string; files_flagged: number; candidates: any[] } | null;
 
   @Column('datetime')

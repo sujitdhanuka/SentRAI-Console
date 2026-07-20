@@ -1,5 +1,7 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
+import { largeJsonColumnType, safeJsonTransformer } from '../json-transformer';
+
 /**
  * Append-only record of every pre-deployment CI gate decision. This is the
  * "defensible audit trail before non-compliant models hit production" — one
@@ -41,8 +43,10 @@ export class DeploymentGateEventEntity {
    * The governance omissions that caused a `fail` (empty on `pass`). `evidence`
    * carries the exact flagged lines (path/line/snippet) so an auditor can review
    * the AST-flagged code inline without the scanned workspace being retained.
+   * `mediumtext` + safe transformer so a large scan can't overrun the 64 KB TEXT
+   * limit on MariaDB and crash reads (same class of bug as project scan results).
    */
-  @Column('simple-json')
+  @Column({ type: largeJsonColumnType(), transformer: safeJsonTransformer })
   blockingGaps!: Array<{
     model_name: string;
     severity: string;
