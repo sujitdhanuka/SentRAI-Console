@@ -669,6 +669,13 @@ describe('SentrAI Console (e2e)', () => {
     const ciToken = tok.body.token;
     expect(typeof ciToken).toBe('string');
 
+    // Minting for a non-existent project fails clearly here, not later at scan time.
+    await request(http)
+      .post('/api/v1/ci/tokens')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: 'no-such-project', label: 'x' })
+      .expect(404);
+
     // A policy that blocks any detected model of any severity that isn't governed.
     const policy = [
       'gates:',
