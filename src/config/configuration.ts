@@ -62,6 +62,13 @@ export interface AppConfig {
 
   // True when NODE_ENV=production or DB_PROVIDER=mariadb.
   productionLike: boolean;
+
+  // Bootstrap admin. In production the password must come from the environment,
+  // or a strong one is generated and logged once — never the dev default.
+  seedAdmin: {
+    email: string;
+    password: string | null;
+  };
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -163,4 +170,9 @@ export default (): AppConfig => ({
   allowServerFs: bool(process.env.ALLOW_SERVER_FS, !isProductionLike()),
   exposeDocs: bool(process.env.EXPOSE_DOCS, !isProductionLike()),
   productionLike: isProductionLike(),
+
+  seedAdmin: {
+    email: process.env.SEED_ADMIN_EMAIL?.trim() || 'admin@sentrai.local',
+    password: process.env.SEED_ADMIN_PASSWORD?.trim() || null,
+  },
 });
