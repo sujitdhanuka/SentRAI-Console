@@ -7,6 +7,12 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from './common/decorators/public.decorator';
 import { INDEX_HTML, LANDING_HTML, HELP_MD } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
+import { BUILD_TAG } from './common/build';
+
+/** Cache-bust /static assets per deploy: the browser only re-fetches when the
+ *  query string changes. Without this, a redeploy leaves the old dashboard.js in
+ *  the browser/proxy cache (new HTML, stale JS → buttons that do nothing). */
+const ASSET_VERSION = encodeURIComponent(BUILD_TAG);
 
 @ApiTags('Root')
 @Controller()
@@ -21,12 +27,17 @@ export class AppController {
     res.sendFile(LANDING_HTML);
   }
 
-  /** Serves the compliance console UI — a single-page dashboard with no build step. */
+  /** Serves the compliance console UI — a single-page dashboard with no build step.
+   *  The HTML is served no-cache and its asset URLs are stamped with the build
+   *  version, so a redeploy always loads the matching dashboard.js/.css instead
+   *  of a stale cached copy. */
   @Public()
   @Get('/console')
   @ApiExcludeEndpoint()
   async dashboard(@Res() res: Response): Promise<void> {
-    res.sendFile(INDEX_HTML);
+    const html = (await readFile(INDEX_HTML, 'utf-8')).replace(/__ASSET_VER__/g, ASSET_VERSION);
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(html);
   }
 
   @Public()
