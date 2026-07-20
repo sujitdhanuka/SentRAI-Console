@@ -269,6 +269,10 @@ function updateTabVisibility(hasActiveProject) {
     const name = tab.dataset.tab;
     if (name === "users") {
       tab.style.display = (AUTH_USER && AUTH_USER.role === "ADMIN") ? "" : "none";
+    } else if (name === "compliance") {
+      // Portfolio-wide executive rollup — always available; it aggregates across
+      // every project you can see, and narrows to the active project when one is set.
+      tab.style.display = "";
     } else if (name !== "projects" && name !== "docs") {
       tab.style.display = hasActiveProject ? "" : "none";
     }
@@ -295,6 +299,7 @@ function switchToTab(tabName) {
     loadProjects();
   }
   if (tabName === "overview") loadOverview();
+  if (tabName === "compliance") loadCompliance();
   if (tabName === "inventory") {
     const btnNewModel = document.getElementById("btn-new-model");
     if (btnNewModel) {
@@ -522,6 +527,75 @@ async function refreshOverviewStats() {
     `).join("");
   } catch (e) {
     document.getElementById("overview-stats").innerHTML = `<div class="empty-state">Stats unavailable — ${e.message}</div>`;
+  }
+}
+
+// ── Executive Compliance Rollup ───────────────────────────────────────────────
+
+async function loadCompliance() {
+  const scope = ACTIVE_PROJECT_ID ? `?project_id=${encodeURIComponent(ACTIVE_PROJECT_ID)}` : "";
+  const headlineEl = document.getElementById("compliance-headline");
+  const statsEl = document.getElementById("compliance-stats");
+  const fwEl = document.getElementById("compliance-frameworks");
+  const gapsEl = document.getElementById("compliance-gaps");
+  statsEl.innerHTML = `<div class="empty-state">Computing portfolio compliance…</div>`;
+  fwEl.innerHTML = ""; gapsEl.innerHTML = "";
+  try {
+    const p = await api("/compliance/portfolio" + scope);
+    const clean = p.summary.open_blocking_gaps === 0 && p.summary.total_models > 0;
+    headlineEl.style.display = "block";
+    headlineEl.className = "result-banner " + (clean ? "ok" : "bad");
+    headlineEl.textContent = p.summary.headline;
+
+    const rate = Math.round(p.summary.compliance_rate * 100);
+    const stats = [
+      { label: "Models", value: p.summary.total_models },
+      { label: "Fully Compliant", value: `${p.summary.fully_compliant} (${rate}%)`, cls: clean ? "success" : "" },
+      { label: "High-Risk", value: p.summary.high_risk_models, cls: p.summary.high_risk_models ? "danger" : "success" },
+      { label: "Open Blocking Gaps", value: p.summary.open_blocking_gaps, cls: p.summary.open_blocking_gaps ? "danger" : "success" },
+    ];
+    statsEl.innerHTML = stats.map((s) =>
+      `<div class="stat-box ${s.cls || ""}"><div class="value">${s.value}</div><div class="label">${s.label}</div></div>`).join("");
+
+    fwEl.innerHTML = p.frameworks.map((f) => {
+      const pct = Math.round(f.pass_rate * 100);
+      const ok = f.open_gaps === 0 && f.models_assessed > 0;
+      return `<div class="principle-card">
+        <div class="num">${pct}% PASS</div>
+        <div class="title">${escapeHtml(f.name)}</div>
+        <div class="desc">${escapeHtml(f.readiness)}</div>
+        <div style="margin-top:10px;"><span class="badge ${ok ? "ok" : "risk-HIGH"}">${f.models_passing}/${f.models_assessed} passing · ${f.open_gaps} gap(s)</span></div>
+      </div>`;
+    }).join("");
+
+    gapsEl.innerHTML = p.top_gaps.length === 0
+      ? `<div class="result-banner ok">No blocking gaps across the portfolio.</div>`
+      : p.top_gaps.map((g) => `
+          <div style="display:flex; gap:12px; align-items:baseline; padding:9px 0; border-bottom:1px solid var(--border);">
+            <span class="badge neutral" style="white-space:nowrap;">${escapeHtml(g.framework)} · ${escapeHtml(g.control)}</span>
+            <span>${escapeHtml(g.statement)}</span>
+          </div>`).join("");
+  } catch (e) {
+    statsEl.innerHTML = `<div class="empty-state">Failed to load rollup — ${e.message}</div>`;
+  }
+  const btn = document.getElementById("btn-export-portfolio-pdf");
+  if (btn) btn.onclick = downloadPortfolioPdf;
+}
+
+async function downloadPortfolioPdf() {
+  const scope = ACTIVE_PROJECT_ID ? `?project_id=${encodeURIComponent(ACTIVE_PROJECT_ID)}` : "";
+  try {
+    const res = await fetch(API + "/compliance/portfolio/export-pdf" + scope, { headers: _getAuthHeaders() });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "sentrai-portfolio-readiness.pdf";
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast("Readiness PDF downloaded", "ok");
+  } catch (e) {
+    toast("PDF export failed: " + e.message, "error");
   }
 }
 

@@ -23,6 +23,7 @@ import { MetricsModule } from './metrics/metrics.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { TasksModule } from './tasks/tasks.module';
 import { CiModule } from './ci/ci.module';
+import { ComplianceModule } from './compliance/compliance.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { CiModule } from './ci/ci.module';
     DiscoveryModule,
     TasksModule,
     CiModule,
+    ComplianceModule,
     // Mirrors FastAPI's StaticFiles mounts: /static -> web/static, /images -> docs/images
     ServeStaticModule.forRoot(
       { rootPath: STATIC_DIR, serveRoot: '/static' },
