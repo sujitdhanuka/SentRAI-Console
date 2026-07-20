@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { buildDataSourceOptions, DbSettings } from './data-source-options';
 import { SeedService } from './seed.service';
+import { SchemaGuardService } from './schema-guard.service';
 import { UserEntity } from './entities';
 
 @Module({
@@ -17,6 +18,6 @@ import { UserEntity } from './entities';
     }),
     TypeOrmModule.forFeature([UserEntity]),
   ],
-  providers: [SeedService],
+  providers: [SchemaGuardService, SeedService],
 })
 export class DatabaseModule {}
