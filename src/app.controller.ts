@@ -5,7 +5,7 @@ import { readFile } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
 
 import { Public } from './common/decorators/public.decorator';
-import { INDEX_HTML, LANDING_HTML, HELP_MD } from './common/paths';
+import { INDEX_HTML, LANDING_HTML, HELP_MD, GATE_SCRIPT } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
 import { BUILD_TAG } from './common/build';
 
@@ -62,5 +62,23 @@ export class AppController {
   @Get('/api/v1/sutras')
   listSutras(): typeof SUTRAS {
     return SUTRAS;
+  }
+
+  /**
+   * Serves the standalone CI gate runner so any pipeline can `curl … | node` it
+   * without a cross-repo Action or a vendored copy — works for private repos and
+   * for GitLab/Jenkins/etc. Public + no-cache so pipelines always get the latest.
+   */
+  @Public()
+  @Get('/api/v1/ci/gate.mjs')
+  @ApiExcludeEndpoint()
+  async gateScript(@Res() res: Response): Promise<void> {
+    try {
+      const src = await readFile(GATE_SCRIPT, 'utf-8');
+      res.set('Cache-Control', 'no-cache');
+      res.type('application/javascript').send(src);
+    } catch (e) {
+      res.status(404).type('text/plain').send(`// SentRAI gate runner unavailable: ${String(e)}`);
+    }
   }
 }

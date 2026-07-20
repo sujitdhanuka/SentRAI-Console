@@ -83,6 +83,30 @@ Reference the packaged action directly — no script to copy:
 The action emits GitHub `::error::` annotations on the offending files and a job
 summary, and exits non-zero on `fail` so the deploy is blocked.
 
+### Private app repos / any CI (no cross-repo Action)
+
+GitHub can't pull an Action from a **private** repo into a different repo unless
+you enable it under *Settings → Actions → General → Access*. To avoid that
+entirely — and to support GitLab/Jenkins — fetch the runner from your Console at
+runtime instead of referencing the Action. Copy
+[`github-workflow-selfcontained.yml`](github-workflow-selfcontained.yml):
+
+```yaml
+- name: SentRAI Pre-Deployment Gate
+  env:
+    SENTRAI_URL: ${{ vars.SENTRAI_URL }}
+    SENTRAI_CI_TOKEN: ${{ secrets.SENTRAI_CI_TOKEN }}
+    GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    PR_NUMBER: ${{ github.event.pull_request.number }}
+    GITHUB_RUN_ID: ${{ github.run_id }}
+  run: |
+    curl -sSfL "$SENTRAI_URL/api/v1/ci/gate.mjs" -o sentrai-gate.mjs
+    node sentrai-gate.mjs
+```
+
+The Console serves the runner publicly at **`GET /api/v1/ci/gate.mjs`** (no-cache,
+so pipelines always get the latest). Nothing to vendor, no tag, no Access setting.
+
 ### Versioning the action
 
 Consumers pin to a tag. To publish `v1`, tag this repo:

@@ -20,3 +20,10 @@ export const LANDING_HTML = join(PUBLIC_DIR, 'landing.html');
  */
 export const WORKSPACES_DIR = process.env.WORKSPACES_DIR?.trim() || join(process.cwd(), 'workspaces');
 export const HELP_MD = join(DOCS_DIR, 'HELP.md');
+
+/**
+ * The standalone CI gate runner, served publicly at /api/v1/ci/gate.mjs so any
+ * pipeline (incl. private repos that can't reference a cross-repo Action) can
+ * `curl … | node` it without vendoring a copy.
+ */
+export const GATE_SCRIPT = join(process.cwd(), 'ci-integration', 'sentrai-gate.mjs');
