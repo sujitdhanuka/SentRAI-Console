@@ -169,6 +169,7 @@
           <p class="muted">Every pipeline gate decision — an immutable, append-only audit trail. Failed gates can be signed off by an auditor without erasing the original failure.</p>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn primary small" id="btn-setup-ci" style="display:none; white-space:nowrap;">⚙ Set up CI scanning</button>
           <select id="ci-ledger-filter" style="font-size:0.72rem;">
             <option value="">All verdicts</option>
             <option value="fail">Failed only</option>
@@ -673,6 +674,17 @@
         <button class="btn ghost small" id="btn-close-ci-detail">✕</button>
       </div>
       <div class="modal-body" id="ci-detail-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Set up CI scanning (mint token + snippet) ── -->
+  <div class="modal-overlay hidden" id="ci-setup-overlay">
+    <div class="modal ci-modal">
+      <div class="modal-head">
+        <h3>Set up CI scanning</h3>
+        <button class="btn ghost small" id="btn-close-ci-setup">✕</button>
+      </div>
+      <div class="modal-body" id="ci-setup-body"></div>
     </div>
   </div>
 
