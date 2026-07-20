@@ -34,6 +34,13 @@ export class AuthController {
     return this.auth.me(user);
   }
 
+  /** Public, secret-free bootstrap diagnostics (build tag + seed-admin state). */
+  @Public()
+  @Get('bootstrap-status')
+  bootstrapStatus() {
+    return this.auth.bootstrapStatus();
+  }
+
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Public()
   @Post('register')

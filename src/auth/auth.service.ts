@@ -4,12 +4,14 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { UserEntity } from '../database/entities';
 import { Role } from '../common/enums';
+import { BUILD_TAG } from '../common/build';
 import { hashPassword, verifyPassword } from '../common/password';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { TokenService } from './token.service';
@@ -21,7 +23,33 @@ export class AuthService {
     @InjectRepository(UserEntity)
     private readonly users: Repository<UserEntity>,
     private readonly tokens: TokenService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Non-sensitive bootstrap diagnostics: which build is running, whether the
+   * configured seed admin exists/active, and whether the reset flag is on.
+   * No passwords or full emails are exposed — enough to diagnose a lockout
+   * from the outside, nothing an attacker can use to authenticate.
+   */
+  async bootstrapStatus() {
+    const seed = this.config.get<{ email: string; password: string | null; reset: boolean }>('seedAdmin')!;
+    const existing = await this.users.findOne({ where: { email: seed.email } });
+    const at = seed.email.indexOf('@');
+    const maskedEmail =
+      at > 1 ? `${seed.email.slice(0, 2)}***${seed.email.slice(at)}` : '***';
+    return {
+      build: BUILD_TAG,
+      production_mode: this.config.get<boolean>('productionLike'),
+      seed_admin_email: maskedEmail,
+      seed_admin_exists: Boolean(existing),
+      seed_admin_active: existing ? existing.isActive : null,
+      seed_admin_role: existing ? existing.role : null,
+      seed_password_provided: Boolean(seed.password),
+      seed_reset_enabled: seed.reset,
+      total_users: await this.users.count(),
+    };
+  }
 
   private tokenResponse(user: UserEntity): TokenResponse {
     const tenantId = user.tenantId ?? null;
