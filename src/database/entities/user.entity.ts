@@ -6,7 +6,9 @@ export class UserEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id!: string;
 
-  @Index({ unique: true })
+  // `unique: true` on the column already creates the unique index; a separate
+  // @Index({unique:true}) generated a SECOND index with the same auto name,
+  // which MariaDB rejects on sync as "Duplicate key name" (SQLite tolerated it).
   @Column('varchar', { length: 320, unique: true })
   email!: string;
 
