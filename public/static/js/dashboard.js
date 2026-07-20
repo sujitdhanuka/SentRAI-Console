@@ -1626,8 +1626,11 @@ document.getElementById("project-form").addEventListener("submit", async (e) => 
 
   const submitBtn = document.getElementById("project-form-submit");
   submitBtn.disabled = true;
+
+  // Step 1: create/update the project. A failure here is a real create failure.
+  let projectId = obj.project_id;
+  let justCreated = false;
   try {
-    let projectId = obj.project_id;
     if (isEdit) {
       await api(`/projects/${projectId}`, {
         method: "PATCH",
@@ -1639,20 +1642,32 @@ document.getElementById("project-form").addEventListener("submit", async (e) => 
         body: JSON.stringify({ name: obj.name, description: obj.description || "", root_directory: "" }),
       });
       projectId = created.project_id;
+      justCreated = true;
     }
+  } catch (err) {
+    toast(`Failed to ${isEdit ? "update" : "create"} project: ` + (err.message || "unknown error"), "error");
+    submitBtn.disabled = false;
+    return;
+  }
 
+  // Step 2: upload the codebase. The project already exists, so a failure here
+  // is an UPLOAD failure — report it as such (not "failed to create") and keep
+  // the created project so the user can retry without a duplicate-name error.
+  try {
     if (hasCode) {
       const up = await uploadProjectCodebase(projectId, source);
       toast(`Codebase ready — ${up.files_extracted} files added${up.entries_skipped ? `, ${up.entries_skipped} skipped` : ""}`);
     } else {
       toast(isEdit ? "Project updated" : "Project created");
     }
-
     form.reset();
     document.getElementById("form-new-project").classList.add("hidden");
     loadProjects();
   } catch (err) {
-    toast(`Failed to ${isEdit ? "update" : "create"} project: ` + err.message, "error");
+    const where = justCreated ? "Project created, but the codebase upload failed" : "Codebase upload failed";
+    toast(`${where}: ` + (err.message || "unknown error"), "error");
+    // Refresh so the created project appears (retry the upload via its Edit button).
+    loadProjects();
   } finally {
     submitBtn.disabled = false;
   }

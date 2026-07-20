@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -88,20 +89,29 @@ export class ProjectsService {
 
     const now = new Date();
     const id = uuidv4();
-    const project = await this.projects.save(
-      this.projects.create({
-        id,
-        name: dto.name,
-        description: dto.description ?? '',
-        // Without a server path the project scans its private upload workspace,
-        // populated via POST /projects/:id/codebase.
-        rootDirectory: usesServerPath ? expandAndResolve(dto.root_directory) : join(WORKSPACES_DIR, id),
-        lastScannedAt: null,
-        tenantId: user.tenantId,
-        createdAt: now,
-        updatedAt: now,
-      }),
-    );
+    let project: ProjectEntity;
+    try {
+      project = await this.projects.save(
+        this.projects.create({
+          id,
+          name: dto.name,
+          description: dto.description ?? '',
+          // Without a server path the project scans its private upload workspace,
+          // populated via POST /projects/:id/codebase.
+          rootDirectory: usesServerPath ? expandAndResolve(dto.root_directory) : join(WORKSPACES_DIR, id),
+          lastScannedAt: null,
+          tenantId: user.tenantId,
+          createdAt: now,
+          updatedAt: now,
+        }),
+      );
+    } catch (e) {
+      // Surface a DB-layer failure (e.g. connectivity, constraint) as an
+      // actionable message rather than a bare "Internal server error".
+      const reason = e instanceof Error ? e.message : String(e);
+      this.logger.error(`project create failed for '${dto.name}': ${reason}`);
+      throw new InternalServerErrorException(`Could not save the project to the database: ${reason}`);
+    }
     return this.toResponse(project);
   }
 
@@ -120,8 +130,19 @@ export class ProjectsService {
   /** Clear and recreate the project's private workspace directory. */
   private prepareWorkspace(projectId: string): { target: string; targetRoot: string } {
     const target = join(WORKSPACES_DIR, projectId);
-    rmSync(target, { recursive: true, force: true });
-    mkdirSync(target, { recursive: true });
+    try {
+      rmSync(target, { recursive: true, force: true });
+      mkdirSync(target, { recursive: true });
+    } catch (e) {
+      // A read-only / non-persistent app root is the usual hosted cause. Surface
+      // it clearly instead of a generic 500, and point at the WORKSPACES_DIR fix.
+      const reason = e instanceof Error ? e.message : String(e);
+      this.logger.error(`workspace write failed at ${WORKSPACES_DIR}: ${reason}`);
+      throw new InternalServerErrorException(
+        `Could not write the codebase workspace at "${WORKSPACES_DIR}" (${reason}). ` +
+          'Ensure that directory is writable, or set the WORKSPACES_DIR env var to a writable path.',
+      );
+    }
     return { target, targetRoot: resolve(target) + sep };
   }
 

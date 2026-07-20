@@ -12,6 +12,11 @@ export const IMAGES_DIR = join(DOCS_DIR, 'images');
 export const STATIC_DIR = join(PUBLIC_DIR, 'static');
 export const INDEX_HTML = join(PUBLIC_DIR, 'index.html');
 export const LANDING_HTML = join(PUBLIC_DIR, 'landing.html');
-/** Per-project codebase workspaces for uploaded ZIPs (hosted deployments). */
-export const WORKSPACES_DIR = join(process.cwd(), 'workspaces');
+/**
+ * Per-project codebase workspaces for uploaded code. Defaults to a `workspaces`
+ * dir under the process cwd, but is overridable via WORKSPACES_DIR so hosts
+ * with a read-only app root (or a separate persistent volume) can point it at a
+ * writable, persistent location.
+ */
+export const WORKSPACES_DIR = process.env.WORKSPACES_DIR?.trim() || join(process.cwd(), 'workspaces');
 export const HELP_MD = join(DOCS_DIR, 'HELP.md');
