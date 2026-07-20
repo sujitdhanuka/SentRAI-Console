@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { existsSync, readdirSync, rmSync, statSync } from 'fs';
 import { basename, dirname, join, resolve, sep } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 
 import {
   AIAuditTrailEntity,
@@ -57,11 +57,15 @@ export class DiscoveryService {
     }
   }
 
-  /** True when a path is inside the app-managed per-project workspace tree. */
+  /**
+   * True when a path is inside an app-managed per-project workspace — either the
+   * configured WORKSPACES_DIR or the temp-dir fallback the upload uses when the
+   * app root is not writable.
+   */
   private isManagedWorkspace(dir: string): boolean {
     const resolved = resolve(expandAndResolve(dir));
-    const root = resolve(WORKSPACES_DIR);
-    return resolved === root || resolved.startsWith(root + sep);
+    const roots = [resolve(WORKSPACES_DIR), resolve(join(tmpdir(), 'sentrai-workspaces'))];
+    return roots.some((root) => resolved === root || resolved.startsWith(root + sep));
   }
 
   private async resolveDirectory(
@@ -121,36 +125,48 @@ export class DiscoveryService {
     };
   }
 
+  private storedResult(dir: string, project: ProjectEntity) {
+    const r = project.lastScanResult!;
+    return {
+      directory: dir,
+      ast_coverage: r.ast_coverage,
+      files_flagged: r.files_flagged,
+      candidates: r.candidates,
+      served_from: 'stored',
+      scanned_at: r.scanned_at,
+    };
+  }
+
   async scan(directory?: string | null, projectId?: string | null) {
-    const { dir, project: resolvedProject } = await this.resolveDirectory(directory, projectId);
+    // Resolve the owning project first (by id, or by matching workspace path),
+    // so the DB-stored scan is authoritative regardless of filesystem state.
+    let project: ProjectEntity | null = null;
+    if (projectId) {
+      project = await this.projects.findOne({ where: { id: projectId } });
+      if (!project) throw new NotFoundException('Project not found');
+    } else if (directory) {
+      project = await this.projects.findOne({ where: { rootDirectory: directory } });
+    }
+
+    const dir = directory || project?.rootDirectory || null;
+    if (!dir) throw new BadRequestException('Provide either a directory or a project_id');
     const resolved = expandAndResolve(dir);
 
-    // Identify the owning project (by id, or by matching the workspace path) so
-    // we can fall back to the DB-stored scan when the files are gone.
-    const project =
-      resolvedProject ?? (directory ? await this.projects.findOne({ where: { rootDirectory: dir } }) : null);
+    // A live scan is only possible when the files are present in a location we
+    // may read (a managed workspace, or ALLOW_SERVER_FS for arbitrary paths).
+    const filesPresent = existsSync(resolved) && statSync(resolved).isDirectory();
+    const readable = filesPresent && (this.isManagedWorkspace(dir) || this.config.get<boolean>('allowServerFs'));
 
-    if (!existsSync(resolved)) {
-      // Files gone (redeploy / ephemeral FS) but a stored scan exists → serve it.
-      if (project?.lastScanResult) {
-        return {
-          directory: dir,
-          ast_coverage: project.lastScanResult.ast_coverage,
-          files_flagged: project.lastScanResult.files_flagged,
-          candidates: project.lastScanResult.candidates,
-          served_from: 'stored',
-          scanned_at: project.lastScanResult.scanned_at,
-        };
-      }
+    if (!readable) {
+      // No live read — serve the stored result if we have one.
+      if (project?.lastScanResult) return this.storedResult(dir, project);
+      // Otherwise explain: gated arbitrary path, or nothing to scan.
+      if (filesPresent && !this.isManagedWorkspace(dir)) this.assertServerFsAllowed();
       throw new BadRequestException(
-        this.isManagedWorkspace(dir)
-          ? 'No codebase found for this project. Upload a codebase (zip/folder/GitHub) — it is scanned on upload and the result is stored.'
-          : `Directory does not exist: ${dir}`,
+        'No codebase found for this project. Upload a codebase (zip/folder/GitHub) — it is scanned on upload and the result is stored.',
       );
     }
-    if (!statSync(resolved).isDirectory()) {
-      throw new BadRequestException(`${dir} is not a directory`);
-    }
+
     let candidates: DiscoveredCandidate[];
     try {
       candidates = scanDirectory(resolved, this.treeSitter);
@@ -158,14 +174,7 @@ export class DiscoveryService {
       // A live read error must never lose a prior result — serve the stored one.
       if (project?.lastScanResult) {
         this.logger.warn(`live scan failed for ${dir}; serving stored result: ${String(e)}`);
-        return {
-          directory: dir,
-          ast_coverage: project.lastScanResult.ast_coverage,
-          files_flagged: project.lastScanResult.files_flagged,
-          candidates: project.lastScanResult.candidates,
-          served_from: 'stored',
-          scanned_at: project.lastScanResult.scanned_at,
-        };
+        return this.storedResult(dir, project);
       }
       throw new BadRequestException(`Scan failed while reading ${dir}: ${e instanceof Error ? e.message : String(e)}`);
     }
