@@ -1,14 +1,14 @@
-# Help — SentrAI Compliance Console
+# Help — SentRAI Compliance Console
 
-A governance platform that turns the RBI's **SentrAI Framework** (*Framework for Responsible and Ethical Enablement of AI*) into something you actually run: scan a codebase, find its AI models, register them, close governance gaps, audit them, monitor them for drift, and track incidents — all scoped per project.
+A governance platform that turns the RBI's **SentRAI Framework** (*Framework for Responsible and Ethical Enablement of AI*) into something you actually run: scan a codebase, find its AI models, register them, close governance gaps, audit them, monitor them for drift, and track incidents — all scoped per project.
 
-> **Working Product Name:** *SentrAI* — the product's job is to verify that an AI system does what it claims and is governed the way it should be.
+> **Working Product Name:** *SentRAI* — the product's job is to verify that an AI system does what it claims and is governed the way it should be.
 
 ---
 
 ## 1. The Framework This App Implements
 
-The SentrAI Committee Report is anchored in **7 Sutras** (guiding principles), operationalized through **6 Pillars** and **26 Recommendations**. 
+The SentRAI Committee Report is anchored in **7 Sutras** (guiding principles), operationalized through **6 Pillars** and **26 Recommendations**. 
 
 ![7 Sutras Guiding Principles](images/seven-sutras.png)
 
@@ -164,19 +164,19 @@ The sectoral risk dashboard aggregates by category/severity and flags overdue re
 
 ## 6. Future Development
 
-To elevate **SentrAI** into a premium, high-demand enterprise-grade AI governance platform, the following features are planned for future development:
+To elevate **SentRAI** into a premium, high-demand enterprise-grade AI governance platform, the following features are planned for future development:
 
 ### 🚀 Automated Red-Teaming & Security Scanning
 Instead of simply tracking manual red-teaming dates, integrate automated active-probing tools. This will run routine simulated attacks (e.g., prompt injections, adversarial noise, and data leakage scans) on registered models and score their vulnerabilities automatically.
 
 ### 🔔 Real-Time Drift Webhooks & Alerting
-Introduce background monitoring workers that periodically pull live scoring tables and evaluate drift. If a metric crosses the threshold or a circuit breaker trips, SentrAI will dispatch instant alerts to communication tools like **Slack**, **Microsoft Teams**, or emergency notification channels like **PagerDuty**.
+Introduce background monitoring workers that periodically pull live scoring tables and evaluate drift. If a metric crosses the threshold or a circuit breaker trips, SentRAI will dispatch instant alerts to communication tools like **Slack**, **Microsoft Teams**, or emergency notification channels like **PagerDuty**.
 
 ### 📁 Automated Evidence Collection
-Reduce compliance paperwork by linking codebases directly to evidence generators. SentrAI will automatically scan Git commits, database schemas, and ML training pipelines to generate immutable compliance proof records without human overhead.
+Reduce compliance paperwork by linking codebases directly to evidence generators. SentRAI will automatically scan Git commits, database schemas, and ML training pipelines to generate immutable compliance proof records without human overhead.
 
 ### ⚖️ Active Bias Mitigation & Fair-AI Toolkits
-Provide plug-and-play middleware that mitigates bias on the fly. If the audit trail identifies a demographic parity gap in an underwriting model, SentrAI will recommend or run active re-weighting algorithms to balance model outputs.
+Provide plug-and-play middleware that mitigates bias on the fly. If the audit trail identifies a demographic parity gap in an underwriting model, SentRAI will recommend or run active re-weighting algorithms to balance model outputs.
 
 ### 📄 One-Click Regulatory Filings
 Export pre-compiled compliance portfolios formatted as certified PDFs. These reports will match regulatory requirements exactly (e.g., RBI Annexures, EU AI Act conformity declarations) for direct submission to governing bodies.

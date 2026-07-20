@@ -1,4 +1,4 @@
-// SentrAI Compliance Console — vanilla JS dashboard. No build step required.
+// SentRAI Compliance Console — vanilla JS dashboard. No build step required.
 const API = "/api/v1";
 let MODELS_CACHE = [];
 let PROJECTS_CACHE = [];
@@ -276,6 +276,10 @@ function updateTabVisibility(hasActiveProject) {
     } else if (name === "ci-ledger") {
       // Org-wide auditor ledger — visible to sign-off / audit roles only.
       tab.style.display = canViewLedger() ? "" : "none";
+    } else if (name === "orgs") {
+      // Organizations is a global-admin surface (an ADMIN with no tenant).
+      // Show it by default — not only after the Users tab has been opened.
+      tab.style.display = (AUTH_USER && AUTH_USER.role === "ADMIN" && !AUTH_USER.tenant_id) ? "" : "none";
     } else if (name !== "projects" && name !== "docs") {
       tab.style.display = hasActiveProject ? "" : "none";
     }
@@ -304,6 +308,7 @@ function switchToTab(tabName) {
   if (tabName === "overview") loadOverview();
   if (tabName === "compliance") loadCompliance();
   if (tabName === "ci-ledger") loadCiLedger();
+  if (tabName === "orgs") loadOrgs();
   if (tabName === "inventory") {
     const btnNewModel = document.getElementById("btn-new-model");
     if (btnNewModel) {
@@ -832,7 +837,7 @@ document.getElementById("btn-cancel-model").addEventListener("click", () => {
 
 document.getElementById("btn-rescan-models").addEventListener("click", async () => {
   const scope = ACTIVE_PROJECT_ID ? "this project's models" : "all models you can see";
-  if (!confirm(`Re-scan ${scope}?\n\nThis re-evaluates every model against the current SentrAI logic, and re-reads the codebase for models linked to a source file — updating risk levels where they changed. Your governance edits (owner, policy, sutras, lifecycle) are preserved.`)) return;
+  if (!confirm(`Re-scan ${scope}?\n\nThis re-evaluates every model against the current SentRAI logic, and re-reads the codebase for models linked to a source file — updating risk levels where they changed. Your governance edits (owner, policy, sutras, lifecycle) are preserved.`)) return;
   const btn = document.getElementById("btn-rescan-models");
   const original = btn.textContent;
   btn.disabled = true;
