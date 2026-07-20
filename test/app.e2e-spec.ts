@@ -653,6 +653,42 @@ describe('SentrAI Console (e2e)', () => {
     expect(after.body.find((m: any) => m.model_id === modelId).risk_level).toBe('HIGH');
   });
 
+  it('AI SUMMARY: heuristic summariser rewrites the description with reviewable provenance', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    const reg = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Zoo Signal Engine',
+        model_type: 'RULES_BASED',
+        functional_area: 'trading_signal_generation',
+        use_case_description: 'Composite signal engine over ``Alpha Zoo`` factors. Unlike ``example_signal_engine`` (per-symbol API that takes ``dict[code, OHLCV]``), this consumes a registry.',
+      }).expect(201);
+    const modelId = reg.body.model_id;
+    // A freshly registered model's description is human-entered, not AI/auto.
+    expect(reg.body.description_source).toBe('static');
+
+    const sum = await request(http).post(`/api/v1/inventory/models/${modelId}/summarize`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(sum.body.ai_enabled).toBe(false); // no key configured in tests → local heuristic
+    expect(sum.body.description_source).toBe('heuristic');
+    expect(sum.body.description_model).toBeNull();
+    // Reframed, not a verbatim copy: code jargon is stripped, governance framing added.
+    expect(sum.body.summary).toContain('Zoo Signal Engine');
+    expect(sum.body.summary).not.toContain('dict[code');
+    expect(sum.body.summary).toMatch(/review and confirm/i);
+
+    // Provenance is persisted and surfaced on the model.
+    const list = await request(http).get('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`).expect(200);
+    const saved = list.body.find((m: any) => m.model_id === modelId);
+    expect(saved.description_source).toBe('heuristic');
+
+    // A human edit flips provenance to 'human'.
+    await request(http).patch(`/api/v1/inventory/models/${modelId}/governance`).set('Authorization', `Bearer ${admin}`)
+      .send({ use_case_description: 'Combines quant signals into one trade-ranking score.', actor: 'test' }).expect(200);
+    const after = await request(http).get('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(after.body.find((m: any) => m.model_id === modelId).description_source).toBe('human');
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)

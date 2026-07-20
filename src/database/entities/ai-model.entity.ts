@@ -88,6 +88,16 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   securityFindings!: Array<{ type: string; masked_value: string; line: number }> | null;
 
+  /** Provenance of useCaseDescription: 'static' (docstring), 'heuristic' (local
+   *  auto-summary), 'ai' (LLM-drafted), or 'human' (edited/confirmed). Lets the
+   *  UI flag an unreviewed AI/auto draft. Null = legacy/unknown (treat as static). */
+  @Column('varchar', { length: 20, nullable: true })
+  descriptionSource!: string | null;
+
+  /** The model that produced an AI description, e.g. 'claude-sonnet-5'. */
+  @Column('varchar', { length: 100, nullable: true })
+  descriptionModel!: string | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

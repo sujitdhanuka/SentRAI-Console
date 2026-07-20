@@ -92,6 +92,20 @@ export interface ModelResponse {
   sutras_alignment: string[];
   /** Hardcoded secrets found in the model's source at scan time (values masked). */
   security_findings: Array<{ type: string; masked_value: string; line: number }>;
+  /** Provenance of use_case_description: 'static' | 'heuristic' | 'ai' | 'human'. */
+  description_source: string;
+  /** Model that produced an AI description, e.g. 'claude-sonnet-5' (else null). */
+  description_model: string | null;
   /** Set when the org crossed its plan's soft model limit (registration never blocks). */
   plan_warning?: string | null;
+}
+
+export interface SummarizeResponse {
+  model_id: string;
+  summary: string;
+  description_source: string;
+  description_model: string | null;
+  /** True when a real AI provider produced it; false for the local heuristic. */
+  ai_enabled: boolean;
+  provider: string;
 }
