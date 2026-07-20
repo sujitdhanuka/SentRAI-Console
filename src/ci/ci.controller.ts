@@ -9,7 +9,7 @@ import { Role } from '../common/enums';
 import { CiEvaluationService } from './ci.service';
 import { CiTokenService } from './ci-token.service';
 import { CiServiceTokenGuard } from './ci-token.guard';
-import { CiScanDto, CiTokenDto } from './ci.dto';
+import { CiScanDto, CiTokenDto, CiOverrideDto } from './ci.dto';
 
 @ApiTags('CI / Pre-Deployment Gate')
 @Controller('api/v1/ci')
@@ -48,11 +48,52 @@ export class CiController {
     };
   }
 
+  /**
+   * Org-wide gate ledger for the auditor dashboard. Tenant-scoped in the
+   * service (non-admins see only their organization's events). Optional
+   * `?verdict=fail` and `?limit=` filters.
+   */
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER, Role.APPROVER)
+  @Get('events')
+  events(
+    @CurrentUser() user: CurrentUserType,
+    @Query('limit') limit?: string,
+    @Query('verdict') verdict?: string,
+  ) {
+    return this.ci.listEvents(user, {
+      limit: limit ? parseInt(limit, 10) : undefined,
+      verdict: verdict === 'pass' || verdict === 'fail' ? verdict : undefined,
+    });
+  }
+
+  /**
+   * Auditor sign-off override of a failed gate. Additive by design: the
+   * original `verdict='fail'` is preserved on the record; this attaches the
+   * auditor's identity, timestamp, and mandatory justification. Requires a
+   * sign-off role (ADMIN / CISO / APPROVER) and org ownership of the project.
+   */
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.CISO, Role.APPROVER)
+  @Post('events/:id/override')
+  @HttpCode(HttpStatus.OK)
+  override(
+    @CurrentUser() user: CurrentUserType,
+    @Param('id') id: string,
+    @Body() dto: CiOverrideDto,
+  ) {
+    return this.ci.overrideEvent(user, id, dto.reason);
+  }
+
   /** Auditor view of the immutable pre-deployment gate trail for a project. */
   @ApiBearerAuth()
-  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER)
+  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER, Role.APPROVER)
   @Get('projects/:projectId/gate-history')
-  history(@Param('projectId') projectId: string, @Query('limit') limit?: string) {
-    return this.ci.history(projectId, limit ? parseInt(limit, 10) : 50);
+  history(
+    @CurrentUser() user: CurrentUserType,
+    @Param('projectId') projectId: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.ci.history(user, projectId, limit ? parseInt(limit, 10) : 50);
   }
 }

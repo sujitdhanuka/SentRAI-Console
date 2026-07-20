@@ -26,13 +26,22 @@ export class DeploymentGateEventEntity {
   @Column('varchar', { length: 100, nullable: true })
   pipelineRunId!: string | null;
 
+  /**
+   * The ORIGINAL, immutable pipeline decision. This is never rewritten — an
+   * auditor override is recorded additively in the override* columns below, so
+   * the record of the original failure survives for the audit trail.
+   */
   @Column('varchar', { length: 10 })
   verdict!: 'pass' | 'fail';
 
   @Column('int', { default: 0 })
   modelsDetected!: number;
 
-  /** The governance omissions that caused a `fail` (empty on `pass`). */
+  /**
+   * The governance omissions that caused a `fail` (empty on `pass`). `evidence`
+   * carries the exact flagged lines (path/line/snippet) so an auditor can review
+   * the AST-flagged code inline without the scanned workspace being retained.
+   */
   @Column('simple-json')
   blockingGaps!: Array<{
     model_name: string;
@@ -41,10 +50,23 @@ export class DeploymentGateEventEntity {
     missing: string[];
     reason: string;
     shadow: boolean;
+    evidence?: Array<{ line: number; snippet: string; category: string }>;
   }>;
 
   @Column('varchar', { length: 255 })
   triggeredBy!: string;
+
+  // ── Additive auditor override (never mutates `verdict`) ──────────────────
+  /** Email of the auditor who signed off an override, or null if none. */
+  @Column('varchar', { length: 255, nullable: true })
+  overriddenBy!: string | null;
+
+  /** Mandatory justification captured at override time (immutable once set). */
+  @Column('varchar', { length: 1000, nullable: true })
+  overrideReason!: string | null;
+
+  @Column('datetime', { nullable: true })
+  overriddenAt!: Date | null;
 
   @Index()
   @Column('datetime')

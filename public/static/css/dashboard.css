@@ -261,6 +261,29 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-
 .modal-dir-item:hover { background: var(--surface-2); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
 .modal-empty { text-align: center; color: var(--muted); font-size: 0.75rem; padding: 30px; }
+.modal.ci-modal { max-width: 780px; }
+.modal-body { overflow-y: auto; padding: 16px 18px; }
+
+/* CI gate verdict badges */
+.badge.PASS { background: rgba(34,197,94,0.15); color: var(--success); }
+.badge.FAIL { background: rgba(239,68,68,0.15); color: var(--danger); }
+.badge.OVERRIDDEN { background: rgba(245,158,11,0.15); color: var(--warning); }
+
+/* Inline AST code viewer */
+.gap-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface-2); }
+.gap-card .gap-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.gap-card .gap-file { font-family: var(--mono); font-size: 0.72rem; color: var(--accent-2); word-break: break-all; }
+.gap-card .gap-reason { font-size: 0.74rem; color: var(--muted); margin-bottom: 8px; }
+.code-viewer { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; font-family: var(--mono); font-size: 0.72rem; }
+.code-viewer .code-line { display: flex; white-space: pre; }
+.code-viewer .code-line .ln { width: 44px; flex: none; text-align: right; padding: 1px 10px 1px 0; color: var(--muted); user-select: none; border-right: 1px solid var(--border); }
+.code-viewer .code-line .lc { padding: 1px 10px; flex: 1; }
+.code-viewer .code-line.flagged { background: rgba(239,68,68,0.14); }
+.code-viewer .code-line.flagged .ln { color: var(--danger); font-weight: 700; }
+.override-box { border: 1px solid var(--warning); border-radius: 8px; padding: 14px; margin-top: 8px; background: rgba(245,158,11,0.06); }
+.override-box textarea { width: 100%; min-height: 70px; margin: 8px 0; }
+.override-note { font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+.time-ago { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
 
 #docs-content img {
   max-width: 100%;

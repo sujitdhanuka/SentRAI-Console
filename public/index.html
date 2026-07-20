@@ -41,6 +41,7 @@
     <button class="tab active" data-tab="projects">Projects</button>
     <button class="tab" data-tab="overview">Overview</button>
     <button class="tab" data-tab="compliance">Compliance Rollup</button>
+    <button class="tab" data-tab="ci-ledger" id="tab-ci-ledger" style="display:none;">CI Gate Ledger</button>
     <button class="tab" data-tab="inventory">Model Inventory</button>
     <button class="tab" data-tab="monitoring">Drift Monitoring</button>
     <button class="tab" data-tab="audit">Audit Trail</button>
@@ -149,10 +150,44 @@
       </div>
       <div id="compliance-headline" class="result-banner ok" style="display:none; margin-bottom:16px;"></div>
       <div class="grid stat-grid" id="compliance-stats"></div>
+      <div class="panel-head" style="margin-top:28px"><h2 style="font-size:1.1rem;">Shift-Left Pre-Deployment Gate</h2>
+        <p class="muted" style="font-size:0.75rem;">Live signal from the CI gate ledger — <a href="#" id="link-open-ci-ledger" style="color:var(--accent-2);">open the ledger →</a></p>
+      </div>
+      <div class="grid stat-grid" id="compliance-ci-stats"></div>
       <div class="panel-head" style="margin-top:28px"><h2 style="font-size:1.1rem;">Framework Readiness</h2></div>
       <div class="grid cards" id="compliance-frameworks"></div>
       <div class="panel-head" style="margin-top:28px"><h2 style="font-size:1.1rem;">Most Common Blocking Gaps</h2></div>
       <div id="compliance-gaps"></div>
+    </section>
+
+    <!-- ── CI Gate Ledger ── -->
+    <section class="panel" id="panel-ci-ledger">
+      <div class="panel-head" style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+        <div>
+          <h2>CI/CD Pre-Deployment Gate Ledger</h2>
+          <p class="muted">Every pipeline gate decision — an immutable, append-only audit trail. Failed gates can be signed off by an auditor without erasing the original failure.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="ci-ledger-filter" style="font-size:0.72rem;">
+            <option value="">All verdicts</option>
+            <option value="fail">Failed only</option>
+            <option value="pass">Passed only</option>
+          </select>
+          <button class="btn ghost small" id="btn-refresh-ci-ledger">↻ Refresh</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="ci-ledger-table">
+          <thead>
+            <tr>
+              <th>Commit</th><th>Project</th><th>When</th><th>Verdict</th>
+              <th>Models</th><th>Triage — core reasons</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="ci-ledger-rows"></tbody>
+        </table>
+      </div>
+      <div class="empty-state hidden" id="ci-ledger-empty">No gate events recorded yet. They appear here the first time a pipeline calls <code>POST /api/v1/ci/scan</code>.</div>
     </section>
 
     <!-- ── Inventory ── -->
@@ -626,6 +661,17 @@
         <button class="btn ghost" id="btn-cancel-browse">Cancel</button>
         <button class="btn primary" id="btn-select-directory">Select This Folder</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ── CI Gate Detail / Auditor Override Modal ── -->
+  <div class="modal-overlay hidden" id="ci-detail-overlay">
+    <div class="modal ci-modal">
+      <div class="modal-head">
+        <h3 id="ci-detail-title">Gate Decision</h3>
+        <button class="btn ghost small" id="btn-close-ci-detail">✕</button>
+      </div>
+      <div class="modal-body" id="ci-detail-body"></div>
     </div>
   </div>
 
