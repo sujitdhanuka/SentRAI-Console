@@ -8,7 +8,9 @@ business rule of the Python backend.
 - **Runtime:** NestJS 10 + TypeScript, Express platform
 - **Database:** TypeORM — **SQLite** locally, **MariaDB/MySQL** in production, chosen from one env var
 - **Auth:** JWT (Passport), bcrypt password hashing, role-based access control
-- **Discovery:** regex + **web-tree-sitter (WASM)** AST scanning, remote GitHub/GitLab scan, k8s/Triton infra scan
+- **Discovery:** regex + **web-tree-sitter (WASM)** AST scanning with alias/variable resolution (renamed clients
+  attributed to their SDK) and data-flow-lite model-usage detection (`from_pretrained`, ONNX `InferenceSession`,
+  artifact loads the regex misses); remote GitHub/GitLab scan; k8s/Triton infra scan; `ast_coverage` reported per scan
 - **Compliance:** 7-Sutras + NIST/EU-AI-Act/ISO-42001 validators, plugin registry
 - **Monitoring:** PSI + 1-D Wasserstein drift math (pure TS), BCP circuit breaker
 - **Shift-left CI gate:** stateless `/api/v1/ci/scan` endpoint + policy-as-code + append-only

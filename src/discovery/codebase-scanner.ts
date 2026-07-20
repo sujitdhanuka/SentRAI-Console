@@ -331,23 +331,30 @@ export function scanDirectory(root: string, ast?: AstScanner): DiscoveredCandida
     const lower = content.toLowerCase();
     const needsAst = FAST_KEYWORDS.some((kw) => lower.includes(kw));
     if (needsAst && ast && ast.ready) {
-      if (lang === 'python') {
-        const { libs, gaps } = ast.scanPython(content);
-        astGaps = gaps;
-        if (libs.includes('openai') || libs.includes('anthropic') || libs.includes('google')) { hasLlm = true; weight += 5; }
-        if (libs.includes('torch') || libs.includes('sklearn') || libs.includes('xgboost')) { hasMl = true; weight += 5; }
-        if (libs.includes('langchain')) { hasAgent = true; weight += 5; }
-      } else if (lang === 'javascript' || lang === 'typescript') {
-        const { libs, gaps } = ast.scanJsTs(content, lang === 'typescript');
-        astGaps = gaps;
-        if (libs.includes('openai') || libs.includes('anthropic') || libs.includes('google-generativeai')) { hasLlm = true; weight += 5; }
-        if (libs.includes('tensorflow') || libs.includes('onnxruntime')) { hasMl = true; weight += 5; }
-        if (libs.includes('langchain')) { hasAgent = true; weight += 5; }
-      } else if (lang === 'go') {
-        const { libs, gaps } = ast.scanGo(content);
-        astGaps = gaps;
-        if (libs.includes('go-openai') || libs.includes('anthropic-go') || libs.includes('genai')) { hasLlm = true; weight += 5; }
-        if (libs.includes('langchain-go')) { hasAgent = true; weight += 5; }
+      let astResult: AstScanResult | null = null;
+      if (lang === 'python') astResult = ast.scanPython(content);
+      else if (lang === 'javascript' || lang === 'typescript') astResult = ast.scanJsTs(content, lang === 'typescript');
+      else if (lang === 'go') astResult = ast.scanGo(content);
+
+      if (astResult) {
+        astGaps = astResult.gaps;
+        // Library imports still contribute a weight boost.
+        for (const libGroup of [
+          { libs: ['openai', 'anthropic', 'cohere', 'mistralai', 'groq', 'litellm', 'go-openai', 'anthropic-go'], set: () => (hasLlm = true) },
+          { libs: ['torch', 'sklearn', 'xgboost', 'lightgbm', 'catboost', 'keras', 'tensorflow', 'onnxruntime', 'transformers', 'joblib'], set: () => (hasMl = true) },
+          { libs: ['langchain', 'langgraph', 'llama_index', 'autogen', 'crewai', 'langchain-go'], set: () => (hasAgent = true) },
+        ]) {
+          if (astResult.libs.some((l) => libGroup.libs.includes(l))) { libGroup.set(); weight += 5; }
+        }
+        // Structural AST signals: resolved SDK calls + model-usage patterns the
+        // regex layer cannot see. These become first-class candidate signals.
+        for (const s of astResult.signals) {
+          matches.push({ category: `ast_${s.category}`, pattern: s.evidence, lineNumber: s.line, snippet: s.evidence });
+          weight += 4;
+          if (s.category === 'llm_sdk') hasLlm = true;
+          else if (s.category === 'agent_sdk') hasAgent = true;
+          else hasMl = true; // ml_sdk | model_load | inference_call
+        }
       }
     }
 

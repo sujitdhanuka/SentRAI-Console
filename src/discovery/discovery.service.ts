@@ -123,6 +123,9 @@ export class DiscoveryService {
     }
     return {
       directory: dir,
+      // Surface scan assurance level so a degraded (regex-only) scan is never
+      // silent — regulators and auditors can see when AST coverage was lost.
+      ast_coverage: this.treeSitter.ready ? 'full' : 'regex_only',
       files_flagged: candidates.length,
       candidates: candidates.map(candidateAsDict),
     };
