@@ -68,6 +68,7 @@ export interface AppConfig {
   seedAdmin: {
     email: string;
     password: string | null;
+    reset: boolean;
   };
 }
 
@@ -174,5 +175,6 @@ export default (): AppConfig => ({
   seedAdmin: {
     email: process.env.SEED_ADMIN_EMAIL?.trim() || 'admin@sentrai.local',
     password: process.env.SEED_ADMIN_PASSWORD?.trim() || null,
+    reset: bool(process.env.SEED_ADMIN_RESET, false),
   },
 });

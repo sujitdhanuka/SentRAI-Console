@@ -31,11 +31,32 @@ export class SeedService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const seed = this.config.get<{ email: string; password: string | null }>('seedAdmin')!;
+    const seed = this.config.get<{ email: string; password: string | null; reset: boolean }>('seedAdmin')!;
     const productionLike = this.config.get<boolean>('productionLike');
 
     const existing = await this.users.findOne({ where: { email: seed.email } });
-    if (existing) return;
+    if (existing) {
+      // Recovery path: SEED_ADMIN_RESET=true forces the existing admin's
+      // password back to SEED_ADMIN_PASSWORD (and reactivates it). For a
+      // locked-out operator — unset the flag again after signing in.
+      if (seed.reset && seed.password) {
+        if (productionLike && seed.password.length < MIN_SEED_PASSWORD_LEN) {
+          throw new Error(`FATAL: SEED_ADMIN_PASSWORD must be at least ${MIN_SEED_PASSWORD_LEN} characters in production.`);
+        }
+        existing.hashedPassword = hashPassword(seed.password);
+        existing.isActive = true;
+        existing.role = Role.ADMIN;
+        existing.updatedAt = new Date();
+        await this.users.save(existing);
+        this.logger.warn(
+          `SEED_ADMIN_RESET: reset password for existing admin '${seed.email}'. ` +
+            'Remove SEED_ADMIN_RESET from the environment after signing in.',
+        );
+      } else if (seed.reset && !seed.password) {
+        this.logger.warn('SEED_ADMIN_RESET is set but SEED_ADMIN_PASSWORD is empty — nothing to reset.');
+      }
+      return;
+    }
 
     let password = seed.password;
     let generated = false;
