@@ -155,7 +155,18 @@ legend { font-size: 0.68rem; font-weight: 700; color: var(--accent-2); padding: 
 .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
+/* Keeps a wide table inside its card: it scrolls within this box instead of
+   spilling the last columns past the card border. */
+.table-scroll { width: 100%; overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+/* Action buttons stay on one line so the column can't stretch or stack. */
+.data-table td.row-actions { white-space: nowrap; text-align: right; }
+.data-table td.row-actions .btn { margin-left: 4px; }
+/* Scanned file paths are long unbreakable tokens — bound and ellipsize them. */
+.data-table .src-ref {
+  display: inline-block; max-width: 260px; font-size: 0.62rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom;
+}
 .data-table th { text-align: left; color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 8px; border-bottom: 1px solid var(--border); }
 .data-table th[data-sort] { user-select: none; }
 .data-table th[data-sort]:hover { color: var(--text); }
