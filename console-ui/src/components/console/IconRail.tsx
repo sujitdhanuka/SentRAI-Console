@@ -1,47 +1,74 @@
 import {
-  PanelsTopLeft,
   Boxes,
   FileText,
+  FolderGit2,
+  GitBranch,
   LayoutDashboard,
   MessageSquareWarning,
   Scale,
   ScrollText,
   Settings,
   Siren,
-  Swords,
-  Wrench,
+  Sparkles,
+  Users,
 } from 'lucide-react';
 
-const NAV = [
-  { icon: LayoutDashboard, label: 'Dashboard', active: true },
-  { icon: Boxes, label: 'Inventory' },
-  { icon: Scale, label: 'Frameworks' },
-  { icon: Wrench, label: 'Gaps & Remediation' },
-  { icon: Swords, label: 'Red-team' },
-  { icon: Siren, label: 'Incidents' },
-  { icon: MessageSquareWarning, label: 'Grievances' },
-  { icon: ScrollText, label: 'Audit Ledger' },
-  { icon: FileText, label: 'Reports' },
-  { icon: Settings, label: 'Settings' },
+import { navigate, Route, useRoute } from '../../stores/route';
+import { useSession } from '../../stores/session';
+
+interface NavItem {
+  route: Route;
+  icon: typeof Boxes;
+  label: string;
+  /** Roles allowed to see it; omitted = everyone. */
+  roles?: string[];
+  globalAdminOnly?: boolean;
+}
+
+const NAV: NavItem[] = [
+  { route: 'projects', icon: FolderGit2, label: 'Projects' },
+  { route: 'inventory', icon: Boxes, label: 'Model Inventory' },
+  { route: 'compliance', icon: Scale, label: 'Compliance Rollup' },
+  { route: 'ci-ledger', icon: ScrollText, label: 'CI Gate Ledger', roles: ['ADMIN', 'CISO', 'APPROVER', 'AUDITOR', 'OWNER'] },
+  { route: 'monitoring', icon: LayoutDashboard, label: 'Drift Monitoring' },
+  { route: 'audit', icon: FileText, label: 'Audit Trail' },
+  { route: 'incidents', icon: Siren, label: 'Incidents' },
+  { route: 'lineage', icon: GitBranch, label: 'Lineage Graph' },
+  { route: 'ai-settings', icon: Sparkles, label: 'AI Settings', roles: ['ADMIN', 'CISO', 'OWNER'] },
+  { route: 'users', icon: Users, label: 'Users', roles: ['ADMIN', 'OWNER'] },
+  { route: 'orgs', icon: MessageSquareWarning, label: 'Organizations', globalAdminOnly: true },
+  { route: 'docs', icon: Settings, label: 'Docs' },
 ];
 
 export function IconRail() {
+  const active = useRoute();
+  const user = useSession((s) => s.user);
+  const role = user?.role ?? 'VIEWER';
+  const isGlobalAdmin = role === 'ADMIN' && !user?.tenant_id;
+
+  const visible = NAV.filter((n) => {
+    if (n.globalAdminOnly) return isGlobalAdmin;
+    if (n.roles) return n.roles.includes(role);
+    return true;
+  });
+
   return (
-    <nav className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-border bg-bg-elevated py-2">
+    <nav className="flex w-[52px] shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border bg-bg-elevated py-2">
       <div
-        className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-accent font-heading text-sm font-bold text-white"
+        className="mb-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent font-heading text-sm font-bold text-white"
         title="sentRAI Console"
       >
         S
       </div>
-      {NAV.map(({ icon: Icon, label, active }) => (
+      {visible.map(({ icon: Icon, label, route }) => (
         <button
-          key={label}
+          key={route}
           title={label}
           aria-label={label}
-          aria-current={active ? 'page' : undefined}
-          className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
-            active
+          aria-current={active === route ? 'page' : undefined}
+          onClick={() => navigate(route)}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
+            active === route
               ? 'bg-accent-soft text-accent'
               : 'text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
           }`}
@@ -49,14 +76,6 @@ export function IconRail() {
           <Icon size={17} strokeWidth={1.75} />
         </button>
       ))}
-      <a
-        href="/console"
-        title="Classic console (projects, scanning, AI settings)"
-        aria-label="Classic console"
-        className="mt-auto flex h-9 w-9 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-hover hover:text-text-secondary"
-      >
-        <PanelsTopLeft size={17} strokeWidth={1.75} />
-      </a>
     </nav>
   );
 }

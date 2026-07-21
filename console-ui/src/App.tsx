@@ -1,44 +1,70 @@
-import { ExternalLink, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Construction } from 'lucide-react';
+import { useEffect } from 'react';
 
+import { AppShell } from './components/console/AppShell';
 import { InventoryDashboard } from './pages/InventoryDashboard';
+import { Login } from './pages/Login';
+import { Projects } from './pages/Projects';
 import { isDemoMode } from './providers';
 import { useConsoleUi } from './stores/consoleUi';
+import { Route, useRoute } from './stores/route';
+import { useSession } from './stores/session';
 
-/** Live mode reuses the classic console's JWT (same origin, same localStorage
- *  key) — so /console sign-in IS the dashboard sign-in. */
-function AuthGate() {
+/** Tabs still living in the classic console — ported in the next phases. */
+const PENDING: Partial<Record<Route, string>> = {
+  compliance: 'Compliance Rollup',
+  'ci-ledger': 'CI Gate Ledger',
+  monitoring: 'Drift Monitoring',
+  audit: 'Audit Trail',
+  incidents: 'Incidents',
+  lineage: 'Lineage Graph',
+  'ai-settings': 'AI Settings',
+  users: 'Users',
+  orgs: 'Organizations',
+  docs: 'Docs',
+};
+
+function ComingSoon({ title }: { title: string }) {
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-bg text-text">
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent font-heading text-xl font-bold text-white">S</div>
-      <h1 className="font-heading text-lg font-medium">sentRAI Console · Model Inventory</h1>
-      <p className="max-w-sm text-center text-[12px] text-text-secondary">
-        Sign in through the SentRAI Console first — this dashboard reuses your console session.
-      </p>
-      <div className="flex gap-2">
-        <a href="/console" className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90">
-          <ShieldCheck size={14} /> Open console to sign in
-        </a>
-        <a href="?demo=1" className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[12px] text-text-secondary hover:bg-surface-hover">
-          <ExternalLink size={14} /> View with demo data
-        </a>
-      </div>
-    </div>
+    <AppShell title={title}>
+      <main className="flex min-h-0 flex-1 items-center justify-center p-6">
+        <div className="max-w-sm rounded-md border border-border bg-surface px-6 py-6 text-center">
+          <Construction size={20} className="mx-auto mb-2 text-warning" />
+          <h2 className="mb-1 font-heading text-[13px] font-medium">{title}</h2>
+          <p className="mb-3 text-[11px] leading-relaxed text-text-secondary">
+            Being rebuilt in the new console. It's fully working in the classic console today.
+          </p>
+          <a href="/console" className="inline-block rounded-md border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">
+            Open in classic console
+          </a>
+        </div>
+      </main>
+    </AppShell>
   );
 }
 
 export default function App() {
   const theme = useConsoleUi((s) => s.theme);
-  const [authed, setAuthed] = useState(() => Boolean(localStorage.getItem('sentrai_access_token')));
+  const authed = useSession((s) => s.authed);
+  const hydrate = useSession((s) => s.hydrate);
+  const route = useRoute();
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
   useEffect(() => {
-    // Re-check when returning from the console sign-in tab.
-    const onFocus = () => setAuthed(Boolean(localStorage.getItem('sentrai_access_token')));
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, []);
-  if (!isDemoMode && !authed) return <AuthGate />;
-  return <InventoryDashboard />;
+    // Re-check after an api() 401 clears the session, or on tab focus.
+    window.addEventListener('sentrai:signed-out', hydrate);
+    window.addEventListener('focus', hydrate);
+    return () => {
+      window.removeEventListener('sentrai:signed-out', hydrate);
+      window.removeEventListener('focus', hydrate);
+    };
+  }, [hydrate]);
+
+  if (!isDemoMode && !authed) return <Login />;
+  if (route === 'inventory' || isDemoMode) return <InventoryDashboard />;
+  if (route === 'projects') return <Projects />;
+  return <ComingSoon title={PENDING[route] ?? 'Console'} />;
 }

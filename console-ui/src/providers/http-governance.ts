@@ -51,7 +51,7 @@ interface MatrixRow {
 }
 
 export class HttpGovernanceProvider implements GovernanceProvider {
-  private cache: { rows: MatrixRow[]; gaps: GovernanceGap[]; at: number } | null = null;
+  private cache: { rows: MatrixRow[]; gaps: GovernanceGap[]; at: number; scope: string } | null = null;
 
   private async api<T>(path: string, init?: RequestInit): Promise<T> {
     const token = localStorage.getItem('sentrai_access_token');
@@ -68,10 +68,14 @@ export class HttpGovernanceProvider implements GovernanceProvider {
   }
 
   /** One matrix call feeds components AND gaps; a tiny TTL avoids re-fetching
-   *  it twice when the dashboard loads both in parallel. */
+   *  it twice when the dashboard loads both in parallel. Scoped to the active
+   *  project when one is selected, so the rail's scope chip actually narrows
+   *  the fleet (cache key includes it). */
   private async matrix(): Promise<{ rows: MatrixRow[]; gaps: GovernanceGap[] }> {
-    if (this.cache && Date.now() - this.cache.at < 2000) return this.cache;
-    const data = await this.api<{ components: MatrixRow[]; gaps: Array<Record<string, string>> }>('/compliance/matrix');
+    const projectId = localStorage.getItem('sentrai_active_project_id') || '';
+    if (this.cache && this.cache.scope === projectId && Date.now() - this.cache.at < 2000) return this.cache;
+    const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+    const data = await this.api<{ components: MatrixRow[]; gaps: Array<Record<string, string>> }>(`/compliance/matrix${qs}`);
     const dueFor = (row?: MatrixRow) => {
       if (!row?.next_audit_due) return 'open';
       const d = Math.round((new Date(row.next_audit_due).getTime() - Date.now()) / 86_400_000);
@@ -85,7 +89,7 @@ export class HttpGovernanceProvider implements GovernanceProvider {
       description: g.description,
       due: dueFor(data.components.find((c) => c.model_id === g.model_id)),
     }));
-    this.cache = { rows: data.components, gaps, at: Date.now() };
+    this.cache = { rows: data.components, gaps, at: Date.now(), scope: projectId };
     return this.cache;
   }
 
@@ -190,7 +194,8 @@ export class HttpGovernanceProvider implements GovernanceProvider {
   /** The PDF endpoint needs the bearer header, so fetch → blob URL → open. */
   async exportAudit(): Promise<{ url: string }> {
     const token = localStorage.getItem('sentrai_access_token');
-    const res = await fetch(`${API}/compliance/portfolio/export-pdf`, {
+    const projectId = localStorage.getItem('sentrai_active_project_id') || '';
+    const res = await fetch(`${API}/compliance/portfolio/export-pdf${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(`PDF export failed (${res.status})`);
