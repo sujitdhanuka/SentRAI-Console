@@ -332,9 +332,9 @@ export class InventoryService {
    * project root. The secret masking happens *here*, before the text is handed
    * to any provider, so a plaintext credential can never reach an external API.
    */
-  private async readMaskedSnippet(orm: AIModelEntity): Promise<string | null> {
+  private async readMaskedSnippet(orm: AIModelEntity, aiEnabled: boolean): Promise<string | null> {
     try {
-      if (!this.summarizer.aiEnabled || !orm.projectId || !orm.sourceRef) return null;
+      if (!aiEnabled || !orm.projectId || !orm.sourceRef) return null;
       const project = await this.projects.findOne({ where: { id: orm.projectId } });
       if (!project?.rootDirectory) return null;
       const root = expandAndResolve(project.rootDirectory);
@@ -355,6 +355,9 @@ export class InventoryService {
    */
   async summarizeModel(user: CurrentUser, modelId: string) {
     const orm = await this.getOrThrow(modelId);
+    // Provider precedence is per-org: the caller's registered provider (AI
+    // Settings) → env-level config → local heuristic.
+    const aiEnabled = await this.summarizer.aiEnabledForOrg(user?.tenantId ?? null);
     const ctx: SummarizationContext = {
       name: orm.name,
       modelType: orm.modelType,
@@ -364,9 +367,9 @@ export class InventoryService {
       domainTags: [],
       humanOversightRequired: orm.humanOversightRequired,
       hasHardcodedSecret: Boolean(orm.securityFindings?.length),
-      snippet: await this.readMaskedSnippet(orm),
+      snippet: await this.readMaskedSnippet(orm, aiEnabled),
     };
-    const result = await this.summarizer.summarize(ctx);
+    const result = await this.summarizer.summarizeForOrg(user?.tenantId ?? null, ctx);
 
     orm.useCaseDescription = result.text;
     orm.descriptionSource = result.source;
@@ -386,8 +389,8 @@ export class InventoryService {
       summary: result.text,
       description_source: result.source,
       description_model: result.model,
-      ai_enabled: this.summarizer.aiEnabled,
-      provider: this.summarizer.activeProvider,
+      ai_enabled: result.source === 'ai',
+      provider: result.provider,
     };
   }
 

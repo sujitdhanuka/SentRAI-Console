@@ -87,6 +87,15 @@ export interface AppConfig {
     baseUrl: string;
     maxSnippetChars: number;
   };
+
+  // At-rest encryption for per-org AI provider API keys. Prefer a dedicated
+  // APP_ENCRYPTION_KEY; falls back to the JWT secret (dedicated=false) so
+  // existing deployments keep working — but then rotating the JWT secret
+  // orphans stored provider keys, so production logs a warning.
+  encryption: {
+    key: string;
+    dedicated: boolean;
+  };
 }
 
 function bool(value: string | undefined, fallback: boolean): boolean {
@@ -252,5 +261,22 @@ export default (): AppConfig => {
     baseUrl: process.env.AI_SUMMARIZER_BASE_URL?.trim() || 'https://api.anthropic.com',
     maxSnippetChars: parseInt(process.env.AI_SUMMARIZER_MAX_SNIPPET_CHARS ?? '4000', 10),
   },
+
+  encryption: resolveEncryptionKey(),
   };
 };
+
+/** Dedicated APP_ENCRYPTION_KEY preferred; JWT secret as compatible fallback. */
+function resolveEncryptionKey(): { key: string; dedicated: boolean } {
+  const dedicated = process.env.APP_ENCRYPTION_KEY?.trim();
+  if (dedicated && dedicated.length >= 16) return { key: dedicated, dedicated: true };
+  if (isProductionLike()) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[config] APP_ENCRYPTION_KEY is not set — AI provider keys will be encrypted with a key ' +
+        'derived from the JWT secret. This works, but rotating JWT_SECRET will orphan stored ' +
+        "provider keys. Set a dedicated APP_ENCRYPTION_KEY: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+    );
+  }
+  return { key: resolveJwtSecret(), dedicated: false };
+}

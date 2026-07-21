@@ -12,6 +12,7 @@ import { ExplainabilityRecordEntity } from './explainability-record.entity';
 import { AuditEventEntity } from './audit-event.entity';
 import { ScoreWindowEntity } from './score-window.entity';
 import { DeploymentGateEventEntity } from './deployment-gate-event.entity';
+import { AiProviderConfigEntity } from './ai-provider-config.entity';
 
 export {
   OrganizationEntity,
@@ -28,6 +29,7 @@ export {
   AuditEventEntity,
   ScoreWindowEntity,
   DeploymentGateEventEntity,
+  AiProviderConfigEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -45,4 +47,5 @@ export const ALL_ENTITIES = [
   AuditEventEntity,
   ScoreWindowEntity,
   DeploymentGateEventEntity,
+  AiProviderConfigEntity,
 ];

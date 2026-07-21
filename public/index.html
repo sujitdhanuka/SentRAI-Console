@@ -51,6 +51,7 @@
     <button class="tab" data-tab="docs">Docs</button>
     <button class="tab" data-tab="users" id="tab-users" style="display:none;">Users</button>
     <button class="tab" data-tab="orgs" id="tab-orgs" style="display:none;">Organizations</button>
+    <button class="tab" data-tab="ai-settings" id="tab-ai-settings" style="display:none;">AI Settings</button>
     <div id="active-project-bar" style="display:none; margin-left:auto; display:none; align-items:center; gap:10px; padding:0 12px;">
       <span style="font-size:0.75rem; color:var(--muted);">Active Project:</span>
       <span id="active-project-name" style="font-size:0.8rem; font-weight:600; color:var(--accent);"></span>
@@ -669,6 +670,67 @@
           </thead>
           <tbody></tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- ── AI Settings (BYO-LLM provider registry) ── -->
+    <section class="panel" id="panel-ai-settings">
+      <div class="panel-head">
+        <h2>AI Settings</h2>
+        <button class="btn primary" id="btn-new-ai-provider">+ Add AI Provider</button>
+      </div>
+      <p class="muted" style="margin-top:0; max-width:78ch;">
+        Register the AI model your organization uses for summaries and drafting. Where model code
+        snippets are sent is a <b>governance decision</b>: a local endpoint (e.g. Ollama) keeps
+        everything on your network; an external provider receives secret-masked snippets.
+        Without a provider here, the app falls back to the built-in rule-based engine (no AI, fully local).
+      </p>
+
+      <div class="card form-card hidden" id="form-ai-provider">
+        <h3 id="ai-provider-form-title">Add AI Provider</h3>
+        <form id="ai-provider-form">
+          <input type="hidden" id="ai-provider-id" value="" />
+          <div class="form-row">
+            <label>Preset
+              <select id="ai-preset">
+                <option value="">— choose a provider —</option>
+                <option value="ollama">Ollama (local — no data leaves your network)</option>
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="anthropic">Anthropic Claude</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="together">Together.ai</option>
+                <option value="huggingface">Hugging Face</option>
+                <option value="groq">Groq</option>
+                <option value="mistral">Mistral</option>
+                <option value="custom">Custom (vLLM / TGI / other OpenAI-compatible)</option>
+              </select>
+            </label>
+            <label>Label <input id="ai-label" required maxlength="120" placeholder="e.g. Ollama (on-prem)" /></label>
+          </div>
+          <div class="form-row">
+            <label>Protocol
+              <select id="ai-adapter">
+                <option value="openai-compat">OpenAI-compatible</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </label>
+            <label>Base URL <input id="ai-base-url" required maxlength="500" placeholder="https://api.openai.com/v1" /></label>
+          </div>
+          <div class="form-row">
+            <label>Model <input id="ai-model" required maxlength="200" placeholder="e.g. gpt-4o-mini / llama3.1" /></label>
+            <label>API key <input id="ai-api-key" type="password" autocomplete="off" maxlength="500" placeholder="paste key — leave empty for keyless (Ollama)" /></label>
+          </div>
+          <p class="muted" id="ai-egress-note" style="font-size:0.72rem; margin:4px 0 0;"></p>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btn-cancel-ai-provider">Cancel</button>
+            <button type="submit" class="btn primary" id="ai-provider-submit">Save Provider</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="ai-providers-list" style="margin-top:20px;">
+        <div class="empty-state">Loading…</div>
       </div>
     </section>
 

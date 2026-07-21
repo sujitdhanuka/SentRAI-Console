@@ -33,6 +33,38 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'descriptionModel', definition: 'VARCHAR(100) NULL' },
 ];
 
+/** Whole tables added after a deploy froze the schema. CREATE TABLE IF NOT
+ *  EXISTS is inherently additive — an existing table is never touched. The
+ *  definition must mirror the entity's column mapping. */
+interface TableSpec {
+  table: string;
+  createSql: string;
+}
+
+const REQUIRED_TABLES: TableSpec[] = [
+  {
+    table: 'ai_provider_configs', // ai-provider-config.entity.ts
+    createSql: `CREATE TABLE IF NOT EXISTS \`ai_provider_configs\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`tenantId\` VARCHAR(36) NOT NULL,
+      \`label\` VARCHAR(120) NOT NULL,
+      \`adapter\` VARCHAR(30) NOT NULL,
+      \`baseUrl\` VARCHAR(500) NOT NULL,
+      \`model\` VARCHAR(200) NOT NULL,
+      \`apiKeyEncrypted\` TEXT NULL,
+      \`apiKeyMasked\` VARCHAR(40) NULL,
+      \`enabled\` TINYINT NOT NULL DEFAULT 1,
+      \`defaultForUseCase\` VARCHAR(50) NULL,
+      \`lastTestStatus\` VARCHAR(20) NULL,
+      \`lastTestAt\` DATETIME NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_ai_provider_configs_tenant\` (\`tenantId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+];
+
 @Injectable()
 export class SchemaGuardService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SchemaGuardService.name);
@@ -49,6 +81,13 @@ export class SchemaGuardService implements OnApplicationBootstrap {
     const runner = this.dataSource.createQueryRunner();
     try {
       let added = 0;
+      for (const spec of REQUIRED_TABLES) {
+        try {
+          await runner.query(spec.createSql);
+        } catch (e) {
+          this.logger.warn(`Schema guard: could not ensure table ${spec.table}: ${String(e)}`);
+        }
+      }
       for (const spec of REQUIRED_COLUMNS) {
         try {
           if (await this.columnExists(runner, spec.table, spec.column)) continue;
