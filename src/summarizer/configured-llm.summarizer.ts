@@ -23,7 +23,7 @@ export class ConfiguredLlmSummarizer implements Summarizer {
   ) {}
 
   async generate(ctx: SummarizationContext): Promise<SummaryResult> {
-    const { text } = await chatComplete({
+    const r = await chatComplete({
       adapter: this.adapter,
       baseUrl: this.baseUrl,
       model: this.model,
@@ -32,6 +32,6 @@ export class ConfiguredLlmSummarizer implements Summarizer {
       maxTokens: 400,
       timeoutMs: 45_000,
     });
-    return { text, source: this.source, model: this.model };
+    return { text: r.text, source: this.source, model: this.model, tokensIn: r.tokensIn, tokensOut: r.tokensOut, latencyMs: r.latencyMs };
   }
 }

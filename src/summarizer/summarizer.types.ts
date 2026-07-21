@@ -29,6 +29,10 @@ export interface SummaryResult {
   source: SummarySource;
   /** The model that produced it, e.g. 'claude-sonnet-5' — null for non-AI sources. */
   model: string | null;
+  /** Provider-reported token accounting (AI sources only). */
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  latencyMs?: number;
 }
 
 export interface Summarizer {

@@ -152,6 +152,18 @@ Manage the people in your organization.
 
 Manage organizations (tenants). Each organization fully isolates its projects, models, gate ledger, and users from every other. **New Organization** captures a Name and Description.
 
+### 13. AI Settings
+*Visible to: ADMIN, CISO, OWNER — because choosing where model code snippets are sent is a governance decision.*
+
+Configure the AI model your organization uses for drafting (✨ Summarize, ✨ Draft rationale, ✨ Draft remediation plan) — bring your own LLM:
+
+- **AI Providers** — pick a preset (OpenAI, Google Gemini, Anthropic Claude, **Ollama for fully local**, OpenRouter, Together.ai, Hugging Face, Groq, Mistral, or any OpenAI-compatible endpoint), enter the base URL, model name, and API key. Keys are encrypted at rest and **never displayed again** — only a mask like `sk-…x4Q2`. Every card shows a **data-egress badge**: 🔒 *Local* means nothing leaves your network; 🌐 *External* means secret-masked snippets are sent to that provider. **⚡ Test** fires a one-token live call so a bad key fails at setup, not first use. Each configured provider is **self-registered in your Model Inventory** (project "AI Governance Tooling") — the LLM you use for governance is itself a governed AI system, with gaps to close like any other.
+- **Usage strip** — total AI calls, ok/failed, token in/out counts, and average latency for your organization: cost and reliability at a glance. Every call is also recorded in the audit trail with who invoked it and for what.
+- **Prompt Vault** — the exact instructions sent to the AI for each task. Editable per organization; every save is a **new version** (nothing is overwritten), with history, restore, and reset-to-default. Templates use `{{variables}}` filled from the model being processed; removing a required variable is blocked at save.
+- **Without any provider configured**, all AI buttons still work using a built-in rule-based engine — fully local, deterministic, and labeled "⚙ Auto-draft" so reviewers know its origin.
+
+All AI output is a **draft with provenance** (✨ AI-drafted / ⚙ Auto-draft / ✓ human-confirmed): a human reviews and saves before it becomes part of the governance record.
+
 ---
 
 ## Roles & permissions

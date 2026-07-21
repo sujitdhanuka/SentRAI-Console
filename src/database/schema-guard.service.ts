@@ -36,6 +36,8 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'riskRationale', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'riskRationaleSource', definition: 'VARCHAR(20) NULL' },
   { table: 'ai_models', column: 'riskRationaleModel', definition: 'VARCHAR(100) NULL' },
+  // ai-provider-config.entity.ts — link to the self-registered inventory model.
+  { table: 'ai_provider_configs', column: 'linkedModelId', definition: 'VARCHAR(36) NULL' },
 ];
 
 /** Whole tables added after a deploy froze the schema. CREATE TABLE IF NOT
@@ -82,6 +84,23 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`createdAt\` DATETIME NOT NULL,
       INDEX \`IDX_prompt_templates_tenant\` (\`tenantId\`),
       INDEX \`IDX_prompt_templates_usecase\` (\`useCase\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'ai_usage_events', // ai-usage-event.entity.ts
+    createSql: `CREATE TABLE IF NOT EXISTS \`ai_usage_events\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`tenantId\` VARCHAR(36) NULL,
+      \`useCase\` VARCHAR(50) NOT NULL,
+      \`provider\` VARCHAR(160) NOT NULL,
+      \`model\` VARCHAR(200) NOT NULL,
+      \`status\` VARCHAR(10) NOT NULL,
+      \`tokensIn\` INT NULL,
+      \`tokensOut\` INT NULL,
+      \`latencyMs\` INT NOT NULL,
+      \`actor\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_ai_usage_events_tenant\` (\`tenantId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
 ];

@@ -10,9 +10,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AiProviderConfigEntity, OrganizationEntity } from '../database/entities';
+import { join } from 'path';
+
+import {
+  AiProviderConfigEntity,
+  AIModelEntity,
+  AiUsageEventEntity,
+  ModelLedgerEventEntity,
+  OrganizationEntity,
+  ProjectEntity,
+} from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
-import { Role } from '../common/enums';
+import { ModelLifecycleStage, ModelType, RiskLevel, Role } from '../common/enums';
+import { WORKSPACES_DIR } from '../common/paths';
 import { decryptSecret, encryptSecret, maskKey } from './key-crypto';
 import { chatComplete } from './llm-client';
 import { CreateProviderDto, ProviderResponse, TestResult, UpdateProviderDto } from './ai.dto';
@@ -28,6 +38,10 @@ export class AiProvidersService {
   constructor(
     @InjectRepository(AiProviderConfigEntity) private readonly configs: Repository<AiProviderConfigEntity>,
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
+    @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
+    @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
+    @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
+    @InjectRepository(AiUsageEventEntity) private readonly usageEvents: Repository<AiUsageEventEntity>,
     private readonly config: ConfigService,
   ) {}
 
@@ -74,6 +88,82 @@ export class AiProvidersService {
     return orm;
   }
 
+  /**
+   * Self-governance: the LLM an org configures for governance drafting is
+   * itself an AI system in use, so it gets registered in the org's own model
+   * inventory. It lands in a per-org 'AI Governance Tooling' project (models
+   * are org-visible via projects) at DESIGN stage with governance gaps open —
+   * configuring an LLM creates a governance obligation, exactly like any other
+   * model. Failures here never block provider creation (logged instead).
+   */
+  private async registerInInventory(cfg: AiProviderConfigEntity, actor: string): Promise<string | null> {
+    try {
+      const org = await this.orgs.findOne({ where: { id: cfg.tenantId } });
+      const projName = `AI Governance Tooling (${org?.name ?? cfg.tenantId.slice(0, 8)})`;
+      let project = await this.projects.findOne({ where: { tenantId: cfg.tenantId, name: projName } });
+      if (!project) {
+        const now = new Date();
+        const pid = uuidv4();
+        project = await this.projects.save(this.projects.create({
+          id: pid,
+          name: projName,
+          description: 'Auto-managed: AI systems SentRAI itself uses for this organization (LLM providers configured in AI Settings).',
+          rootDirectory: join(WORKSPACES_DIR, pid),
+          lastScannedAt: null,
+          lastScanResult: null,
+          createdAt: now,
+          updatedAt: now,
+          tenantId: cfg.tenantId,
+        }));
+      }
+      const now = new Date();
+      const model = await this.models.save(this.models.create({
+        id: uuidv4(),
+        projectId: project.id,
+        name: `LLM: ${cfg.label}`,
+        modelType: ModelType.GENERATIVE_AI,
+        functionalArea: 'governance_tooling',
+        useCaseDescription:
+          `Large-language model used by SentRAI for AI-assisted governance drafting (summaries, risk rationales, remediation plans). ` +
+          `Endpoint: ${cfg.baseUrl} · model: ${cfg.model} · protocol: ${cfg.adapter}. Prompts are secret-masked before egress.`,
+        targetCustomerSegments: [],
+        riskLevel: RiskLevel.LOW,
+        lifecycleStage: ModelLifecycleStage.DESIGN,
+        ownerTeam: 'UNASSIGNED — pending review',
+        developedBy: 'third_party',
+        deploymentDate: null,
+        dependencies: [],
+        performanceBenchmarks: [],
+        sutrasAlignment: [],
+        humanOversightRequired: true, // every AI draft is human-reviewed by design
+        autonomousScope: null,
+        boardPolicyRef: '',
+        lastRedTeamDate: null,
+        nextAuditDue: null,
+        grievanceCount: 0,
+        grievanceResolutionNotes: '',
+        sourceRef: null,
+        securityFindings: null,
+        detectionSignals: ['llm_api'],
+        isActive: true,
+        registeredAt: now,
+        updatedAt: now,
+      }));
+      await this.ledger.save(this.ledger.create({
+        id: uuidv4(),
+        modelId: model.id,
+        eventType: 'MODEL_REGISTERED',
+        eventData: { source: 'ai_settings_self_governance', provider_label: cfg.label, endpoint: cfg.baseUrl },
+        actor,
+        occurredAt: now,
+      }));
+      return model.id;
+    } catch (e) {
+      this.logger.warn(`Self-governance registration failed for provider '${cfg.label}': ${String(e)}`);
+      return null;
+    }
+  }
+
   private toResponse(orm: AiProviderConfigEntity): ProviderResponse {
     let localEndpoint = false;
     try {
@@ -88,6 +178,7 @@ export class AiProvidersService {
       model: orm.model,
       api_key_masked: orm.apiKeyMasked,
       has_api_key: Boolean(orm.apiKeyEncrypted),
+      linked_model_id: orm.linkedModelId,
       enabled: orm.enabled,
       local_endpoint: localEndpoint,
       last_test_status: orm.lastTestStatus,
@@ -126,6 +217,9 @@ export class AiProvidersService {
       updatedAt: now,
     });
     await this.configs.save(orm);
+    // Dogfooding: the configured LLM enters the org's own model inventory.
+    orm.linkedModelId = await this.registerInInventory(orm, user.email);
+    if (orm.linkedModelId) await this.configs.save(orm);
     this.logger.log(`AI provider '${orm.label}' (${orm.adapter}) created for org ${tenantId} by ${user.email}`);
     return this.toResponse(orm);
   }
@@ -153,6 +247,23 @@ export class AiProvidersService {
   async remove(user: CurrentUser, providerId: string): Promise<void> {
     const orm = await this.getScoped(user, providerId);
     await this.configs.delete({ id: orm.id });
+    // Retire (never hard-delete) the self-registered inventory entry — its
+    // ledger history is audit evidence that this LLM was in use.
+    if (orm.linkedModelId) {
+      try {
+        await this.models.update({ id: orm.linkedModelId }, { isActive: false, lifecycleStage: ModelLifecycleStage.DECOMMISSIONED, updatedAt: new Date() });
+        await this.ledger.save(this.ledger.create({
+          id: uuidv4(),
+          modelId: orm.linkedModelId,
+          eventType: 'MODEL_DECOMMISSIONED',
+          eventData: { source: 'ai_settings_self_governance', reason: `provider '${orm.label}' removed` },
+          actor: user.email,
+          occurredAt: new Date(),
+        }));
+      } catch (e) {
+        this.logger.warn(`Could not retire linked inventory model ${orm.linkedModelId}: ${String(e)}`);
+      }
+    }
     this.logger.log(`AI provider '${orm.label}' removed from org ${orm.tenantId} by ${user.email}`);
   }
 
@@ -180,6 +291,31 @@ export class AiProvidersService {
     orm.lastTestAt = new Date();
     await this.configs.save(orm);
     return { provider_id: orm.id, status, latency_ms: Date.now() - started, detail };
+  }
+
+  /** Org AI usage: totals for cost visibility + the most recent calls. */
+  async usageSummary(user: CurrentUser, explicitOrgId?: string | null) {
+    const tenantId = await this.resolveTenant(user, explicitOrgId);
+    const rows = await this.usageEvents.find({ where: { tenantId }, order: { createdAt: 'DESC' }, take: 500 });
+    const ok = rows.filter((r) => r.status === 'ok');
+    const sum = (xs: (number | null)[]): number => { let t = 0; for (const x of xs) t += x ?? 0; return t; };
+    return {
+      organization_id: tenantId,
+      total_calls: rows.length,
+      ok_calls: ok.length,
+      failed_calls: rows.length - ok.length,
+      tokens_in: sum(rows.map((r) => r.tokensIn)),
+      tokens_out: sum(rows.map((r) => r.tokensOut)),
+      avg_latency_ms: ok.length ? Math.round(sum(ok.map((r) => r.latencyMs)) / ok.length) : null,
+      by_use_case: Object.fromEntries(
+        [...new Set(rows.map((r) => r.useCase))].map((uc) => [uc, rows.filter((r) => r.useCase === uc).length]),
+      ),
+      recent: rows.slice(0, 20).map((r) => ({
+        use_case: r.useCase, provider: r.provider, status: r.status,
+        tokens_in: r.tokensIn, tokens_out: r.tokensOut, latency_ms: r.latencyMs,
+        actor: r.actor, at: r.createdAt,
+      })),
+    };
   }
 
   /**

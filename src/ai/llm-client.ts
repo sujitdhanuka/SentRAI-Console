@@ -18,10 +18,19 @@ export interface ChatCompleteOptions {
   timeoutMs?: number;
 }
 
-export async function chatComplete(opts: ChatCompleteOptions): Promise<{ text: string }> {
+export interface ChatCompleteResult {
+  text: string;
+  /** Token accounting when the provider reports it (both protocols usually do). */
+  tokensIn: number | null;
+  tokensOut: number | null;
+  latencyMs: number;
+}
+
+export async function chatComplete(opts: ChatCompleteOptions): Promise<ChatCompleteResult> {
   const base = opts.baseUrl.replace(/\/$/, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 30_000);
+  const started = Date.now();
   try {
     if (opts.adapter === 'anthropic') {
       const res = await fetch(`${base}/v1/messages`, {
@@ -46,7 +55,12 @@ export async function chatComplete(opts: ChatCompleteOptions): Promise<{ text: s
         .join('')
         .trim();
       if (!text) throw new Error('Provider returned no text');
-      return { text };
+      return {
+        text,
+        tokensIn: data?.usage?.input_tokens ?? null,
+        tokensOut: data?.usage?.output_tokens ?? null,
+        latencyMs: Date.now() - started,
+      };
     }
 
     // openai-compat
@@ -67,7 +81,12 @@ export async function chatComplete(opts: ChatCompleteOptions): Promise<{ text: s
     const data: any = await res.json();
     const text = String(data?.choices?.[0]?.message?.content ?? '').trim();
     if (!text) throw new Error('Provider returned no text');
-    return { text };
+    return {
+      text,
+      tokensIn: data?.usage?.prompt_tokens ?? null,
+      tokensOut: data?.usage?.completion_tokens ?? null,
+      latencyMs: Date.now() - started,
+    };
   } finally {
     clearTimeout(timer);
   }

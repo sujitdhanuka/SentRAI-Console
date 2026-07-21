@@ -82,6 +82,8 @@ export interface ProviderResponse {
   model: string;
   api_key_masked: string | null;
   has_api_key: boolean;
+  /** The self-registered inventory model for this endpoint (self-governance). */
+  linked_model_id: string | null;
   enabled: boolean;
   /** True when the base URL points at localhost/a private range — data stays on-box. */
   local_endpoint: boolean;
