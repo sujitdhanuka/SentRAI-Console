@@ -1,6 +1,7 @@
 import { Construction } from 'lucide-react';
 import { useEffect } from 'react';
 
+import { AiSettings } from './pages/AiSettings';
 import { AppShell } from './components/console/AppShell';
 import { CiLedger } from './pages/CiLedger';
 import { ComplianceRollup } from './pages/ComplianceRollup';
@@ -18,7 +19,6 @@ const PENDING: Partial<Record<Route, string>> = {
   audit: 'Audit Trail',
   incidents: 'Incidents',
   lineage: 'Lineage Graph',
-  'ai-settings': 'AI Settings',
   users: 'Users',
   orgs: 'Organizations',
   docs: 'Docs',
@@ -68,5 +68,6 @@ export default function App() {
   if (route === 'projects') return <Projects />;
   if (route === 'compliance') return <ComplianceRollup />;
   if (route === 'ci-ledger') return <CiLedger />;
+  if (route === 'ai-settings') return <AiSettings />;
   return <ComingSoon title={PENDING[route] ?? 'Console'} />;
 }
