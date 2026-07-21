@@ -21,6 +21,12 @@ export class MonitoringController {
     return this.monitoring.ingestScores(modelId, dto);
   }
 
+  /** Force an evaluation of the model's stored windows, as the hourly cron would. */
+  @Post('drift/:modelId/evaluate')
+  evaluateStored(@Param('modelId') modelId: string): Promise<DriftReportResponse> {
+    return this.monitoring.evaluateStoredWindows(modelId);
+  }
+
   @Get('drift/:modelId/history')
   driftHistory(@Param('modelId') modelId: string, @Query('limit') limit?: string): Promise<DriftReportResponse[]> {
     return this.monitoring.driftHistory(modelId, limit ? parseInt(limit, 10) : 30);
