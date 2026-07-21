@@ -98,6 +98,22 @@ export class AIModelEntity {
   @Column('varchar', { length: 100, nullable: true })
   descriptionModel!: string | null;
 
+  /** Unique static-analysis signal categories from discovery (llm_api,
+   *  decision_function, …) — evidence for summaries and risk rationale. */
+  @Column('simple-json', { nullable: true })
+  detectionSignals!: string[] | null;
+
+  /** Auditor-facing justification of the assigned risk level, with the same
+   *  provenance scheme as the description ('heuristic' | 'ai' | 'human'). */
+  @Column('text', { nullable: true })
+  riskRationale!: string | null;
+
+  @Column('varchar', { length: 20, nullable: true })
+  riskRationaleSource!: string | null;
+
+  @Column('varchar', { length: 100, nullable: true })
+  riskRationaleModel!: string | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

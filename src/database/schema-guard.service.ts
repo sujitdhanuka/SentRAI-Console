@@ -31,6 +31,11 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'securityFindings', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'descriptionSource', definition: 'VARCHAR(20) NULL' },
   { table: 'ai_models', column: 'descriptionModel', definition: 'VARCHAR(100) NULL' },
+  // ai-model.entity.ts — detection signals + AI-drafted risk rationale (Phase 3).
+  { table: 'ai_models', column: 'detectionSignals', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'riskRationale', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'riskRationaleSource', definition: 'VARCHAR(20) NULL' },
+  { table: 'ai_models', column: 'riskRationaleModel', definition: 'VARCHAR(100) NULL' },
 ];
 
 /** Whole tables added after a deploy froze the schema. CREATE TABLE IF NOT
