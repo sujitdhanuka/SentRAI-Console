@@ -2,6 +2,8 @@ import { Construction } from 'lucide-react';
 import { useEffect } from 'react';
 
 import { AppShell } from './components/console/AppShell';
+import { CiLedger } from './pages/CiLedger';
+import { ComplianceRollup } from './pages/ComplianceRollup';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { Login } from './pages/Login';
 import { Projects } from './pages/Projects';
@@ -12,8 +14,6 @@ import { useSession } from './stores/session';
 
 /** Tabs still living in the classic console — ported in the next phases. */
 const PENDING: Partial<Record<Route, string>> = {
-  compliance: 'Compliance Rollup',
-  'ci-ledger': 'CI Gate Ledger',
   monitoring: 'Drift Monitoring',
   audit: 'Audit Trail',
   incidents: 'Incidents',
@@ -66,5 +66,7 @@ export default function App() {
   if (!isDemoMode && !authed) return <Login />;
   if (route === 'inventory' || isDemoMode) return <InventoryDashboard />;
   if (route === 'projects') return <Projects />;
+  if (route === 'compliance') return <ComplianceRollup />;
+  if (route === 'ci-ledger') return <CiLedger />;
   return <ComingSoon title={PENDING[route] ?? 'Console'} />;
 }
