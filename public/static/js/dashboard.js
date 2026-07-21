@@ -283,6 +283,9 @@ function updateTabVisibility(hasActiveProject) {
       // Organizations is a global-admin surface (an ADMIN with no tenant).
       // Show it by default — not only after the Users tab has been opened.
       tab.style.display = (AUTH_USER && AUTH_USER.role === "ADMIN" && !AUTH_USER.tenant_id) ? "" : "none";
+    } else if (name === "ai-settings") {
+      // BYO-LLM registry — a data-egress decision, so governance roles only.
+      tab.style.display = (AUTH_USER && ["ADMIN", "CISO", "OWNER"].includes(AUTH_USER.role)) ? "" : "none";
     } else if (name !== "projects" && name !== "docs") {
       tab.style.display = hasActiveProject ? "" : "none";
     }
@@ -313,6 +316,7 @@ function switchToTab(tabName) {
   if (tabName === "compliance") loadCompliance();
   if (tabName === "ci-ledger") loadCiLedger();
   if (tabName === "orgs") loadOrgs();
+  if (tabName === "ai-settings") loadAiProviders();
   if (tabName === "inventory") {
     const btnNewModel = document.getElementById("btn-new-model");
     if (btnNewModel) {
@@ -2877,4 +2881,213 @@ if (orgForm) {
     }
   });
 }
+
+// ── AI Settings: per-org BYO-LLM provider registry ───────────────────────────
+// Two wire protocols cover the market: 'openai-compat' (OpenAI, Gemini, Ollama,
+// OpenRouter, Together, HF, Groq, Mistral, vLLM/TGI) and 'anthropic'. A preset
+// just prefills adapter + base URL + a sensible default model.
+const AI_PRESETS = {
+  openai:      { label: "OpenAI",           adapter: "openai-compat", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+  gemini:      { label: "Google Gemini",    adapter: "openai-compat", base_url: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-2.0-flash" },
+  anthropic:   { label: "Anthropic Claude", adapter: "anthropic",     base_url: "https://api.anthropic.com", model: "claude-sonnet-5" },
+  ollama:      { label: "Ollama (local)",   adapter: "openai-compat", base_url: "http://localhost:11434/v1", model: "llama3.1" },
+  openrouter:  { label: "OpenRouter",       adapter: "openai-compat", base_url: "https://openrouter.ai/api/v1", model: "openrouter/auto" },
+  together:    { label: "Together.ai",      adapter: "openai-compat", base_url: "https://api.together.xyz/v1", model: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+  huggingface: { label: "Hugging Face",     adapter: "openai-compat", base_url: "https://router.huggingface.co/v1", model: "meta-llama/Llama-3.1-8B-Instruct" },
+  groq:        { label: "Groq",             adapter: "openai-compat", base_url: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" },
+  mistral:     { label: "Mistral",          adapter: "openai-compat", base_url: "https://api.mistral.ai/v1", model: "mistral-small-latest" },
+  custom:      { label: "",                 adapter: "openai-compat", base_url: "", model: "" },
+};
+
+let AI_PROVIDERS_CACHE = [];
+
+function isAdminNoOrg() { return !!(AUTH_USER && AUTH_USER.role === "ADMIN" && !AUTH_USER.tenant_id); }
+
+function egressBadge(p) {
+  return p.local_endpoint
+    ? `<span class="badge COMPLIANT" title="The base URL points inside your network — code snippets never leave your infrastructure.">🔒 Local — no data egress</span>`
+    : `<span class="badge risk-MEDIUM" title="Secret-masked code snippets are sent to this external provider.">🌐 External — snippets leave your network</span>`;
+}
+
+function testBadge(p) {
+  if (!p.last_test_status) return `<span class="muted" style="font-size:0.68rem;">not tested yet</span>`;
+  return p.last_test_status === "ok"
+    ? `<span class="badge COMPLIANT" title="${escapeHtml(p.last_test_at || "")}">✓ connection OK</span>`
+    : `<span class="badge risk-HIGH" title="${escapeHtml(p.last_test_at || "")}">✗ last test failed</span>`;
+}
+
+async function loadAiProviders() {
+  const list = document.getElementById("ai-providers-list");
+  if (!list) return;
+  // A global admin (no org of their own) manages per-org configs — needs a target org.
+  const qs = isAdminNoOrg() && ACTIVE_ORG_FOR_AI ? `?organization_id=${encodeURIComponent(ACTIVE_ORG_FOR_AI)}` : "";
+  if (isAdminNoOrg() && !ACTIVE_ORG_FOR_AI) {
+    await renderAiOrgPicker(list);
+    return;
+  }
+  try {
+    AI_PROVIDERS_CACHE = await api(`/ai/providers${qs}`);
+    renderAiProviders();
+  } catch (e) {
+    list.innerHTML = `<div class="empty-state">Failed to load AI providers — ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+let ACTIVE_ORG_FOR_AI = "";
+async function renderAiOrgPicker(list) {
+  try {
+    const orgs = await api("/organizations/");
+    list.innerHTML = `
+      <div class="card">
+        <h3>Select an organization</h3>
+        <p class="muted" style="font-size:0.75rem;">You are a global admin — AI providers are configured per organization.</p>
+        <select id="ai-org-picker" style="min-width:260px;">
+          <option value="">— choose —</option>
+          ${orgs.map((o) => `<option value="${o.organization_id || o.id}">${escapeHtml(o.name)}</option>`).join("")}
+        </select>
+      </div>`;
+    document.getElementById("ai-org-picker").addEventListener("change", (e) => {
+      ACTIVE_ORG_FOR_AI = e.target.value;
+      if (ACTIVE_ORG_FOR_AI) loadAiProviders();
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="empty-state">Failed to load organizations — ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderAiProviders() {
+  const list = document.getElementById("ai-providers-list");
+  if (!AI_PROVIDERS_CACHE.length) {
+    list.innerHTML = `<div class="empty-state">No AI provider configured — summaries use the built-in rule-based engine (fully local). Add a provider to enable richer AI drafting.</div>`;
+    return;
+  }
+  list.innerHTML = AI_PROVIDERS_CACHE.map((p) => `
+    <div class="card" data-provider-id="${p.provider_id}" style="${p.enabled ? "" : "opacity:0.55;"}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+        <div>
+          <h3 style="margin:0 0 4px;">${escapeHtml(p.label)} ${p.enabled ? "" : `<span class="badge neutral">disabled</span>`}</h3>
+          <div class="muted" style="font-size:0.72rem; font-family:var(--mono, monospace);">
+            ${escapeHtml(p.adapter)} · ${escapeHtml(p.model)} · ${escapeHtml(p.base_url)}
+            ${p.has_api_key ? ` · key ${escapeHtml(p.api_key_masked || "set")}` : " · no key (keyless endpoint)"}
+          </div>
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">${egressBadge(p)} ${testBadge(p)}</div>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn small secondary ai-test-btn" data-id="${p.provider_id}">⚡ Test</button>
+          <button class="btn small ghost ai-edit-btn" data-id="${p.provider_id}">✎ Edit</button>
+          <button class="btn small ghost ai-toggle-btn" data-id="${p.provider_id}" data-enabled="${p.enabled}">${p.enabled ? "Disable" : "Enable"}</button>
+          <button class="btn small ghost ai-delete-btn" data-id="${p.provider_id}" data-label="${escapeHtml(p.label)}">🗑</button>
+        </div>
+      </div>
+      <div class="muted ai-test-result" style="font-size:0.72rem; margin-top:6px;"></div>
+    </div>
+  `).join("");
+
+  list.querySelectorAll(".ai-test-btn").forEach((btn) => btn.addEventListener("click", async () => {
+    const card = btn.closest(".card");
+    const out = card.querySelector(".ai-test-result");
+    btn.disabled = true; btn.textContent = "⚡ Testing…"; out.textContent = "";
+    try {
+      const r = await api(`/ai/providers/${btn.dataset.id}/test`, { method: "POST" });
+      out.textContent = r.status === "ok" ? `✓ ${r.detail} (${r.latency_ms} ms)` : `✗ ${r.detail}`;
+      out.style.color = r.status === "ok" ? "var(--ok, #2E7D4F)" : "var(--danger, #c0392b)";
+      loadAiProviders();
+    } catch (e) {
+      out.textContent = "Test failed: " + e.message;
+    } finally { btn.disabled = false; btn.textContent = "⚡ Test"; }
+  }));
+
+  list.querySelectorAll(".ai-edit-btn").forEach((btn) => btn.addEventListener("click", () => {
+    openAiProviderForm(AI_PROVIDERS_CACHE.find((p) => p.provider_id === btn.dataset.id));
+  }));
+
+  list.querySelectorAll(".ai-toggle-btn").forEach((btn) => btn.addEventListener("click", async () => {
+    try {
+      await api(`/ai/providers/${btn.dataset.id}`, { method: "PATCH", body: JSON.stringify({ enabled: btn.dataset.enabled !== "true" }) });
+      loadAiProviders();
+    } catch (e) { toast("Update failed: " + e.message, "error"); }
+  }));
+
+  list.querySelectorAll(".ai-delete-btn").forEach((btn) => btn.addEventListener("click", async () => {
+    if (!confirm(`Remove AI provider "${btn.dataset.label}"?\n\nIts stored API key is deleted with it. Summaries fall back to the built-in local engine.`)) return;
+    try {
+      await api(`/ai/providers/${btn.dataset.id}`, { method: "DELETE" });
+      toast("AI provider removed");
+      loadAiProviders();
+    } catch (e) { toast("Delete failed: " + e.message, "error"); }
+  }));
+}
+
+function updateAiEgressNote() {
+  const url = document.getElementById("ai-base-url").value.trim();
+  const note = document.getElementById("ai-egress-note");
+  const local = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|host\.docker\.internal|\[?::1)/i.test(url);
+  if (!url) { note.textContent = ""; return; }
+  note.innerHTML = local
+    ? `🔒 <b>Local endpoint</b> — code snippets stay on your network.`
+    : `🌐 <b>External endpoint</b> — secret-masked code snippets will be sent to this provider. Confirm this is acceptable under your data policy.`;
+}
+
+function openAiProviderForm(existing) {
+  const form = document.getElementById("form-ai-provider");
+  form.classList.remove("hidden");
+  document.getElementById("ai-provider-form-title").textContent = existing ? `Edit — ${existing.label}` : "Add AI Provider";
+  document.getElementById("ai-provider-id").value = existing?.provider_id || "";
+  document.getElementById("ai-label").value = existing?.label || "";
+  document.getElementById("ai-adapter").value = existing?.adapter || "openai-compat";
+  document.getElementById("ai-base-url").value = existing?.base_url || "";
+  document.getElementById("ai-model").value = existing?.model || "";
+  const keyInput = document.getElementById("ai-api-key");
+  keyInput.value = "";
+  keyInput.placeholder = existing?.has_api_key
+    ? `saved (${existing.api_key_masked}) — leave blank to keep, type to replace`
+    : "paste key — leave empty for keyless (Ollama)";
+  updateAiEgressNote();
+  form.scrollIntoView({ block: "nearest" });
+}
+
+document.getElementById("btn-new-ai-provider")?.addEventListener("click", () => openAiProviderForm(null));
+document.getElementById("btn-cancel-ai-provider")?.addEventListener("click", () => {
+  document.getElementById("form-ai-provider").classList.add("hidden");
+});
+document.getElementById("ai-base-url")?.addEventListener("input", updateAiEgressNote);
+document.getElementById("ai-preset")?.addEventListener("change", (e) => {
+  const preset = AI_PRESETS[e.target.value];
+  if (!preset) return;
+  if (preset.label) document.getElementById("ai-label").value = preset.label;
+  document.getElementById("ai-adapter").value = preset.adapter;
+  document.getElementById("ai-base-url").value = preset.base_url;
+  document.getElementById("ai-model").value = preset.model;
+  updateAiEgressNote();
+});
+
+document.getElementById("ai-provider-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = document.getElementById("ai-provider-id").value;
+  const key = document.getElementById("ai-api-key").value;
+  const payload = {
+    label: document.getElementById("ai-label").value.trim(),
+    adapter: document.getElementById("ai-adapter").value,
+    base_url: document.getElementById("ai-base-url").value.trim(),
+    model: document.getElementById("ai-model").value.trim(),
+  };
+  // Key semantics: on create send if present; on edit only send when the user
+  // typed something (blank = keep the stored key).
+  if (!id || key) payload.api_key = key;
+  if (!id && isAdminNoOrg()) payload.organization_id = ACTIVE_ORG_FOR_AI;
+  const btn = document.getElementById("ai-provider-submit");
+  btn.disabled = true; btn.textContent = "Saving…";
+  try {
+    if (id) await api(`/ai/providers/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    else await api("/ai/providers", { method: "POST", body: JSON.stringify(payload) });
+    toast(id ? "AI provider updated" : "AI provider added — run ⚡ Test to verify the connection");
+    document.getElementById("form-ai-provider").classList.add("hidden");
+    document.getElementById("ai-provider-form").reset();
+    loadAiProviders();
+  } catch (err) {
+    toast("Save failed: " + err.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Save Provider";
+  }
+});
 

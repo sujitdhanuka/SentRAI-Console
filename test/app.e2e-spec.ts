@@ -689,6 +689,101 @@ describe('SentrAI Console (e2e)', () => {
     expect(after.body.find((m: any) => m.model_id === modelId).description_source).toBe('human');
   });
 
+  it('AI PROVIDERS: org registry — CRUD with masked keys, tenant isolation, per-org precedence', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const SECRET_KEY = 'sk-secret-test-12345-do-not-leak';
+
+    // A local mock OpenAI-compatible server — no real API is ever called.
+    const httpMod = await import('http');
+    let lastAuthHeader = '';
+    const mock = httpMod.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: any) => (body += c));
+      req.on('end', () => {
+        lastAuthHeader = String(req.headers['authorization'] ?? '');
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ choices: [{ message: { content: 'MOCK-LLM: governed summary output.' } }] }));
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.address() as any).port;
+
+    try {
+      // Two orgs, one OWNER each.
+      const mkOrg = async (name: string) => (await request(http)
+        .post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`).send({ name })).body.organization_id;
+      const orgA = await mkOrg('AI Org Alpha');
+      const orgB = await mkOrg('AI Org Beta');
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'ai-owner@alpha.test', full_name: 'A', password: 'pw123456', role: 'OWNER', organization_id: orgA }).expect(201);
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'ai-owner@beta.test', full_name: 'B', password: 'pw123456', role: 'OWNER', organization_id: orgB }).expect(201);
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'ai-viewer@alpha.test', full_name: 'V', password: 'pw123456', role: 'VIEWER', organization_id: orgA }).expect(201);
+      const ownerA = await login('ai-owner@alpha.test', 'pw123456');
+      const ownerB = await login('ai-owner@beta.test', 'pw123456');
+      const viewerA = await login('ai-viewer@alpha.test', 'pw123456');
+
+      // VIEWER cannot touch the registry — data egress is a governance decision.
+      await request(http).get('/api/v1/ai/providers').set('Authorization', `Bearer ${viewerA}`).expect(403);
+
+      // OWNER A registers a provider pointing at the mock.
+      const created = await request(http).post('/api/v1/ai/providers').set('Authorization', `Bearer ${ownerA}`)
+        .send({
+          label: 'Mock LLM', adapter: 'openai-compat',
+          base_url: `http://127.0.0.1:${mockPort}/v1`, model: 'mock-1', api_key: SECRET_KEY,
+        }).expect(201);
+      const providerId = created.body.provider_id;
+      // The key NEVER comes back — only a mask.
+      expect(JSON.stringify(created.body)).not.toContain(SECRET_KEY);
+      expect(created.body.has_api_key).toBe(true);
+      expect(created.body.api_key_masked).toContain('…');
+      expect(created.body.local_endpoint).toBe(true); // 127.0.0.1 = on-box
+
+      // Tenant isolation: B sees nothing and cannot reach A's config by id.
+      const bList = await request(http).get('/api/v1/ai/providers').set('Authorization', `Bearer ${ownerB}`).expect(200);
+      expect(bList.body).toHaveLength(0);
+      await request(http).patch(`/api/v1/ai/providers/${providerId}`).set('Authorization', `Bearer ${ownerB}`)
+        .send({ label: 'hijack' }).expect(404);
+      await request(http).delete(`/api/v1/ai/providers/${providerId}`).set('Authorization', `Bearer ${ownerB}`).expect(404);
+
+      // Connection test round-trips the DECRYPTED key to the provider.
+      const test = await request(http).post(`/api/v1/ai/providers/${providerId}/test`)
+        .set('Authorization', `Bearer ${ownerA}`).expect(200);
+      expect(test.body.status).toBe('ok');
+      expect(typeof test.body.latency_ms).toBe('number');
+      expect(lastAuthHeader).toBe(`Bearer ${SECRET_KEY}`);
+
+      // Precedence: org A's summarize goes through its registered provider…
+      const regA = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${ownerA}`)
+        .send({ name: 'Alpha Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'risk_scoring', use_case_description: 'scores things' }).expect(201);
+      const sumA = await request(http).post(`/api/v1/inventory/models/${regA.body.model_id}/summarize`)
+        .set('Authorization', `Bearer ${ownerA}`).expect(200);
+      expect(sumA.body.ai_enabled).toBe(true);
+      expect(sumA.body.summary).toBe('MOCK-LLM: governed summary output.');
+      expect(sumA.body.description_source).toBe('ai');
+      expect(sumA.body.description_model).toBe('mock-1');
+      expect(sumA.body.provider).toContain('Mock LLM');
+
+      // …while org B (no provider) falls back to the local heuristic.
+      const regB = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${ownerB}`)
+        .send({ name: 'Beta Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'risk_scoring', use_case_description: 'scores things too' }).expect(201);
+      const sumB = await request(http).post(`/api/v1/inventory/models/${regB.body.model_id}/summarize`)
+        .set('Authorization', `Bearer ${ownerB}`).expect(200);
+      expect(sumB.body.ai_enabled).toBe(false);
+      expect(sumB.body.description_source).toBe('heuristic');
+
+      // Disabled providers are never selected — A drops back to the heuristic.
+      await request(http).patch(`/api/v1/ai/providers/${providerId}`).set('Authorization', `Bearer ${ownerA}`)
+        .send({ enabled: false }).expect(200);
+      const sumA2 = await request(http).post(`/api/v1/inventory/models/${regA.body.model_id}/summarize`)
+        .set('Authorization', `Bearer ${ownerA}`).expect(200);
+      expect(sumA2.body.ai_enabled).toBe(false);
+    } finally {
+      await new Promise<void>((r) => mock.close(() => r()));
+    }
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)
