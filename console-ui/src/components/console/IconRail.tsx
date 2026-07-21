@@ -40,6 +40,19 @@ const NAV: NavItem[] = [
   { route: 'docs', icon: Settings, label: 'Docs' },
 ];
 
+/** Instant flyout label — the native `title` tooltip is too slow for a rail
+ *  you scan quickly, and it can't be styled to match the console. */
+function RailTooltip({ label }: { label: string }) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border-strong bg-bg-elevated px-2 py-1 text-[11px] text-text opacity-0 shadow-lg transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100"
+    >
+      {label}
+    </span>
+  );
+}
+
 export function IconRail() {
   const active = useRoute();
   const user = useSession((s) => s.user);
@@ -53,27 +66,29 @@ export function IconRail() {
   });
 
   return (
-    <nav className="flex w-[52px] shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border bg-bg-elevated py-2">
-      <div
-        className="mb-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent font-heading text-sm font-bold text-white"
-        title="sentRAI Console"
-      >
-        S
-      </div>
+    <nav className="flex w-[52px] shrink-0 flex-col items-center gap-1 overflow-visible border-r border-border bg-bg-elevated py-2">
+      <a href="#/projects" className="group relative mb-2 shrink-0" aria-label="sentRAI Console">
+        <img
+          src="/static/logo.png"
+          alt="sentRAI Console"
+          className="h-9 w-9 rounded-lg object-contain"
+        />
+        <RailTooltip label="sentRAI Console" />
+      </a>
       {visible.map(({ icon: Icon, label, route }) => (
         <button
           key={route}
-          title={label}
           aria-label={label}
           aria-current={active === route ? 'page' : undefined}
           onClick={() => navigate(route)}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
+          className={`group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
             active === route
               ? 'bg-accent-soft text-accent'
               : 'text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
           }`}
         >
           <Icon size={17} strokeWidth={1.75} />
+          <RailTooltip label={label} />
         </button>
       ))}
     </nav>
