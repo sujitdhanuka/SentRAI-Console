@@ -63,6 +63,22 @@ const REQUIRED_TABLES: TableSpec[] = [
       INDEX \`IDX_ai_provider_configs_tenant\` (\`tenantId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
+  {
+    table: 'prompt_templates', // prompt-template.entity.ts
+    createSql: `CREATE TABLE IF NOT EXISTS \`prompt_templates\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`tenantId\` VARCHAR(36) NOT NULL,
+      \`useCase\` VARCHAR(50) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`body\` TEXT NOT NULL,
+      \`active\` TINYINT NOT NULL DEFAULT 0,
+      \`changeNote\` VARCHAR(255) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_prompt_templates_tenant\` (\`tenantId\`),
+      INDEX \`IDX_prompt_templates_usecase\` (\`useCase\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 @Injectable()

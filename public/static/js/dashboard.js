@@ -316,7 +316,7 @@ function switchToTab(tabName) {
   if (tabName === "compliance") loadCompliance();
   if (tabName === "ci-ledger") loadCiLedger();
   if (tabName === "orgs") loadOrgs();
-  if (tabName === "ai-settings") loadAiProviders();
+  if (tabName === "ai-settings") { loadAiProviders(); loadPromptVault(); }
   if (tabName === "inventory") {
     const btnNewModel = document.getElementById("btn-new-model");
     if (btnNewModel) {
@@ -2948,7 +2948,7 @@ async function renderAiOrgPicker(list) {
       </div>`;
     document.getElementById("ai-org-picker").addEventListener("change", (e) => {
       ACTIVE_ORG_FOR_AI = e.target.value;
-      if (ACTIVE_ORG_FOR_AI) loadAiProviders();
+      if (ACTIVE_ORG_FOR_AI) { loadAiProviders(); loadPromptVault(); }
     });
   } catch (e) {
     list.innerHTML = `<div class="empty-state">Failed to load organizations — ${escapeHtml(e.message)}</div>`;
@@ -3090,4 +3090,148 @@ document.getElementById("ai-provider-form")?.addEventListener("submit", async (e
     btn.disabled = false; btn.textContent = "Save Provider";
   }
 });
+
+// ── Prompt Vault: versioned, editable prompt templates ───────────────────────
+let PROMPT_VAULT_CACHE = [];
+
+function aiOrgQs() {
+  return isAdminNoOrg() && ACTIVE_ORG_FOR_AI ? `?organization_id=${encodeURIComponent(ACTIVE_ORG_FOR_AI)}` : "";
+}
+
+async function loadPromptVault() {
+  const list = document.getElementById("prompt-vault-list");
+  if (!list) return;
+  if (isAdminNoOrg() && !ACTIVE_ORG_FOR_AI) {
+    list.innerHTML = `<div class="empty-state">Select an organization above to manage its prompts.</div>`;
+    return;
+  }
+  try {
+    PROMPT_VAULT_CACHE = await api(`/ai/prompts${aiOrgQs()}`);
+    renderPromptVault();
+  } catch (e) {
+    list.innerHTML = `<div class="empty-state">Failed to load prompt vault — ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function promptStatusBadge(p) {
+  return p.customized
+    ? `<span class="badge risk-MEDIUM" title="Your organization's version ${p.active_version} is active.">Customized · v${p.active_version}</span>`
+    : `<span class="badge neutral" title="No customization — the built-in default applies.">System default</span>`;
+}
+
+function renderPromptVault() {
+  const list = document.getElementById("prompt-vault-list");
+  list.innerHTML = PROMPT_VAULT_CACHE.map((p) => `
+    <div class="card" data-use-case="${p.use_case}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+        <div>
+          <h3 style="margin:0 0 4px;">${escapeHtml(p.title)} ${promptStatusBadge(p)}</h3>
+          <div class="muted" style="font-size:0.74rem; max-width:64ch;">${escapeHtml(p.description)}</div>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn small ghost pv-edit-btn" data-uc="${p.use_case}">✎ Edit</button>
+          <button class="btn small ghost pv-history-btn" data-uc="${p.use_case}" ${p.version_count ? "" : "disabled"}>History (${p.version_count})</button>
+          ${p.customized ? `<button class="btn small ghost pv-reset-btn" data-uc="${p.use_case}">Reset to default</button>` : ""}
+        </div>
+      </div>
+      <div class="pv-detail" style="margin-top:10px;"></div>
+    </div>
+  `).join("");
+
+  list.querySelectorAll(".pv-edit-btn").forEach((b) => b.addEventListener("click", () => openPromptEditor(b.dataset.uc)));
+  list.querySelectorAll(".pv-history-btn").forEach((b) => b.addEventListener("click", () => openPromptHistory(b.dataset.uc)));
+  list.querySelectorAll(".pv-reset-btn").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Reset this prompt to the system default?\n\nYour saved versions are kept in History — nothing is deleted.")) return;
+    try {
+      await api(`/ai/prompts/${b.dataset.uc}/reset`, { method: "POST", body: JSON.stringify(isAdminNoOrg() ? { organization_id: ACTIVE_ORG_FOR_AI } : {}) });
+      toast("Prompt reset to system default");
+      loadPromptVault();
+    } catch (e) { toast("Reset failed: " + e.message, "error"); }
+  }));
+}
+
+function pvDetailEl(useCase) {
+  return document.querySelector(`#prompt-vault-list .card[data-use-case="${useCase}"] .pv-detail`);
+}
+
+function openPromptEditor(useCase) {
+  const p = PROMPT_VAULT_CACHE.find((x) => x.use_case === useCase);
+  const el = pvDetailEl(useCase);
+  if (!p || !el) return;
+  const legend = p.variables.map((v) =>
+    `<span class="badge neutral" title="${escapeHtml(v.description)}" style="font-family:var(--mono, monospace); font-size:0.62rem;">{{${escapeHtml(v.name)}}}${v.required ? " *" : ""}</span>`
+  ).join(" ");
+  el.innerHTML = `
+    <div class="inline-panel" style="border:1px solid var(--border); border-radius:8px;">
+      <div class="muted" style="font-size:0.7rem; margin-bottom:6px;">Available variables (* required): ${legend}</div>
+      <textarea class="pv-body" rows="10" style="width:100%; font-family:var(--mono, monospace); font-size:0.72rem;">${escapeHtml(p.body)}</textarea>
+      <div class="form-row" style="margin-top:8px;">
+        <label style="flex:1;">Change note (optional) <input class="pv-note" maxlength="255" placeholder="e.g. added PII instruction" /></label>
+      </div>
+      <div class="form-actions" style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn ghost small pv-cancel">Cancel</button>
+        <button class="btn primary small pv-save">Save as new version</button>
+      </div>
+    </div>`;
+  el.querySelector(".pv-cancel").addEventListener("click", () => { el.innerHTML = ""; });
+  el.querySelector(".pv-save").addEventListener("click", async () => {
+    const body = el.querySelector(".pv-body").value;
+    const note = el.querySelector(".pv-note").value;
+    const btn = el.querySelector(".pv-save");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const payload = { body, change_note: note || undefined };
+      if (isAdminNoOrg()) payload.organization_id = ACTIVE_ORG_FOR_AI;
+      const r = await api(`/ai/prompts/${useCase}`, { method: "PUT", body: JSON.stringify(payload) });
+      toast(`Saved as v${r.version}`);
+      (r.warnings || []).forEach((w) => toast(w, "error"));
+      loadPromptVault();
+    } catch (e) {
+      toast("Save failed: " + e.message, "error");
+      btn.disabled = false; btn.textContent = "Save as new version";
+    }
+  });
+}
+
+async function openPromptHistory(useCase) {
+  const el = pvDetailEl(useCase);
+  if (!el) return;
+  el.innerHTML = `<div class="muted" style="font-size:0.74rem;">Loading history…</div>`;
+  try {
+    const rows = await api(`/ai/prompts/${useCase}/history${aiOrgQs()}`);
+    if (!rows.length) { el.innerHTML = `<div class="muted" style="font-size:0.74rem;">No saved versions yet — the system default applies.</div>`; return; }
+    el.innerHTML = `
+      <div class="inline-panel" style="border:1px solid var(--border); border-radius:8px;">
+        ${rows.map((r) => `
+          <div style="padding:7px 0; border-bottom:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap;">
+              <span style="font-size:0.74rem;">
+                <b>v${r.version}</b> ${r.active ? `<span class="badge COMPLIANT">active</span>` : ""}
+                <span class="muted">· ${escapeHtml(r.created_by)} · ${fmtDate(r.created_at)}${r.change_note ? ` · “${escapeHtml(r.change_note)}”` : ""}</span>
+              </span>
+              <span style="display:flex; gap:6px;">
+                <button class="btn small ghost pv-view-btn">View</button>
+                ${r.active ? "" : `<button class="btn small ghost pv-restore-btn" data-v="${r.version}">Restore</button>`}
+              </span>
+            </div>
+            <pre class="pv-preview" style="display:none; white-space:pre-wrap; font-size:0.68rem; background:var(--surface-2); border-radius:6px; padding:8px; margin:8px 0 0; max-height:220px; overflow:auto;">${escapeHtml(r.body)}</pre>
+          </div>`).join("")}
+        <div style="text-align:right; margin-top:8px;"><button class="btn ghost small pv-close-history">Close</button></div>
+      </div>`;
+    el.querySelectorAll(".pv-view-btn").forEach((b) => b.addEventListener("click", () => {
+      const pre = b.closest("div[style]").parentElement.querySelector(".pv-preview");
+      pre.style.display = pre.style.display === "none" ? "block" : "none";
+    }));
+    el.querySelectorAll(".pv-restore-btn").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        const r = await api(`/ai/prompts/${useCase}/restore/${b.dataset.v}`, { method: "POST", body: JSON.stringify(isAdminNoOrg() ? { organization_id: ACTIVE_ORG_FOR_AI } : {}) });
+        toast(`Restored v${b.dataset.v} as v${r.version}`);
+        loadPromptVault();
+      } catch (e) { toast("Restore failed: " + e.message, "error"); }
+    }));
+    el.querySelector(".pv-close-history").addEventListener("click", () => { el.innerHTML = ""; });
+  } catch (e) {
+    el.innerHTML = `<div class="muted" style="font-size:0.74rem;">Failed to load history — ${escapeHtml(e.message)}</div>`;
+  }
+}
 

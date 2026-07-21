@@ -13,6 +13,7 @@ import { AuditEventEntity } from './audit-event.entity';
 import { ScoreWindowEntity } from './score-window.entity';
 import { DeploymentGateEventEntity } from './deployment-gate-event.entity';
 import { AiProviderConfigEntity } from './ai-provider-config.entity';
+import { PromptTemplateEntity } from './prompt-template.entity';
 
 export {
   OrganizationEntity,
@@ -30,6 +31,7 @@ export {
   ScoreWindowEntity,
   DeploymentGateEventEntity,
   AiProviderConfigEntity,
+  PromptTemplateEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -48,4 +50,5 @@ export const ALL_ENTITIES = [
   ScoreWindowEntity,
   DeploymentGateEventEntity,
   AiProviderConfigEntity,
+  PromptTemplateEntity,
 ];
