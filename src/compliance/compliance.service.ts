@@ -119,6 +119,16 @@ export class ComplianceService {
         grievance_count: m.grievanceCount,
         has_evidence: (m.evidenceArtifacts?.length ?? 0) > 0,
         drift: driftUi(driftByModel.get(m.id)),
+        // Generation state, so the console can show provenance and offer a
+        // re-draft without a second round trip per model.
+        description_source: m.descriptionSource ?? 'static',
+        risk_rationale: m.riskRationale ?? null,
+        risk_rationale_source: m.riskRationaleSource ?? null,
+        gap_remediation: m.gapRemediation ?? null,
+        gap_remediation_source: m.gapRemediationSource ?? null,
+        // Every file this record covers — more than one means hits were merged.
+        source_refs: m.sourceRefs ?? (m.sourceRef ? [m.sourceRef] : []),
+        merge_history: m.mergeHistory ?? [],
         frameworks,
       });
     }

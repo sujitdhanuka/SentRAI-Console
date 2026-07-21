@@ -336,10 +336,13 @@ export class AiProvidersService {
         .sort((a, b) => b.calls - a.calls);
     };
 
-    // Dense daily series (zero-filled) so a chart has no gaps.
+    // Dense daily series (zero-filled) so a chart has no gaps. The window ends
+    // TODAY — anchoring it to `since` would push the current day off the end
+    // and hide the activity a user has just generated.
     const byDay = new Map<string, { calls: number; failed: number; tokens: number }>();
-    for (let i = 0; i < days; i++) {
-      const d = new Date(since.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       byDay.set(d, { calls: 0, failed: 0, tokens: 0 });
     }
     for (const r of rows) {

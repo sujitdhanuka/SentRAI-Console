@@ -47,6 +47,11 @@ interface MatrixRow {
   sutras_alignment: string[]; board_policy_ref: string | null;
   last_red_team_date: string | null; next_audit_due: string | null;
   grievance_count: number; has_evidence: boolean; drift: DriftStatus;
+  description_source: string;
+  risk_rationale: string | null; risk_rationale_source: string | null;
+  gap_remediation: string | null; gap_remediation_source: string | null;
+  source_refs: string[];
+  merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
   frameworks: Record<'rbi' | 'nist' | 'eu' | 'iso', { status: CheckStatus }>;
 }
 
@@ -115,6 +120,13 @@ export class HttpGovernanceProvider implements GovernanceProvider {
         incidents30d: r.grievance_count,
         boardPolicyRef: r.board_policy_ref,
         sutras: r.sutras_alignment,
+        descriptionSource: r.description_source,
+        riskRationale: r.risk_rationale ?? undefined,
+        riskRationaleSource: r.risk_rationale_source,
+        gapRemediation: r.gap_remediation,
+        gapRemediationSource: r.gap_remediation_source,
+        sourceRefs: r.source_refs ?? [],
+        mergeHistory: r.merge_history ?? [],
         frameworks: {
           rbi: { status: r.frameworks.rbi.status, evidenceUrl: evidence(r.frameworks.rbi.status) },
           nist: { status: r.frameworks.nist.status, evidenceUrl: evidence(r.frameworks.nist.status) },

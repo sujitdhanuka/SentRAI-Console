@@ -15,6 +15,7 @@ export const ROUTES = [
   'incidents',
   'lineage',
   'ai-settings',
+  'ai-usage',
   'users',
   'orgs',
   'docs',

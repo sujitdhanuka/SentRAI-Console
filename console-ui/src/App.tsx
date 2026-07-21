@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { AiSettings } from './pages/AiSettings';
+import { AiUsage } from './pages/AiUsage';
 import { AuditTrail } from './pages/AuditTrail';
 import { CiLedger } from './pages/CiLedger';
 import { ComplianceRollup } from './pages/ComplianceRollup';
@@ -29,6 +30,7 @@ const PAGES: Record<Route, () => JSX.Element> = {
   incidents: Incidents,
   lineage: Lineage,
   'ai-settings': AiSettings,
+  'ai-usage': AiUsage,
   users: Users,
   orgs: Organizations,
   docs: Docs,
