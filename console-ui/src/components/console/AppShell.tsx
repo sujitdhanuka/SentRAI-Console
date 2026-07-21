@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { useSession } from '../../stores/session';
 import { Toasts } from '../ui/Toast';
+import { ContextHelp } from './ContextHelp';
 import { IconRail } from './IconRail';
 
 function useClock(): string {
@@ -61,6 +62,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
                 <span className="text-[10.5px] text-text-secondary">{user?.email}</span>
                 <span className="font-mono text-[8.5px] text-text-tertiary">{user?.role}</span>
               </span>
+              <ContextHelp />
               <button
                 onClick={toggleTheme}
                 title="Toggle theme"

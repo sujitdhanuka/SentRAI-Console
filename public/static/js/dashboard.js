@@ -590,6 +590,8 @@ async function loadCompliance() {
       </div>`;
     }).join("");
 
+    renderExecNarrative(scope);
+
     gapsEl.innerHTML = p.top_gaps.length === 0
       ? `<div class="result-banner ok">No blocking gaps across the portfolio.</div>`
       : p.top_gaps.map((g) => `
@@ -836,6 +838,7 @@ const CONTEXT_HELP_SECTIONS = {
   users: "Users",
   orgs: "Organizations",
   "ai-settings": "AI Settings",
+  "ai-usage": "LLM Usage",
 };
 
 async function getDocsMarkdown() {
@@ -1122,6 +1125,36 @@ function descProvenanceTag(model) {
 
 // Provenance tag for the risk rationale (same scheme as descriptions):
 // AI/auto drafts are flagged for review; 'human' means confirmed.
+/**
+ * A scan often finds the same model in several files; those hits are merged
+ * into one governed record. Showing the file list here is what makes the
+ * inventory count reconcile with what the scan reported.
+ */
+function mergedSourcesBlock(model) {
+  const refs = (model && model.source_refs) || [];
+  if (refs.length < 2) return "";
+  return `
+    <div class="inline-panel" style="border:1px solid var(--border); border-radius:8px; margin-bottom:12px;">
+      <div class="muted" style="font-size:0.7rem; margin-bottom:4px;">
+        📄 Merged from ${refs.length} files — the scan found this model in several places and they are governed as one record.
+      </div>
+      <div style="font-family:var(--mono, monospace); font-size:0.7rem;">
+        ${refs.map((f) => `<div>${escapeHtml(f)}</div>`).join("")}
+      </div>
+    </div>`;
+}
+
+/** The persisted remediation plan (auto-generated on scan, or drafted here). */
+function storedRemediationBlock(model) {
+  if (!model || !model.gap_remediation) return "";
+  const src = model.gap_remediation_source === "ai" ? "✨ AI-drafted" : "⚙ Auto-drafted";
+  return `
+    <div class="inline-panel" style="border:1px solid var(--border); border-radius:8px; margin-top:8px;">
+      <div class="muted" style="font-size:0.7rem; margin-bottom:6px;">${src} · saved plan · review before attaching as evidence</div>
+      <textarea rows="8" readonly style="width:100%; font-size:0.72rem;">${escapeHtml(model.gap_remediation)}</textarea>
+    </div>`;
+}
+
 function rationaleProvenanceTag(model) {
   const src = model?.risk_rationale_source;
   if (src === "ai") {
@@ -1430,9 +1463,11 @@ async function openGovernancePanel(modelId, name) {
       <h3>Close Governance Gaps — ${name}</h3>
       <button type="button" class="btn ghost small" id="btn-close-governance">✕</button>
     </div>
+    ${mergedSourcesBlock(model)}
     <div id="governance-gaps-list" style="margin-bottom:10px">Loading…</div>
     <div style="margin-bottom:16px;">
-      <button type="button" class="btn small secondary" id="btn-draft-remediation" data-id="${modelId}" title="AI-draft one actionable step per open gap — you review before it becomes evidence">✨ Draft remediation plan</button>
+      <button type="button" class="btn small secondary" id="btn-draft-remediation" data-id="${modelId}" title="AI-draft one actionable step per open gap — you review before it becomes evidence">${model?.gap_remediation ? "✨ Re-draft remediation plan" : "✨ Draft remediation plan"}</button>
+      ${storedRemediationBlock(model)}
       <div id="remediation-draft-out" style="margin-top:8px;"></div>
     </div>
     <form id="governance-form">
@@ -3027,25 +3062,141 @@ async function loadAiProviders() {
   loadAiUsage();
 }
 
-// Cost + reliability visibility: how much AI the org has used, at a glance.
+/**
+ * Board-facing paragraph for the portfolio, drafted from the same rollup
+ * figures shown on this screen so the two can be checked against each other.
+ */
+function renderExecNarrative(scope) {
+  const headlineEl = document.getElementById("compliance-headline");
+  if (!headlineEl) return;
+  let host = document.getElementById("exec-narrative-block");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "exec-narrative-block";
+    host.style.margin = "12px 0";
+    headlineEl.insertAdjacentElement("afterend", host);
+  }
+  host.innerHTML = `
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <b style="font-size:0.8rem;">Board narrative</b>
+        <span class="muted" style="font-size:0.7rem;">one paragraph for the readiness report, grounded in the figures above</span>
+        <button type="button" class="btn small ghost" id="btn-exec-narrative" style="margin-left:auto;">\u2728 Draft narrative</button>
+      </div>
+      <div id="exec-narrative-out" style="margin-top:8px;"></div>
+    </div>`;
+  document.getElementById("btn-exec-narrative").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const out = document.getElementById("exec-narrative-out");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "\u2728 Drafting\u2026";
+    try {
+      const res = await api("/compliance/exec-narrative" + scope, { method: "POST" });
+      out.innerHTML = `
+        <div class="muted" style="font-size:0.7rem; margin-bottom:6px;">
+          ${res.ai_enabled ? `\u2728 AI-drafted via ${escapeHtml(res.provider || "provider")}` : "\u2699 Auto-drafted locally"}
+          \u00b7 review before board circulation
+        </div>
+        <textarea rows="6" style="width:100%; font-size:0.74rem;">${escapeHtml(res.narrative || "")}</textarea>`;
+      btn.textContent = "\u2728 Re-draft narrative";
+    } catch (err) {
+      out.innerHTML = `<div class="muted" style="font-size:0.74rem;">Could not draft narrative \u2014 ${escapeHtml(err.message)}</div>`;
+      btn.textContent = original;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+// LLM usage dashboard: cost, reliability and who is driving the spend.
+let AI_USAGE_WINDOW = 30;
+
+function usageBars(rows, emptyText) {
+  if (!rows || !rows.length) return `<div class="muted" style="font-size:0.72rem;">${emptyText}</div>`;
+  const max = Math.max(...rows.map((r) => r.calls), 1);
+  return rows.slice(0, 8).map((r) => `
+    <div style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; gap:8px; font-size:0.72rem;">
+        <span style="font-family:var(--mono, monospace); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.name)}</span>
+        <span class="muted" style="white-space:nowrap;">${r.calls} call(s)${r.failed_calls ? ` · <span style="color:var(--danger,#c0392b)">${r.failed_calls} failed</span>` : ""}</span>
+      </div>
+      <div style="height:4px; border-radius:3px; background:var(--border); margin-top:3px; overflow:hidden;">
+        <div style="height:100%; width:${(r.calls / max) * 100}%; background:var(--accent, #4c7eff);"></div>
+      </div>
+      <div class="muted" style="font-size:0.66rem; margin-top:2px;">
+        ${r.total_tokens.toLocaleString()} tokens${r.avg_latency_ms != null ? ` · ${r.avg_latency_ms} ms avg` : ""}
+      </div>
+    </div>`).join("");
+}
+
+/** Daily volume as inline bars; failures stack above successes. */
+function usageDailyChart(daily) {
+  const max = Math.max(...daily.map((d) => d.calls), 1);
+  return `
+    <div style="display:flex; align-items:flex-end; gap:2px; height:72px;">
+      ${daily.map((d) => `
+        <div style="flex:1;" title="${d.date}: ${d.calls} call(s), ${d.failed} failed, ${d.tokens.toLocaleString()} tokens">
+          <div style="height:${(d.failed / max) * 72}px; background:var(--danger,#c0392b); border-radius:2px;"></div>
+          <div style="height:${((d.calls - d.failed) / max) * 72}px; background:var(--accent,#4c7eff); border-radius:2px;"></div>
+        </div>`).join("")}
+    </div>
+    <div class="muted" style="display:flex; justify-content:space-between; font-size:0.66rem; margin-top:4px;">
+      <span>${daily[0] ? daily[0].date : ""}</span>
+      <span>peak ${max}/day</span>
+      <span>${daily.length ? daily[daily.length - 1].date : ""}</span>
+    </div>`;
+}
+
 async function loadAiUsage() {
   const strip = document.getElementById("ai-usage-strip");
   if (!strip) return;
   if (isAdminNoOrg() && !ACTIVE_ORG_FOR_AI) { strip.innerHTML = ""; return; }
   try {
-    const u = await api(`/ai/usage${aiOrgQs()}`);
-    if (!u.total_calls) { strip.innerHTML = ""; return; }
-    const uc = Object.entries(u.by_use_case || {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ");
+    const qs = aiOrgQs();
+    const u = await api(`/ai/usage${qs ? qs + "&" : "?"}days=${AI_USAGE_WINDOW}`);
+    const pct = u.success_rate == null ? "—" : Math.round(u.success_rate * 100) + "%";
     strip.innerHTML = `
       <div class="card" style="padding:12px 16px;">
-        <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; font-size:0.76rem;">
-          <span><b>${u.total_calls}</b> AI call(s)</span>
-          <span class="muted">${u.ok_calls} ok${u.failed_calls ? ` · <span style="color:var(--danger,#c0392b)">${u.failed_calls} failed</span>` : ""}</span>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+          <b style="font-size:0.8rem;">LLM usage</b>
+          <select id="ai-usage-window" style="font-size:0.72rem;">
+            ${[7, 30, 90].map((d) => `<option value="${d}" ${d === AI_USAGE_WINDOW ? "selected" : ""}>Last ${d} days</option>`).join("")}
+          </select>
+        </div>
+        <div class="stats-row" style="display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; font-size:0.76rem;">
+          <span><b>${u.total_calls}</b> call(s)</span>
+          <span class="muted">success <b style="color:${u.success_rate != null && u.success_rate < 0.9 ? "var(--danger,#c0392b)" : "inherit"}">${pct}</b>${u.failed_calls ? ` · ${u.failed_calls} failed` : ""}</span>
           <span class="muted">tokens in <b>${u.tokens_in.toLocaleString()}</b> / out <b>${u.tokens_out.toLocaleString()}</b></span>
           ${u.avg_latency_ms != null ? `<span class="muted">avg ${u.avg_latency_ms} ms</span>` : ""}
-          ${uc ? `<span class="muted" style="font-size:0.68rem;">${escapeHtml(uc)}</span>` : ""}
+          ${u.p95_latency_ms != null ? `<span class="muted">p95 ${u.p95_latency_ms} ms</span>` : ""}
         </div>
+        ${!u.total_calls ? `
+          <div class="muted" style="font-size:0.72rem; margin-top:10px;">
+            No LLM calls metered in this window. Only calls that reach a configured provider are counted —
+            generations that fell back to the local heuristic cost no tokens and are not recorded here.
+          </div>` : `
+          <div style="margin-top:12px;">${usageDailyChart(u.daily || [])}</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:18px; margin-top:14px;">
+            <div><div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">By use case</div>${usageBars(u.use_cases, "No calls yet.")}</div>
+            <div><div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">By model</div>${usageBars(u.models, "No calls yet.")}</div>
+            <div><div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">By provider</div>${usageBars(u.providers, "No providers used yet.")}</div>
+            <div><div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">By actor</div>${usageBars(u.actors, "No actors yet.")}</div>
+          </div>
+          ${(u.recent_failures || []).length ? `
+            <div style="margin-top:14px;">
+              <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Recent failures</div>
+              ${u.recent_failures.map((f) => `
+                <div style="display:flex; gap:10px; font-size:0.7rem; padding:3px 0; border-bottom:1px solid var(--border);">
+                  <span style="color:var(--danger,#c0392b);">⚠</span>
+                  <span style="font-family:var(--mono, monospace);">${escapeHtml(f.use_case)}</span>
+                  <span class="muted">${escapeHtml(f.provider)}</span>
+                  <span class="muted" style="margin-left:auto;">${new Date(f.at).toLocaleString()}</span>
+                </div>`).join("")}
+            </div>` : ""}
+        `}
       </div>`;
+    const sel = document.getElementById("ai-usage-window");
+    if (sel) sel.addEventListener("change", (e) => { AI_USAGE_WINDOW = Number(e.target.value); loadAiUsage(); });
   } catch { strip.innerHTML = ""; }
 }
 
