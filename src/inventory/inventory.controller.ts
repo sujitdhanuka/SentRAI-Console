@@ -96,6 +96,20 @@ export class InventoryController {
     return this.inventory.summarizeModel(user, modelId);
   }
 
+  /** Draft an auditor-facing justification of the assigned risk level. */
+  @Post('models/:modelId/risk-rationale')
+  @HttpCode(HttpStatus.OK)
+  draftRiskRationale(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.inventory.draftRiskRationale(user, modelId);
+  }
+
+  /** Draft one remediation step per open compliance gap (returned for review, not persisted). */
+  @Post('models/:modelId/draft-remediation')
+  @HttpCode(HttpStatus.OK)
+  draftRemediation(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.inventory.draftGapRemediation(user, modelId);
+  }
+
   @Get('models/:modelId/compliance-check')
   complianceCheck(@Param('modelId') modelId: string) {
     return this.inventory.complianceCheck(modelId);

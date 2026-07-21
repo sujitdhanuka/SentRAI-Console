@@ -41,6 +41,8 @@ export class GovernanceUpdateDto {
   @IsOptional() @IsArray() @IsEnum(SutraAlignment, { each: true }) sutras_alignment?: SutraAlignment[] | null;
   @IsOptional() last_red_team_date?: string | null;
   @IsOptional() @IsString() use_case_description?: string | null;
+  /** A human-edited risk rationale (flips its provenance to 'human'). */
+  @IsOptional() @IsString() risk_rationale?: string | null;
   @IsOptional() @IsString() actor: string = 'dashboard_user';
 }
 
@@ -96,6 +98,12 @@ export interface ModelResponse {
   description_source: string;
   /** Model that produced an AI description, e.g. 'claude-sonnet-5' (else null). */
   description_model: string | null;
+  /** Static-analysis signal categories detected at import (evidence). */
+  detection_signals: string[];
+  /** Auditor-facing risk justification + its provenance (null until drafted). */
+  risk_rationale: string | null;
+  risk_rationale_source: string | null;
+  risk_rationale_model: string | null;
   /** Set when the org crossed its plan's soft model limit (registration never blocks). */
   plan_warning?: string | null;
 }

@@ -3,8 +3,11 @@ import { ConfigService } from '@nestjs/config';
 
 import { AiProvidersService } from '../ai/ai-providers.service';
 import { PromptVaultService } from '../ai/prompt-vault.service';
+import { chatComplete } from '../ai/llm-client';
+import { renderTemplate } from '../ai/template';
 import { ConfiguredLlmSummarizer } from './configured-llm.summarizer';
 import { HeuristicSummarizer } from './heuristic.summarizer';
+import { redactSecrets } from './redact';
 import { SummarizationContext, Summarizer, SummaryResult } from './summarizer.types';
 
 /**
@@ -87,5 +90,47 @@ export class SummarizerService {
       }
       throw e;
     }
+  }
+
+  /**
+   * Generic AI drafting for any vault use case (risk_rationale,
+   * gap_remediation, …): the org's template + the org's provider, degrading to
+   * the caller-supplied deterministic heuristic when no AI is configured or the
+   * call fails. Every interpolated value is secret-masked here — untrusted
+   * content cannot reach an external provider unredacted through this path.
+   */
+  async draftForOrg(
+    tenantId: string | null,
+    useCase: string,
+    vars: Record<string, string>,
+    heuristicText: () => string,
+  ): Promise<{ text: string; source: 'ai' | 'heuristic'; model: string | null; provider: string }> {
+    const template = await this.vault.resolveActiveBody(tenantId, useCase);
+    const masked: Record<string, string> = {};
+    for (const [k, v] of Object.entries(vars)) masked[k] = redactSecrets(v ?? '');
+    const prompt = renderTemplate(template.body, masked);
+
+    let cfg: { adapter: string; baseUrl: string; model: string; apiKey: string | null; label: string } | null = null;
+    try {
+      cfg = await this.providers.resolveActiveForOrg(tenantId, useCase);
+    } catch (e) {
+      this.log.warn(`Org provider resolution failed (${String(e)}); falling through.`);
+    }
+    if (!cfg && this.envCfg) {
+      cfg = { adapter: 'anthropic', baseUrl: this.envCfg.baseUrl, model: this.envCfg.model, apiKey: this.envCfg.apiKey, label: this.envCfg.model };
+    }
+
+    if (cfg) {
+      try {
+        const { text } = await chatComplete({
+          adapter: cfg.adapter, baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey,
+          prompt, maxTokens: 700, timeoutMs: 45_000,
+        });
+        return { text, source: 'ai', model: cfg.model, provider: `${cfg.label} · ${cfg.model}` };
+      } catch (e) {
+        this.log.warn(`AI draft '${useCase}' via '${cfg.label}' failed (${String(e)}); using heuristic.`);
+      }
+    }
+    return { text: heuristicText(), source: 'heuristic', model: null, provider: 'heuristic (local)' };
   }
 }

@@ -26,7 +26,7 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { IncidentStatus, ModelLifecycleStage, RiskLevel, Role, SutraAlignment } from '../common/enums';
 import { maskDict } from '../common/dpdp';
 import { NotifierService } from '../common/notifier.service';
-import { AIModelEntry, EvidenceArtifact, triageAiModel, floorRiskForSecurityFindings } from '../domain/model-inventory';
+import { AIModelEntry, EvidenceArtifact, triageAiModel, floorRiskForSecurityFindings, explainTriageFactors } from '../domain/model-inventory';
 import { ValidationContext } from '../compliance/frameworks.validator';
 import { modelEntityToEntry } from './model.mapper';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
@@ -44,6 +44,7 @@ import {
   validateSutrasCompliance,
 } from '../compliance/sutras.validator';
 import {
+  frameworkBlockingGaps,
   frameworkReportAsDict,
   validateEuAiAct,
   validateIso42001,
@@ -61,6 +62,21 @@ import {
 
 function parseDate(s?: string | null): Date | null {
   return s ? new Date(s) : null;
+}
+
+/** Deterministic remediation hint per known gap pattern — the no-AI fallback. */
+function heuristicRemediationStep(gap: string): string {
+  const g = gap.toLowerCase();
+  if (g.includes('board-approved') || g.includes('board policy')) return 'Set a board-approved AI policy reference in the governance form (e.g. AI-POLICY-2026-xxx).';
+  if (g.includes('owner') || g.includes('accountability chain')) return 'Assign a named owner team in the governance form.';
+  if (g.includes('bias')) return 'Run a bias/fairness test and attach the report as a bias_test evidence artifact.';
+  if (g.includes('red-team') || g.includes('red team')) return 'Complete a red-team review and record its date (or attach a red_team artifact).';
+  if (g.includes('drift') || g.includes('inference scores') || g.includes('monitoring')) return 'Push live score windows to /monitoring/scores so drift evaluation runs.';
+  if (g.includes('continuity') || g.includes('fallback') || g.includes('bcp')) return 'Configure the business-continuity fallback via /monitoring/bcp.';
+  if (g.includes('audit schedule') || g.includes('audit due')) return 'Set the next audit due date to establish a recurring audit schedule.';
+  if (g.includes('oversight') || g.includes('human')) return 'Enable human oversight or document the bounded autonomous scope.';
+  if (g.includes('secret')) return 'Remove the hardcoded credential from source, rotate it, and re-scan the project.';
+  return 'Assign an owner and schedule this item in the next governance review.';
 }
 
 const RISK_ORDER: Record<string, number> = { [RiskLevel.LOW]: 0, [RiskLevel.MEDIUM]: 1, [RiskLevel.HIGH]: 2 };
@@ -150,6 +166,10 @@ export class InventoryService {
       security_findings: orm.securityFindings ?? [],
       description_source: orm.descriptionSource ?? 'static',
       description_model: orm.descriptionModel ?? null,
+      detection_signals: orm.detectionSignals ?? [],
+      risk_rationale: orm.riskRationale ?? null,
+      risk_rationale_source: orm.riskRationaleSource ?? null,
+      risk_rationale_model: orm.riskRationaleModel ?? null,
     };
   }
 
@@ -363,7 +383,7 @@ export class InventoryService {
       modelType: orm.modelType,
       functionalArea: orm.functionalArea,
       existingDescription: orm.useCaseDescription || '',
-      signals: [],
+      signals: orm.detectionSignals ?? [],
       domainTags: [],
       humanOversightRequired: orm.humanOversightRequired,
       hasHardcodedSecret: Boolean(orm.securityFindings?.length),
@@ -389,6 +409,106 @@ export class InventoryService {
       summary: result.text,
       description_source: result.source,
       description_model: result.model,
+      ai_enabled: result.source === 'ai',
+      provider: result.provider,
+    };
+  }
+
+  /**
+   * Drafts an auditor-facing justification of the model's assigned risk level.
+   * The AI (or heuristic) is grounded in the triage engine's ACTUAL factors —
+   * explainTriageFactors mirrors the rules — so the rationale explains what the
+   * engine did rather than letting an LLM guess. Persisted with provenance; a
+   * later human edit via the governance form flips it to 'human'.
+   */
+  async draftRiskRationale(user: CurrentUser, modelId: string) {
+    const orm = await this.getOrThrow(modelId);
+    const entry = modelEntityToEntry(orm);
+    const factors = explainTriageFactors(entry, orm.securityFindings?.length ?? 0);
+
+    const result = await this.summarizer.draftForOrg(
+      user?.tenantId ?? null,
+      'risk_rationale',
+      {
+        name: orm.name,
+        model_type: orm.modelType,
+        functional_area: orm.functionalArea,
+        risk_level: orm.riskLevel,
+        triage_factors: factors.join('; '),
+        security_findings: orm.securityFindings?.length
+          ? orm.securityFindings.map((s) => `${s.type} (line ${s.line})`).join(', ')
+          : 'none',
+        human_oversight: String(orm.humanOversightRequired),
+        autonomous_scope: orm.autonomousScope ?? 'none declared',
+        existing_description: orm.useCaseDescription ?? '',
+      },
+      () =>
+        `${orm.name} is classified ${orm.riskLevel} risk. Basis: ${factors.join('; ')}. ` +
+        '(Auto-generated rationale — review and confirm before governance sign-off.)',
+    );
+
+    orm.riskRationale = result.text;
+    orm.riskRationaleSource = result.source;
+    orm.riskRationaleModel = result.model;
+    orm.updatedAt = new Date();
+    await this.models.save(orm);
+    await this.recordLedger(modelId, 'RISK_RATIONALE_DRAFTED',
+      { source: result.source, model: result.model ?? 'n/a', risk_level: orm.riskLevel },
+      user?.email ?? 'dashboard_user');
+
+    return {
+      model_id: modelId,
+      risk_rationale: result.text,
+      risk_rationale_source: result.source,
+      risk_rationale_model: result.model,
+      ai_enabled: result.source === 'ai',
+      provider: result.provider,
+    };
+  }
+
+  /**
+   * Drafts one actionable remediation step per open compliance gap, across all
+   * four frameworks. NOT persisted on the model — the draft is returned for
+   * human review; the UI can attach it as a 'remediation_plan' evidence
+   * artifact once accepted, which is how it enters the compliance chain.
+   */
+  async draftGapRemediation(user: CurrentUser, modelId: string) {
+    const orm = await this.getOrThrow(modelId);
+    const entry = modelEntityToEntry(orm);
+    const ctx = await this.buildValidationContext(modelId);
+    const gapLines: string[] = [
+      ...sutrasBlockingGaps(validateSutrasCompliance(entry)).map((g) => `[RBI FREE-AI] ${g}`),
+      ...frameworkBlockingGaps(validateNistRmf(entry, ctx)).map((g) => `[NIST AI RMF] ${g}`),
+      ...frameworkBlockingGaps(validateEuAiAct(entry, ctx)).map((g) => `[EU AI Act] ${g}`),
+      ...frameworkBlockingGaps(validateIso42001(entry, ctx)).map((g) => `[ISO 42001] ${g}`),
+    ];
+    if (!gapLines.length) {
+      return { model_id: modelId, open_gaps: 0, draft: null, message: 'No open compliance gaps — nothing to remediate.' };
+    }
+
+    const result = await this.summarizer.draftForOrg(
+      user?.tenantId ?? null,
+      'gap_remediation',
+      {
+        name: orm.name,
+        model_type: orm.modelType,
+        functional_area: orm.functionalArea,
+        risk_level: orm.riskLevel,
+        gaps: gapLines.join('\n'),
+      },
+      () => gapLines.map((g) => `• ${g}\n  → Action: ${heuristicRemediationStep(g)}`).join('\n'),
+    );
+
+    await this.recordLedger(modelId, 'REMEDIATION_PLAN_DRAFTED',
+      { source: result.source, model: result.model ?? 'n/a', open_gaps: gapLines.length },
+      user?.email ?? 'dashboard_user');
+
+    return {
+      model_id: modelId,
+      open_gaps: gapLines.length,
+      draft: result.text,
+      draft_source: result.source,
+      draft_model: result.model,
       ai_enabled: result.source === 'ai',
       provider: result.provider,
     };
@@ -527,6 +647,15 @@ export class InventoryService {
         orm.descriptionModel = null;
       }
       orm.useCaseDescription = dto.use_case_description;
+    }
+    if (dto.risk_rationale !== undefined && dto.risk_rationale !== null) {
+      if (dto.risk_rationale !== orm.riskRationale) {
+        // Ledger notes the provenance shift, not the full text (it can be long).
+        changes.risk_rationale = [orm.riskRationaleSource ?? '(none)', 'human'];
+        orm.riskRationaleSource = 'human';
+        orm.riskRationaleModel = null;
+      }
+      orm.riskRationale = dto.risk_rationale;
     }
 
     orm.updatedAt = new Date();

@@ -872,6 +872,101 @@ describe('SentrAI Console (e2e)', () => {
     }
   });
 
+  it('AI DRAFTS: signals reach the summary prompt; rationale + remediation carry provenance', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const AdmZip = (await import('adm-zip')).default;
+
+    const httpMod = await import('http');
+    let lastPrompt = '';
+    const mock = httpMod.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: any) => (body += c));
+      req.on('end', () => {
+        try { lastPrompt = JSON.parse(body)?.messages?.[0]?.content ?? ''; } catch { lastPrompt = ''; }
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ choices: [{ message: { content: 'DRAFT-MOCK output.' } }] }));
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.address() as any).port;
+
+    try {
+      const orgId = (await request(http).post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`)
+        .send({ name: 'Draft Org' })).body.organization_id;
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'draft@x.test', full_name: 'D', password: 'pw123456', role: 'CISO', organization_id: orgId }).expect(201);
+      const ciso = await login('draft@x.test', 'pw123456');
+      await request(http).post('/api/v1/ai/providers').set('Authorization', `Bearer ${ciso}`)
+        .send({ label: 'Draft Mock', adapter: 'openai-compat', base_url: `http://127.0.0.1:${mockPort}/v1`, model: 'dm-1' }).expect(201);
+
+      // Import a model whose file produces both an LLM signal and a secret.
+      const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${ciso}`).send({ name: 'Draft Repo' });
+      const zip = new AdmZip();
+      zip.addFile('svc/llm_scorer.py', Buffer.from(
+        'import openai\napi_key = "sk-fake-secret-abcdef1234"\n\ndef credit_score(x):\n    """LLM credit scorer."""\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n',
+      ));
+      await request(http).post(`/api/v1/projects/${p.body.project_id}/codebase`).set('Authorization', `Bearer ${ciso}`)
+        .attach('file', zip.toBuffer(), 'c.zip').expect(201);
+      await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${ciso}`)
+        .send({ project_id: p.body.project_id }).expect(201);
+      const imported = await request(http).post('/api/v1/discovery/import').set('Authorization', `Bearer ${ciso}`)
+        .send({ project_id: p.body.project_id, file_paths: ['svc/llm_scorer.py'], overwrite: true }).expect(201);
+      const modelId = imported.body[0].model_id;
+
+      // detectionSignals persisted and surfaced.
+      const list = await request(http).get(`/api/v1/inventory/models?project_id=${p.body.project_id}`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      const saved = list.body.find((m: any) => m.model_id === modelId);
+      expect(saved.detection_signals.length).toBeGreaterThan(0);
+
+      // (1) Summary prompt now carries the real signals.
+      await request(http).post(`/api/v1/inventory/models/${modelId}/summarize`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(lastPrompt).toContain('Static-analysis signals:');
+      for (const sig of saved.detection_signals.slice(0, 2)) expect(lastPrompt).toContain(sig);
+
+      // (2) Risk rationale: persisted with 'ai' provenance; prompt grounded in
+      // the engine's factors (risk level + the secret-floor explanation).
+      const rat = await request(http).post(`/api/v1/inventory/models/${modelId}/risk-rationale`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(rat.body.risk_rationale).toBe('DRAFT-MOCK output.');
+      expect(rat.body.risk_rationale_source).toBe('ai');
+      expect(lastPrompt).toContain('HIGH');
+      expect(lastPrompt).toContain('hardcoded secret');
+      expect(lastPrompt).not.toContain('sk-fake-secret-abcdef1234'); // secrets never leave
+
+      // Human edit flips rationale provenance to 'human'.
+      await request(http).patch(`/api/v1/inventory/models/${modelId}/governance`).set('Authorization', `Bearer ${ciso}`)
+        .send({ risk_rationale: 'Confirmed: HIGH due to credit decisioning + secret in source.', actor: 'test' }).expect(200);
+      const after = await request(http).get(`/api/v1/inventory/models?project_id=${p.body.project_id}`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(after.body.find((m: any) => m.model_id === modelId).risk_rationale_source).toBe('human');
+
+      // (3) Remediation draft: per-gap lines reach the provider; not persisted.
+      const rem = await request(http).post(`/api/v1/inventory/models/${modelId}/draft-remediation`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(rem.body.open_gaps).toBeGreaterThan(0);
+      expect(rem.body.draft).toBe('DRAFT-MOCK output.');
+      expect(lastPrompt).toContain('[RBI FREE-AI]');
+      expect(lastPrompt).toContain('Open gaps:');
+
+      // Heuristic fallback: disable the provider — drafts still work, labeled.
+      const provs = await request(http).get('/api/v1/ai/providers').set('Authorization', `Bearer ${ciso}`).expect(200);
+      await request(http).patch(`/api/v1/ai/providers/${provs.body[0].provider_id}`).set('Authorization', `Bearer ${ciso}`)
+        .send({ enabled: false }).expect(200);
+      const hRat = await request(http).post(`/api/v1/inventory/models/${modelId}/risk-rationale`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(hRat.body.risk_rationale_source).toBe('heuristic');
+      expect(hRat.body.risk_rationale).toContain('classified HIGH risk');
+      const hRem = await request(http).post(`/api/v1/inventory/models/${modelId}/draft-remediation`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(hRem.body.draft_source).toBe('heuristic');
+      expect(hRem.body.draft).toContain('→ Action:');
+    } finally {
+      await new Promise<void>((r) => mock.close(() => r()));
+    }
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)

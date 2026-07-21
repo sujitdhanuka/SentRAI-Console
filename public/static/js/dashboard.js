@@ -1119,6 +1119,19 @@ function descProvenanceTag(model) {
   return "";
 }
 
+// Provenance tag for the risk rationale (same scheme as descriptions):
+// AI/auto drafts are flagged for review; 'human' means confirmed.
+function rationaleProvenanceTag(model) {
+  const src = model?.risk_rationale_source;
+  if (src === "ai") {
+    const m = model.risk_rationale_model ? ` (${escapeHtml(model.risk_rationale_model)})` : "";
+    return `<span class="badge" style="background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed55;font-size:0.6rem;">✨ AI-drafted${m} — review</span>`;
+  }
+  if (src === "heuristic") return `<span class="badge" style="background:#6b728022;color:var(--muted);border:1px solid var(--border);font-size:0.6rem;">⚙ Auto-draft — review</span>`;
+  if (src === "human") return `<span class="badge COMPLIANT" style="font-size:0.6rem;">✓ human-confirmed</span>`;
+  return "";
+}
+
 // Tiny inline glyph for the inventory row, so unreviewed AI/auto descriptions are
 // visible at a glance without opening the panel.
 function descProvenanceGlyph(model) {
@@ -1416,7 +1429,11 @@ async function openGovernancePanel(modelId, name) {
       <h3>Close Governance Gaps — ${name}</h3>
       <button type="button" class="btn ghost small" id="btn-close-governance">✕</button>
     </div>
-    <div id="governance-gaps-list" style="margin-bottom:16px">Loading…</div>
+    <div id="governance-gaps-list" style="margin-bottom:10px">Loading…</div>
+    <div style="margin-bottom:16px;">
+      <button type="button" class="btn small secondary" id="btn-draft-remediation" data-id="${modelId}" title="AI-draft one actionable step per open gap — you review before it becomes evidence">✨ Draft remediation plan</button>
+      <div id="remediation-draft-out" style="margin-top:8px;"></div>
+    </div>
     <form id="governance-form">
       <div class="form-row">
         <label>Owner Team <input name="owner_team" value="${escapeHtml(model?.owner_team || '')}" placeholder="e.g. Platform Risk Team" /></label>
@@ -1433,6 +1450,13 @@ async function openGovernancePanel(modelId, name) {
           <button type="button" class="btn small ghost" id="btn-summarize" data-id="${modelId}" title="Rewrite as a plain-language governance summary you can review before saving">✨ Summarize</button>
         </span>
         <textarea name="use_case_description" rows="3">${escapeHtml(model?.use_case_description || '')}</textarea>
+      </label>
+      <label>
+        <span style="display:flex; align-items:center; gap:10px; justify-content:space-between; flex-wrap:wrap;">
+          <span>Risk Rationale <span id="rationale-provenance">${rationaleProvenanceTag(model)}</span></span>
+          <button type="button" class="btn small ghost" id="btn-draft-rationale" data-id="${modelId}" title="AI-draft an auditor-facing justification of the assigned risk level, grounded in the triage engine's actual factors">✨ Draft rationale</button>
+        </span>
+        <textarea name="risk_rationale" rows="3" placeholder="Why this model carries its assigned risk level — drafted by AI on demand, editable, and saved as your confirmed rationale.">${escapeHtml(model?.risk_rationale || '')}</textarea>
       </label>
       <fieldset>
         <legend>Sutras Declared</legend>
@@ -1475,6 +1499,73 @@ async function openGovernancePanel(modelId, name) {
     }
   });
 
+  tr.querySelector("#btn-draft-rationale").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const textarea = tr.querySelector('textarea[name="risk_rationale"]');
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "✨ Drafting…";
+    try {
+      const res = await api(`/inventory/models/${modelId}/risk-rationale`, { method: "POST" });
+      textarea.value = res.risk_rationale;
+      const cached = MODELS_CACHE.find((m) => m.model_id === modelId);
+      if (cached) {
+        cached.risk_rationale = res.risk_rationale;
+        cached.risk_rationale_source = res.risk_rationale_source;
+        cached.risk_rationale_model = res.risk_rationale_model;
+      }
+      const tag = tr.querySelector("#rationale-provenance");
+      if (tag) tag.innerHTML = rationaleProvenanceTag(cached || res);
+      toast(res.ai_enabled ? `Rationale drafted with ${res.provider} — review, edit, and Save to confirm` : "Rationale drafted from the triage engine's factors — review and Save to confirm");
+    } catch (err) {
+      toast("Draft failed: " + err.message, "error");
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+    }
+  });
+
+  tr.querySelector("#btn-draft-remediation").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const out = tr.querySelector("#remediation-draft-out");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "✨ Drafting…";
+    try {
+      const res = await api(`/inventory/models/${modelId}/draft-remediation`, { method: "POST" });
+      if (!res.draft) { out.innerHTML = `<div class="muted" style="font-size:0.74rem;">${escapeHtml(res.message || "No open gaps.")}</div>`; return; }
+      out.innerHTML = `
+        <div class="inline-panel" style="border:1px solid var(--border); border-radius:8px;">
+          <div class="muted" style="font-size:0.7rem; margin-bottom:6px;">
+            ${res.ai_enabled ? `✨ AI-drafted via ${escapeHtml(res.provider)}` : "⚙ Auto-drafted from known remediation patterns"}
+            · ${res.open_gaps} gap(s) · review before attaching
+          </div>
+          <textarea id="remediation-draft-text" rows="8" style="width:100%; font-size:0.72rem;">${escapeHtml(res.draft)}</textarea>
+          <div class="form-actions" style="display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">
+            <button type="button" class="btn ghost small" id="btn-remediation-dismiss">Dismiss</button>
+            <button type="button" class="btn primary small" id="btn-remediation-attach">Attach as evidence (remediation_plan)</button>
+          </div>
+        </div>`;
+      out.querySelector("#btn-remediation-dismiss").addEventListener("click", () => { out.innerHTML = ""; });
+      out.querySelector("#btn-remediation-attach").addEventListener("click", async () => {
+        try {
+          await api(`/inventory/models/${modelId}/evidence`, {
+            method: "POST",
+            body: JSON.stringify({
+              type: "remediation_plan",
+              ref: `remediation-draft:${new Date().toISOString().slice(0, 10)}`,
+              description: out.querySelector("#remediation-draft-text").value,
+              actor: "dashboard_user",
+            }),
+          });
+          toast("Remediation plan attached as evidence");
+          out.innerHTML = "";
+        } catch (err) { toast("Attach failed: " + err.message, "error"); }
+      });
+    } catch (err) {
+      toast("Draft failed: " + err.message, "error");
+    } finally {
+      btn.disabled = false; btn.textContent = original;
+    }
+  });
+
   tr.querySelector("#governance-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -1487,6 +1578,7 @@ async function openGovernancePanel(modelId, name) {
     payload.human_oversight_required = !!obj.human_oversight_required;
     if (obj.autonomous_scope) payload.autonomous_scope = obj.autonomous_scope;
     if (obj.use_case_description) payload.use_case_description = obj.use_case_description;
+    if (obj.risk_rationale) payload.risk_rationale = obj.risk_rationale;
     if (obj.last_red_team_date) payload.last_red_team_date = new Date(obj.last_red_team_date).toISOString();
     if (sutras.length) payload.sutras_alignment = sutras;
 

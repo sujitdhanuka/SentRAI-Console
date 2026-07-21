@@ -320,6 +320,8 @@ export class DiscoveryService {
         grievanceResolutionNotes: '',
         sourceRef: entry.sourceRef,
         securityFindings: cand.secrets.length ? cand.secrets : null,
+        // Unique signal categories — evidence for AI summaries / risk rationale.
+        detectionSignals: [...new Set(cand.signals.map((s) => s.category))],
         isActive: true,
         registeredAt: entry.registeredAt,
         updatedAt: entry.updatedAt,

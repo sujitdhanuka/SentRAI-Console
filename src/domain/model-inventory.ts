@@ -119,3 +119,34 @@ export function floorRiskForSecurityFindings(risk: RiskLevel, secretCount: numbe
   }
   return risk;
 }
+
+/**
+ * The human-readable reasons behind a model's triaged risk level — mirrors the
+ * exact rules in triageAiModel() + the security floor, so an AI-drafted (or
+ * heuristic) risk rationale is grounded in what the engine actually did rather
+ * than what an LLM guesses it did.
+ */
+export function explainTriageFactors(entry: AIModelEntry, secretCount = 0): string[] {
+  const fa = entry.functionalArea.toLowerCase();
+  const factors: string[] = [];
+  if (HIGH_USE_CASES.has(fa)) {
+    factors.push(`functional area '${entry.functionalArea}' is a high-risk use case (credit/fraud/trading class)`);
+  } else if (MEDIUM_USE_CASES.has(fa)) {
+    factors.push(`functional area '${entry.functionalArea}' is a medium-risk use case`);
+  } else {
+    factors.push(`functional area '${entry.functionalArea}' carries no elevated base risk`);
+  }
+  if (entry.autonomousScope && !entry.humanOversightRequired) {
+    factors.push(`declared autonomous scope ('${entry.autonomousScope}') with human oversight disabled escalates risk one level`);
+  }
+  if (entry.modelType === ModelType.GENERATIVE_AI && entry.humanOversightRequired === false) {
+    factors.push('generative-AI output without human oversight escalates customer-facing risk');
+  }
+  if (entry.humanOversightRequired) {
+    factors.push('human-in-the-loop review is required before outputs are acted on');
+  }
+  if (secretCount > 0) {
+    factors.push(`${secretCount} unremediated hardcoded secret(s) in source floor the risk at HIGH until removed`);
+  }
+  return factors;
+}
