@@ -114,6 +114,29 @@ export class AIModelEntity {
   @Column('varchar', { length: 100, nullable: true })
   riskRationaleModel!: string | null;
 
+  /** Remediation plan covering every open framework gap, same provenance scheme. */
+  @Column('text', { nullable: true })
+  gapRemediation!: string | null;
+
+  @Column('varchar', { length: 20, nullable: true })
+  gapRemediationSource!: string | null;
+
+  @Column('varchar', { length: 100, nullable: true })
+  gapRemediationModel!: string | null;
+
+  /**
+   * Every file this model was discovered in. A scan often finds the same model
+   * defined or invoked in several places; those are merged into one governed
+   * record rather than dropped, so the inventory count matches what the scan
+   * actually found. sourceRef stays the primary/first file for compatibility.
+   */
+  @Column('simple-json', { nullable: true })
+  sourceRefs!: string[] | null;
+
+  /** Audit trail of merges: which file was folded in, when, and by what match. */
+  @Column('simple-json', { nullable: true })
+  mergeHistory!: Array<{ source_ref: string; merged_at: string; matched_on: string }> | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

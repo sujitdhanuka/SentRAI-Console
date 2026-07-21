@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThanOrEqual, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { join } from 'path';
@@ -293,25 +293,93 @@ export class AiProvidersService {
     return { provider_id: orm.id, status, latency_ms: Date.now() - started, detail };
   }
 
-  /** Org AI usage: totals for cost visibility + the most recent calls. */
-  async usageSummary(user: CurrentUser, explicitOrgId?: string | null) {
+  /**
+   * Org LLM usage: totals, a daily series, and breakdowns by use case, model,
+   * provider and actor — the numbers a CISO needs to answer "what is our AI
+   * spend, is it reliable, and who is driving it".
+   */
+  async usageSummary(user: CurrentUser, explicitOrgId?: string | null, days = 30) {
     const tenantId = await this.resolveTenant(user, explicitOrgId);
-    const rows = await this.usageEvents.find({ where: { tenantId }, order: { createdAt: 'DESC' }, take: 500 });
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const rows = await this.usageEvents.find({
+      where: { tenantId, createdAt: MoreThanOrEqual(since) },
+      order: { createdAt: 'DESC' },
+      take: 5000,
+    });
     const ok = rows.filter((r) => r.status === 'ok');
+    const failed = rows.filter((r) => r.status !== 'ok');
     const sum = (xs: (number | null)[]): number => { let t = 0; for (const x of xs) t += x ?? 0; return t; };
+
+    /** Group rows by a key, returning counts + token totals, busiest first. */
+    const breakdown = (key: (r: AiUsageEventEntity) => string) => {
+      const m = new Map<string, { calls: number; ok: number; tokens_in: number; tokens_out: number; latency: number[] }>();
+      for (const r of rows) {
+        const k = key(r) || 'unknown';
+        const e = m.get(k) ?? { calls: 0, ok: 0, tokens_in: 0, tokens_out: 0, latency: [] };
+        e.calls += 1;
+        if (r.status === 'ok') { e.ok += 1; e.latency.push(r.latencyMs); }
+        e.tokens_in += r.tokensIn ?? 0;
+        e.tokens_out += r.tokensOut ?? 0;
+        m.set(k, e);
+      }
+      return [...m.entries()]
+        .map(([name, e]) => ({
+          name,
+          calls: e.calls,
+          ok_calls: e.ok,
+          failed_calls: e.calls - e.ok,
+          tokens_in: e.tokens_in,
+          tokens_out: e.tokens_out,
+          total_tokens: e.tokens_in + e.tokens_out,
+          avg_latency_ms: e.latency.length ? Math.round(sum(e.latency) / e.latency.length) : null,
+        }))
+        .sort((a, b) => b.calls - a.calls);
+    };
+
+    // Dense daily series (zero-filled) so a chart has no gaps.
+    const byDay = new Map<string, { calls: number; failed: number; tokens: number }>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(since.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      byDay.set(d, { calls: 0, failed: 0, tokens: 0 });
+    }
+    for (const r of rows) {
+      const d = new Date(r.createdAt).toISOString().slice(0, 10);
+      const e = byDay.get(d);
+      if (!e) continue;
+      e.calls += 1;
+      if (r.status !== 'ok') e.failed += 1;
+      e.tokens += (r.tokensIn ?? 0) + (r.tokensOut ?? 0);
+    }
+
     return {
       organization_id: tenantId,
+      window_days: days,
       total_calls: rows.length,
       ok_calls: ok.length,
-      failed_calls: rows.length - ok.length,
+      failed_calls: failed.length,
+      success_rate: rows.length ? Number((ok.length / rows.length).toFixed(3)) : null,
       tokens_in: sum(rows.map((r) => r.tokensIn)),
       tokens_out: sum(rows.map((r) => r.tokensOut)),
+      total_tokens: sum(rows.map((r) => r.tokensIn)) + sum(rows.map((r) => r.tokensOut)),
       avg_latency_ms: ok.length ? Math.round(sum(ok.map((r) => r.latencyMs)) / ok.length) : null,
+      p95_latency_ms: ok.length
+        ? [...ok.map((r) => r.latencyMs)].sort((a, b) => a - b)[Math.floor(ok.length * 0.95) === ok.length ? ok.length - 1 : Math.floor(ok.length * 0.95)]
+        : null,
+      // Kept for the existing compact usage strip.
       by_use_case: Object.fromEntries(
         [...new Set(rows.map((r) => r.useCase))].map((uc) => [uc, rows.filter((r) => r.useCase === uc).length]),
       ),
+      daily: [...byDay.entries()].map(([date, e]) => ({ date, ...e })),
+      use_cases: breakdown((r) => r.useCase),
+      models: breakdown((r) => r.model),
+      providers: breakdown((r) => r.provider),
+      actors: breakdown((r) => r.actor),
+      recent_failures: failed.slice(0, 10).map((r) => ({
+        use_case: r.useCase, provider: r.provider, model: r.model,
+        latency_ms: r.latencyMs, actor: r.actor, at: r.createdAt,
+      })),
       recent: rows.slice(0, 20).map((r) => ({
-        use_case: r.useCase, provider: r.provider, status: r.status,
+        use_case: r.useCase, provider: r.provider, model: r.model, status: r.status,
         tokens_in: r.tokensIn, tokens_out: r.tokensOut, latency_ms: r.latencyMs,
         actor: r.actor, at: r.createdAt,
       })),

@@ -28,8 +28,13 @@ export class AiUsageController {
   constructor(private readonly providers: AiProvidersService) {}
 
   @Get()
-  usage(@CurrentUser() user: CurrentUserType, @Query('organization_id') organizationId?: string) {
-    return this.providers.usageSummary(user, organizationId);
+  usage(
+    @CurrentUser() user: CurrentUserType,
+    @Query('organization_id') organizationId?: string,
+    @Query('days') days?: string,
+  ) {
+    const window = days ? Math.min(365, Math.max(1, parseInt(days, 10) || 30)) : 30;
+    return this.providers.usageSummary(user, organizationId, window);
   }
 }
 

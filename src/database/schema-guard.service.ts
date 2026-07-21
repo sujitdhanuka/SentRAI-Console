@@ -36,6 +36,18 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'riskRationale', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'riskRationaleSource', definition: 'VARCHAR(20) NULL' },
   { table: 'ai_models', column: 'riskRationaleModel', definition: 'VARCHAR(100) NULL' },
+  // ai-model.entity.ts — persisted remediation plan (Phase 5).
+  { table: 'ai_models', column: 'gapRemediation', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'gapRemediationSource', definition: 'VARCHAR(20) NULL' },
+  { table: 'ai_models', column: 'gapRemediationModel', definition: 'VARCHAR(100) NULL' },
+  // ai-model.entity.ts — duplicate scan hits merge into one record instead of being dropped.
+  { table: 'ai_models', column: 'sourceRefs', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'mergeHistory', definition: 'TEXT NULL' },
+  // project.entity.ts — board-facing executive narrative (Phase 5).
+  { table: 'projects', column: 'execNarrative', definition: 'TEXT NULL' },
+  { table: 'projects', column: 'execNarrativeSource', definition: 'VARCHAR(20) NULL' },
+  { table: 'projects', column: 'execNarrativeModel', definition: 'VARCHAR(100) NULL' },
+  { table: 'projects', column: 'execNarrativeAt', definition: 'DATETIME NULL' },
   // ai-provider-config.entity.ts — link to the self-registered inventory model.
   { table: 'ai_provider_configs', column: 'linkedModelId', definition: 'VARCHAR(36) NULL' },
 ];

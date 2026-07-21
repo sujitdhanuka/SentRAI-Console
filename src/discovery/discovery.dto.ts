@@ -48,4 +48,10 @@ export interface ImportedModel {
   source_ref: string;
   risk_level: RiskLevel;
   remaining_gaps: string[];
+  /** True when this scan hit was folded into a model that already existed. */
+  merged: boolean;
+  /** Every file this governed record now covers. */
+  source_refs: string[];
+  /** Set on a merge: which field matched the existing record ('name' | 'source_ref'). */
+  matched_on?: string;
 }

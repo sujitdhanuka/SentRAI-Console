@@ -1368,4 +1368,234 @@ describe('SentrAI Console (e2e)', () => {
     expect(history.body).toHaveLength(1);
     expect(history.body[0].status).toBe(evaluated.body.status);
   });
+
+  it('MERGE: a model found in several files becomes one record, not a dropped duplicate', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const AdmZip = (await import('adm-zip')).default;
+
+    const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Merge Repo' });
+    const projectId = p.body.project_id;
+
+    // The same scorer appears in two files: the definition and a caller that
+    // also leaks a credential. Both must land on ONE governed record.
+    const zip = new AdmZip();
+    zip.addFile('svc/fraud_scorer.py', Buffer.from(
+      'import openai\n\n' +
+      'def fraud_scorer(txn):\n    """Scores card transactions for fraud."""\n' +
+      '    return openai.chat.completions.create(model="gpt-4", messages=[])\n',
+    ));
+    zip.addFile('jobs/fraud_scorer.py', Buffer.from(
+      'import openai\n\n' +
+      'api_key = "sk-liveSecretValue9911"\n\n' +
+      'def fraud_scorer(batch):\n    """Nightly batch fraud scoring."""\n' +
+      '    return [openai.chat.completions.create(model="gpt-4", messages=[]) for _ in batch]\n',
+    ));
+    await request(http).post(`/api/v1/projects/${projectId}/codebase`).set('Authorization', `Bearer ${admin}`)
+      .attach('file', zip.toBuffer(), 'c.zip').expect(201);
+
+    const scan = await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId }).expect(201);
+    const paths = scan.body.candidates.map((c: any) => c.file_path);
+    expect(paths).toContain('svc/fraud_scorer.py');
+    expect(paths).toContain('jobs/fraud_scorer.py');
+
+    const imported = await request(http).post('/api/v1/discovery/import').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId, file_paths: paths }).expect(201);
+
+    // Every scanned candidate is accounted for — nothing silently vanishes.
+    expect(imported.body).toHaveLength(paths.length);
+    const merged = imported.body.filter((m: any) => m.merged);
+    expect(merged.length).toBeGreaterThan(0);
+
+    // The two same-named hits collapsed onto a single model id.
+    const scorerRows = imported.body.filter((m: any) => /fraud/i.test(m.name));
+    const distinctIds = new Set(scorerRows.map((m: any) => m.model_id));
+    expect(scorerRows.length).toBe(2);
+    expect(distinctIds.size).toBe(1);
+
+    const modelId = [...distinctIds][0] as string;
+    const list = await request(http).get(`/api/v1/inventory/models?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    const model = list.body.find((m: any) => m.model_id === modelId);
+    expect(model).toBeDefined();
+    // Both files are recorded, and the credential from the SECOND file still
+    // floors the merged record at HIGH.
+    expect(model.source_refs).toEqual(
+      expect.arrayContaining(['svc/fraud_scorer.py', 'jobs/fraud_scorer.py']),
+    );
+    expect(model.risk_level).toBe('HIGH');
+    expect(model.security_findings.length).toBeGreaterThan(0);
+    expect(model.merge_history).toHaveLength(1);
+
+    // The merge is on the immutable ledger, naming the file that was folded in.
+    const audit = await request(http).get(`/api/v1/inventory/models/${modelId}/ledger`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    const mergeEvent = audit.body.find((e: any) => e.event_type === 'MODEL_SOURCES_MERGED');
+    expect(mergeEvent).toBeDefined();
+    // Whichever file the scanner reached first became the record; the other
+    // was folded in and named on the ledger.
+    const both = ['svc/fraud_scorer.py', 'jobs/fraud_scorer.py'];
+    expect(both).toContain(mergeEvent.event_data.merged_source_ref);
+    expect(mergeEvent.event_data.merged_source_ref).not.toBe(model.source_ref);
+    expect(mergeEvent.event_data.all_source_refs).toEqual(expect.arrayContaining(both));
+  });
+
+  it('AUTO-GEN: import populates all three generations; re-scan backfills only what is missing', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const AdmZip = (await import('adm-zip')).default;
+
+    const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Autogen Repo' });
+    const projectId = p.body.project_id;
+
+    const zip = new AdmZip();
+    zip.addFile('svc/loan_ranker.py', Buffer.from(
+      'import openai\n\n' +
+      'def loan_ranker(app):\n    """Ranks loan applications by approval likelihood."""\n' +
+      '    return openai.chat.completions.create(model="gpt-4", messages=[])\n',
+    ));
+    await request(http).post(`/api/v1/projects/${projectId}/codebase`).set('Authorization', `Bearer ${admin}`)
+      .attach('file', zip.toBuffer(), 'c.zip').expect(201);
+
+    const scan = await request(http).post('/api/v1/discovery/scan').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId }).expect(201);
+    const paths = scan.body.candidates.map((c: any) => c.file_path);
+    const imported = await request(http).post('/api/v1/discovery/import').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId, file_paths: paths }).expect(201);
+    const modelId = imported.body[0].model_id;
+
+    // Generation is queued, not inline — wait for the queue to drain.
+    const drained = async () => {
+      for (let i = 0; i < 60; i++) {
+        const st = await request(http).get('/api/v1/inventory/generation-status')
+          .set('Authorization', `Bearer ${admin}`);
+        if (!st.body.running && st.body.queued === 0) return st.body;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error('generation queue did not drain');
+    };
+    await drained();
+
+    const read = async () => {
+      const list = await request(http).get(`/api/v1/inventory/models?project_id=${projectId}`)
+        .set('Authorization', `Bearer ${admin}`).expect(200);
+      return list.body.find((m: any) => m.model_id === modelId);
+    };
+
+    const after = await read();
+    // All three are populated with reviewable provenance (heuristic here — no
+    // provider is configured in the test env — but the same path AI takes).
+    expect(after.description_source).toBe('heuristic');
+    expect(after.risk_rationale).toBeTruthy();
+    expect(after.risk_rationale_source).toBe('heuristic');
+    expect(after.gap_remediation).toBeTruthy();
+    expect(after.gap_remediation_source).toBe('heuristic');
+
+    // A re-scan must not redo finished work: nothing is queued the second time.
+    const rescan = await request(http).post('/api/v1/inventory/models/rescan')
+      .set('Authorization', `Bearer ${admin}`).send({ project_id: projectId }).expect(200);
+    expect(rescan.body.generations_queued).toBe(0);
+
+    // But a model missing a generation IS backfilled by the re-scan.
+    const manual = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Hand Registered Scorer',
+        model_type: 'MACHINE_LEARNING',
+        functional_area: 'credit_underwriting',
+        use_case_description: 'Registered by hand, never summarised',
+        human_oversight_required: true,
+        board_policy_ref: 'BP-2',
+        project_id: projectId,
+      }).expect(201);
+
+    const rescan2 = await request(http).post('/api/v1/inventory/models/rescan')
+      .set('Authorization', `Bearer ${admin}`).send({ project_id: projectId }).expect(200);
+    expect(rescan2.body.generations_queued).toBeGreaterThan(0);
+    await drained();
+
+    const list2 = await request(http).get(`/api/v1/inventory/models?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    const backfilled = list2.body.find((m: any) => m.model_id === manual.body.model_id);
+    expect(backfilled.risk_rationale).toBeTruthy();
+    expect(backfilled.gap_remediation).toBeTruthy();
+  });
+
+  it('EXEC NARRATIVE: board paragraph is grounded in the rollup numbers and persisted', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Narrative Co' });
+    const projectId = p.body.project_id;
+
+    await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Board Reported Scorer',
+        model_type: 'GENERATIVE_AI',
+        functional_area: 'credit_underwriting',
+        use_case_description: 'LLM scores credit applications',
+        human_oversight_required: false,
+        board_policy_ref: '',
+        project_id: projectId,
+      }).expect(201);
+
+    const res = await request(http).post(`/api/v1/compliance/exec-narrative?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+
+    expect(res.body.narrative).toBeTruthy();
+    expect(res.body.narrative_source).toBe('heuristic');
+    // Grounded, not invented: the statistics handed to the model are returned
+    // alongside so a reviewer can check the paragraph against them.
+    expect(res.body.grounded_in.portfolio_stats).toContain('1 models registered');
+    expect(res.body.grounded_in.ci_metrics).toBeTruthy();
+
+    // Persisted on the project so the readiness report and console agree.
+    const rollup = await request(http).get(`/api/v1/compliance/portfolio?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(rollup.body.summary.total_models).toBe(1);
+  });
+
+  it('USAGE: the LLM usage dashboard aggregates metered calls by day, model and actor', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const org = await request(http).post('/api/v1/organizations/').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Usage Corp' }).expect(201);
+    const orgId = org.body.organization_id ?? org.body.id;
+
+    const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Usage Proj' });
+    const model = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Usage Scorer',
+        model_type: 'MACHINE_LEARNING',
+        functional_area: 'credit_underwriting',
+        use_case_description: 'Scores things',
+        human_oversight_required: true,
+        board_policy_ref: 'BP-9',
+        project_id: p.body.project_id,
+      }).expect(201);
+
+    // Drive real metered calls through the heuristic path.
+    await request(http).post(`/api/v1/inventory/models/${model.body.model_id}/summarize`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    await request(http).post(`/api/v1/inventory/models/${model.body.model_id}/risk-rationale`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+
+    const usage = await request(http).get(`/api/v1/ai/usage?organization_id=${orgId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+
+    // The dashboard shape the console renders.
+    expect(usage.body.window_days).toBe(30);
+    expect(usage.body.daily).toHaveLength(30);
+    expect(Array.isArray(usage.body.use_cases)).toBe(true);
+    expect(Array.isArray(usage.body.models)).toBe(true);
+    expect(Array.isArray(usage.body.actors)).toBe(true);
+    expect(usage.body).toHaveProperty('success_rate');
+    expect(usage.body).toHaveProperty('p95_latency_ms');
+    expect(usage.body).toHaveProperty('total_tokens');
+    // The window is honoured.
+    const short = await request(http).get(`/api/v1/ai/usage?organization_id=${orgId}&days=7`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(short.body.window_days).toBe(7);
+    expect(short.body.daily).toHaveLength(7);
+  });
 });

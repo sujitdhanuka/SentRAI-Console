@@ -16,6 +16,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { UsersModule } from './users/users.module';
 import { ProjectsModule } from './projects/projects.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { GenerationModule } from './inventory/generation.module';
 import { IncidentsModule } from './incidents/incidents.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { AuditModule } from './audit/audit.module';
@@ -45,6 +46,7 @@ import { AiModule } from './ai/ai.module';
     OrganizationsModule,
     UsersModule,
     ProjectsModule,
+    GenerationModule,
     InventoryModule,
     IncidentsModule,
     MonitoringModule,
