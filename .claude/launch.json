@@ -4,8 +4,23 @@
     {
       "name": "sentrai-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:dev"],
+      "runtimeArgs": [
+        "run",
+        "start:dev"
+      ],
       "port": 8002,
+      "autoPort": true
+    },
+    {
+      "name": "console-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "console-ui"
+      ],
+      "port": 5199,
       "autoPort": true
     }
   ]
