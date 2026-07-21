@@ -10,6 +10,7 @@ import { HeaderBar } from '../components/console/HeaderBar';
 import { IconRail } from '../components/console/IconRail';
 import { KpiBand } from '../components/console/KpiBand';
 import { Toasts } from '../components/ui/Toast';
+import { isDemoMode } from '../providers';
 import { useGovernanceData } from '../stores/governanceData';
 import { useConsoleUi } from '../stores/consoleUi';
 
@@ -56,7 +57,9 @@ export function InventoryDashboard() {
             </div>
           </main>
           <footer className="shrink-0 border-t border-border py-1 text-center font-mono text-[8.5px] text-text-tertiary">
-            sentRAI Console · demo data · governance status illustrative only
+            {isDemoMode
+              ? 'sentRAI Console · demo data · governance status illustrative only'
+              : 'sentRAI Console · live data · synced with the classic console'}
           </footer>
         </div>
       </div>

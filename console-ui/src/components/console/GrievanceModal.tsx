@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
-import { provider } from '../../providers/governance';
+import { provider } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
 
@@ -14,18 +14,21 @@ export function GrievanceModal() {
   const setGrievance = useConsoleUi((s) => s.setGrievance);
   const toast = useConsoleUi((s) => s.toast);
   const load = useGovernanceData((s) => s.load);
+  const components = useGovernanceData((s) => s.components);
   const ref = useRef<HTMLDivElement>(null);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
+  const [componentId, setComponentId] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setSubject('');
       setDescription('');
-      setTimeout(() => ref.current?.querySelector<HTMLElement>('input')?.focus(), 0);
+      setComponentId(components[0]?.id ?? '');
+      setTimeout(() => ref.current?.querySelector<HTMLElement>('select, input')?.focus(), 0);
     }
-  }, [open]);
+  }, [open, components]);
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +45,7 @@ export function GrievanceModal() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { id } = await provider.fileGrievance({ subject, description });
+      const { id } = await provider.fileGrievance({ subject, description, componentId: componentId || undefined });
       await load();
       toast(`Grievance ${id} filed`, 'positive');
       setGrievance(false);
@@ -64,6 +67,12 @@ export function GrievanceModal() {
           </button>
         </div>
         <form onSubmit={submit} className="space-y-3">
+          <select className={FIELD} required value={componentId} onChange={(e) => setComponentId(e.target.value)} aria-label="AI component concerned">
+            <option value="" disabled>— which AI component? —</option>
+            {components.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
           <input className={FIELD} required placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
           <textarea className={FIELD} required rows={4} placeholder="What happened, and which AI decision does it concern?" value={description} onChange={(e) => setDescription(e.target.value)} />
           <button type="submit" disabled={busy} className="w-full rounded-md bg-accent py-2 text-[11.5px] font-medium text-white hover:opacity-90 disabled:opacity-50">

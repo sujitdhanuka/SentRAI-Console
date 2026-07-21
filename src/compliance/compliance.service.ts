@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
-import { AIModelEntity, DeploymentGateEventEntity, ProjectEntity } from '../database/entities';
+import { AIModelEntity, DeploymentGateEventEntity, DriftReportEntity, ProjectEntity } from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
@@ -49,8 +49,79 @@ export class ComplianceService {
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     @InjectRepository(DeploymentGateEventEntity)
     private readonly gates: Repository<DeploymentGateEventEntity>,
+    @InjectRepository(DriftReportEntity)
+    private readonly drifts: Repository<DriftReportEntity>,
     private readonly inventory: InventoryService,
   ) {}
+
+  /**
+   * Fleet matrix for the dashboard UI: one call returning, per model, the four
+   * framework verdicts, the latest drift status, evidence presence, and the
+   * flattened blocking-gap list — so the dashboard never needs N per-model
+   * compliance calls. Tenant-scoped exactly like the portfolio rollup.
+   */
+  async matrix(user: CurrentUser, projectId?: string | null) {
+    const qb = this.models.createQueryBuilder('m').where('m.isActive = 1');
+    if (user.role !== Role.ADMIN && user.tenantId) {
+      qb.innerJoin(ProjectEntity, 'p', 'p.id = m.projectId').andWhere('p.tenantId = :tid', { tid: user.tenantId });
+    }
+    if (projectId) qb.andWhere('m.projectId = :pid', { pid: projectId });
+    const models = await qb.getMany();
+
+    // Latest drift status per model, one query (newest first, first-seen wins).
+    const driftByModel = new Map<string, string>();
+    if (models.length) {
+      const rows = await this.drifts
+        .createQueryBuilder('d')
+        .where('d.modelId IN (:...ids)', { ids: models.map((m) => m.id) })
+        .orderBy('d.computedAt', 'DESC')
+        .getMany();
+      for (const r of rows) if (!driftByModel.has(r.modelId)) driftByModel.set(r.modelId, r.status);
+    }
+    const driftUi = (s?: string) =>
+      !s || s === 'NOMINAL' ? 'ok' : s === 'WARNING' ? 'warn' : 'alert';
+
+    const severity = (risk: string) => (HIGH_RISK.has(risk) ? 'HIGH' : risk === 'MEDIUM' ? 'MED' : 'LOW');
+
+    const components = [] as Record<string, any>[];
+    const gaps = [] as Record<string, any>[];
+    for (const m of models) {
+      const report = await this.inventory.complianceCheck(m.id);
+      const perFw: Array<[string, string, any]> = [
+        ['rbi', 'RBI FREE-AI', report],
+        ['nist', 'NIST AI RMF', report.nist_rmf],
+        ['eu', 'EU AI Act', report.eu_ai_act],
+        ['iso', 'ISO 42001', report.iso_42001],
+      ];
+      const frameworks: Record<string, { status: string }> = {};
+      for (const [key, label, r] of perFw) {
+        frameworks[key] = { status: r?.overall_pass ? 'ok' : 'gap' };
+        for (const g of r?.blocking_gaps ?? []) {
+          gaps.push({ model_id: m.id, framework: label, description: g, severity: severity(m.riskLevel) });
+        }
+      }
+      components.push({
+        model_id: m.id,
+        name: m.name,
+        description: m.useCaseDescription,
+        lifecycle_stage: m.lifecycleStage,
+        risk_level: m.riskLevel,
+        owner_team: m.ownerTeam,
+        model_type: m.modelType,
+        human_oversight_required: m.humanOversightRequired,
+        autonomous_scope: m.autonomousScope,
+        sutras_alignment: m.sutrasAlignment ?? [],
+        board_policy_ref: m.boardPolicyRef || null,
+        last_red_team_date: m.lastRedTeamDate,
+        next_audit_due: m.nextAuditDue,
+        grievance_count: m.grievanceCount,
+        has_evidence: (m.evidenceArtifacts?.length ?? 0) > 0,
+        drift: driftUi(driftByModel.get(m.id)),
+        frameworks,
+      });
+    }
+    return { generated_at: new Date().toISOString(), components, gaps };
+  }
 
   /**
    * Portfolio-level compliance rollup: runs every framework validator over every

@@ -1,4 +1,4 @@
-import { CalendarEvent } from '../../providers/governance';
+import { CalendarEvent } from '../../providers';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';
 

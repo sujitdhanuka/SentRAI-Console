@@ -1,4 +1,4 @@
-import { AIComponent, GovernanceGap, Grievance } from '../../providers/governance';
+import { AIComponent, GovernanceGap, Grievance } from '../../providers';
 import { Skeleton } from '../ui/Skeleton';
 
 interface Kpi {

@@ -19,6 +19,12 @@ export class ComplianceController {
     return this.compliance.portfolio(user, projectId ?? null);
   }
 
+  /** Fleet matrix for the dashboard: per-model framework verdicts + drift + gaps in one call. */
+  @Get('matrix')
+  matrix(@CurrentUser() user: CurrentUserType, @Query('project_id') projectId?: string) {
+    return this.compliance.matrix(user, projectId ?? null);
+  }
+
   /** Portfolio-level framework readiness PDF (executive/auditor deliverable). */
   @Get('portfolio/export-pdf')
   async portfolioPdf(

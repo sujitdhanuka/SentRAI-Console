@@ -1,6 +1,6 @@
 import { PencilLine, Sparkles } from 'lucide-react';
 
-import { AIComponent } from '../../providers/governance';
+import { AIComponent } from '../../providers';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';

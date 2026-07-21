@@ -1051,6 +1051,33 @@ describe('SentrAI Console (e2e)', () => {
     }
   });
 
+  it('MATRIX: fleet endpoint returns per-model framework verdicts + gaps, tenant-scoped', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const orgId = (await request(http).post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Matrix Org' })).body.organization_id;
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'matrix@x.test', full_name: 'MX', password: 'pw123456', role: 'CISO', organization_id: orgId }).expect(201);
+    const ciso = await login('matrix@x.test', 'pw123456');
+
+    const p = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${ciso}`).send({ name: 'Matrix Proj' });
+    const reg = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${ciso}`)
+      .send({ name: 'Matrix Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'credit_underwriting', use_case_description: 'scores', project_id: p.body.project_id }).expect(201);
+
+    const mx = await request(http).get('/api/v1/compliance/matrix').set('Authorization', `Bearer ${ciso}`).expect(200);
+    // Tenant-scoped: exactly this org's model, with all four framework verdicts.
+    expect(mx.body.components).toHaveLength(1);
+    const row = mx.body.components[0];
+    expect(row.model_id).toBe(reg.body.model_id);
+    expect(Object.keys(row.frameworks).sort()).toEqual(['eu', 'iso', 'nist', 'rbi']);
+    for (const f of Object.values<any>(row.frameworks)) expect(['ok', 'gap']).toContain(f.status);
+    expect(['ok', 'warn', 'alert']).toContain(row.drift);
+    // An ungoverned HIGH-risk model must surface HIGH-severity gaps with framework labels.
+    const rowGaps = mx.body.gaps.filter((g: any) => g.model_id === row.model_id);
+    expect(rowGaps.length).toBeGreaterThan(0);
+    expect(rowGaps.every((g: any) => g.severity === 'HIGH')).toBe(true);
+    expect(new Set(rowGaps.map((g: any) => g.framework)).size).toBeGreaterThan(1);
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)

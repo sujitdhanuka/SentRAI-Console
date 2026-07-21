@@ -1,7 +1,7 @@
 import { AlertTriangle, Eye } from 'lucide-react';
 import { KeyboardEvent } from 'react';
 
-import { AIComponent, GovernanceGap } from '../../providers/governance';
+import { AIComponent, GovernanceGap } from '../../providers';
 import { EnvFilter, useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
 import { Panel, PanelError } from '../ui/Panel';
