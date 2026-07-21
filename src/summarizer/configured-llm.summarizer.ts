@@ -18,6 +18,8 @@ export class ConfiguredLlmSummarizer implements Summarizer {
     readonly model: string,
     private readonly apiKey: string | null,
     private readonly maxSnippetChars: number,
+    /** The vault-resolved template body (org's active version or the default). */
+    private readonly template: string,
   ) {}
 
   async generate(ctx: SummarizationContext): Promise<SummaryResult> {
@@ -26,7 +28,7 @@ export class ConfiguredLlmSummarizer implements Summarizer {
       baseUrl: this.baseUrl,
       model: this.model,
       apiKey: this.apiKey,
-      prompt: buildSummaryPrompt(ctx, this.maxSnippetChars),
+      prompt: buildSummaryPrompt(ctx, this.template, this.maxSnippetChars),
       maxTokens: 400,
       timeoutMs: 45_000,
     });

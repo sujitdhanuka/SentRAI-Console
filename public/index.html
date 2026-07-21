@@ -732,6 +732,19 @@
       <div id="ai-providers-list" style="margin-top:20px;">
         <div class="empty-state">Loading…</div>
       </div>
+
+      <div class="panel-head" style="margin-top:38px;">
+        <h2 style="font-size:1.02rem;">Prompt Vault</h2>
+      </div>
+      <p class="muted" style="margin-top:0; max-width:78ch;">
+        The exact instructions sent to the AI for each task. Every edit is saved as a <b>new
+        version</b> — nothing is overwritten, so the vault doubles as an audit trail of which
+        prompt drove which output. Restore any prior version, or reset to the system default.
+        <code>{{variables}}</code> are filled in from the model being processed.
+      </p>
+      <div id="prompt-vault-list">
+        <div class="empty-state">Loading…</div>
+      </div>
     </section>
 
   </main>

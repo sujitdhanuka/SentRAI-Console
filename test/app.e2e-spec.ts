@@ -784,6 +784,94 @@ describe('SentrAI Console (e2e)', () => {
     }
   });
 
+  it('PROMPT VAULT: versioned org templates — validation, history, restore, reset, and reaching the LLM', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    // Mock LLM that records the prompt it was sent.
+    const httpMod = await import('http');
+    let lastPrompt = '';
+    const mock = httpMod.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: any) => (body += c));
+      req.on('end', () => {
+        try { lastPrompt = JSON.parse(body)?.messages?.[0]?.content ?? ''; } catch { lastPrompt = ''; }
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ choices: [{ message: { content: 'VAULT-MOCK output.' } }] }));
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.address() as any).port;
+
+    try {
+      const mkOrg = async (name: string) => (await request(http)
+        .post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`).send({ name })).body.organization_id;
+      const orgA = await mkOrg('Vault Org A');
+      const orgB = await mkOrg('Vault Org B');
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'vault-a@x.test', full_name: 'VA', password: 'pw123456', role: 'CISO', organization_id: orgA }).expect(201);
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'vault-b@x.test', full_name: 'VB', password: 'pw123456', role: 'CISO', organization_id: orgB }).expect(201);
+      const cisoA = await login('vault-a@x.test', 'pw123456');
+      const cisoB = await login('vault-b@x.test', 'pw123456');
+
+      // Defaults: all four use cases listed, none customized.
+      const defaults = await request(http).get('/api/v1/ai/prompts').set('Authorization', `Bearer ${cisoA}`).expect(200);
+      expect(defaults.body.map((p: any) => p.use_case).sort())
+        .toEqual(['exec_narrative', 'gap_remediation', 'model_summary', 'risk_rationale']);
+      expect(defaults.body.every((p: any) => p.customized === false)).toBe(true);
+
+      // Validation: dropping a required variable is a hard 400…
+      await request(http).put('/api/v1/ai/prompts/model_summary').set('Authorization', `Bearer ${cisoA}`)
+        .send({ body: 'Summarize something without the model name.' }).expect(400);
+      // …an unknown variable is a warning, not a block.
+      const warned = await request(http).put('/api/v1/ai/prompts/model_summary').set('Authorization', `Bearer ${cisoA}`)
+        .send({ body: 'CUSTOM-VAULT-PROMPT for {{name}} with {{tyop}}.' }).expect(200);
+      expect(warned.body.version).toBe(1);
+      expect(warned.body.warnings[0]).toContain('{{tyop}}');
+
+      // v2 becomes active; history shows both, newest first.
+      const v2 = await request(http).put('/api/v1/ai/prompts/model_summary').set('Authorization', `Bearer ${cisoA}`)
+        .send({ body: 'CUSTOM-VAULT-PROMPT-V2 for {{name}} ({{model_type}}).', change_note: 'tightened' }).expect(200);
+      expect(v2.body.version).toBe(2);
+      const hist = await request(http).get('/api/v1/ai/prompts/model_summary/history').set('Authorization', `Bearer ${cisoA}`).expect(200);
+      expect(hist.body.map((h: any) => h.version)).toEqual([2, 1]);
+      expect(hist.body[0].active).toBe(true);
+      expect(hist.body[0].change_note).toBe('tightened');
+
+      // Tenant isolation: org B still sees the pristine default.
+      const bList = await request(http).get('/api/v1/ai/prompts').set('Authorization', `Bearer ${cisoB}`).expect(200);
+      expect(bList.body.find((p: any) => p.use_case === 'model_summary').customized).toBe(false);
+
+      // The custom template actually reaches the provider: register a provider
+      // for org A, summarize, and inspect the prompt the mock received.
+      await request(http).post('/api/v1/ai/providers').set('Authorization', `Bearer ${cisoA}`)
+        .send({ label: 'Vault Mock', adapter: 'openai-compat', base_url: `http://127.0.0.1:${mockPort}/v1`, model: 'vm-1' }).expect(201);
+      const reg = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${cisoA}`)
+        .send({ name: 'Vaulted Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'risk_scoring', use_case_description: 'scores' }).expect(201);
+      await request(http).post(`/api/v1/inventory/models/${reg.body.model_id}/summarize`)
+        .set('Authorization', `Bearer ${cisoA}`).expect(200);
+      expect(lastPrompt).toContain('CUSTOM-VAULT-PROMPT-V2 for Vaulted Scorer (MACHINE_LEARNING).');
+
+      // Restore v1 → lands as v3 with v1's body; then reset → default applies.
+      const restored = await request(http).post('/api/v1/ai/prompts/model_summary/restore/1')
+        .set('Authorization', `Bearer ${cisoA}`).send({}).expect(200);
+      expect(restored.body.version).toBe(3);
+      await request(http).post('/api/v1/ai/prompts/model_summary/reset').set('Authorization', `Bearer ${cisoA}`).send({}).expect(200);
+      const after = await request(http).get('/api/v1/ai/prompts').set('Authorization', `Bearer ${cisoA}`).expect(200);
+      const ms = after.body.find((p: any) => p.use_case === 'model_summary');
+      expect(ms.customized).toBe(false);
+      expect(ms.version_count).toBe(3); // history preserved through reset
+
+      // After reset, the DEFAULT prompt drives the next generation.
+      await request(http).post(`/api/v1/inventory/models/${reg.body.model_id}/summarize`)
+        .set('Authorization', `Bearer ${cisoA}`).expect(200);
+      expect(lastPrompt).toContain('You are an AI-governance analyst.');
+      expect(lastPrompt).not.toContain('CUSTOM-VAULT-PROMPT');
+    } finally {
+      await new Promise<void>((r) => mock.close(() => r()));
+    }
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)
