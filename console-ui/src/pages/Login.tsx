@@ -22,9 +22,7 @@ export function Login() {
     <div className="flex h-screen items-center justify-center bg-bg px-4 font-ui text-text">
       <div className="w-full max-w-[340px]">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent font-heading text-lg font-bold text-white">
-            S
-          </div>
+          <img src="/static/logo.png" alt="sentRAI Console" className="h-12 w-12 rounded-xl object-contain" />
           <h1 className="font-heading text-[15px] font-medium">sentRAI Console</h1>
           <p className="text-center text-[11px] text-text-secondary">
             AI governance · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
