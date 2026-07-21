@@ -270,12 +270,14 @@
           </select>
           <span class="muted" id="models-count" style="margin-left:auto; font-size:0.72rem; white-space:nowrap;"></span>
         </div>
-        <table class="data-table" id="models-table">
-          <thead>
-            <tr><th data-sort="name">Name</th><th data-sort="risk">Risk</th><th data-sort="compliance">Compliance</th><th data-sort="lifecycle">Lifecycle</th><th data-sort="oversight">Oversight</th><th>Grievances</th><th data-sort="registered">Registered</th><th>Actions</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="data-table" id="models-table">
+            <thead>
+              <tr><th data-sort="name">Name</th><th data-sort="risk">Risk</th><th data-sort="compliance">Compliance</th><th data-sort="lifecycle">Lifecycle</th><th data-sort="oversight">Oversight</th><th>Grievances</th><th data-sort="registered">Registered</th><th>Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
         <div class="empty-state" id="models-empty">No models registered yet.</div>
       </div>
     </section>

@@ -1092,6 +1092,15 @@ function securityChip(findings) {
   return `<br/><span class="badge risk-HIGH" style="font-size:0.6rem;margin-top:4px;display:inline-block;" title="${escapeHtml(detail)}">🔓 ${n} hardcoded secret${n > 1 ? "s" : ""} in source</span>`;
 }
 
+// Scanned paths carry the extracted-archive root (e.g. "owner-repo-<sha>/src/…"),
+// a long unbreakable token that blows out the table width. Show the meaningful
+// tail; the full path stays available in the title tooltip.
+function shortPath(p, maxSegments = 3) {
+  const parts = String(p || "").split("/").filter(Boolean);
+  if (parts.length <= maxSegments) return String(p || "");
+  return "…/" + parts.slice(-maxSegments).join("/");
+}
+
 // Provenance tag for a model's description. Flags an AI/auto draft that a human
 // hasn't confirmed yet; nothing for human-written or plain docstring text.
 function descProvenanceTag(model) {
@@ -1181,7 +1190,7 @@ function renderModelTable() {
         <td>
           <strong>${m.name}</strong>
           ${m.use_case_description ? `<div style="font-size:0.7rem; color:var(--muted); max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;" title="${escapeHtml(m.use_case_description)}">${descProvenanceGlyph(m)}${escapeHtml(m.use_case_description)}</div>` : ""}
-          <br/><span class="muted">${shortId(m.model_id)}</span>${projectFilter ? "" : projectLabel(m.project_id)}${m.source_ref ? `<br/><span class="muted" style="font-size:0.62rem">📄 ${m.source_ref}</span>` : ""}
+          <br/><span class="muted">${shortId(m.model_id)}</span>${projectFilter ? "" : projectLabel(m.project_id)}${m.source_ref ? `<br/><span class="muted src-ref" title="${escapeHtml(m.source_ref)}">📄 ${escapeHtml(shortPath(m.source_ref))}</span>` : ""}
           ${securityChip(m.security_findings)}
         </td>
         <td>${badge(m.risk_level, "risk-" + m.risk_level)}</td>
@@ -1199,8 +1208,9 @@ function renderModelTable() {
         <td>${m.human_oversight_required ? "✅" : "—"}</td>
         <td><button class="btn small ghost grievance-btn" data-id="${m.model_id}">+ Grievance</button></td>
         <td>${fmtDate(m.registered_at)}</td>
-        <td>
-          <button class="btn small ghost ledger-btn" data-id="${m.model_id}" data-name="${m.name}">View Ledger</button>
+        <td class="row-actions">
+          <button class="btn small ghost edit-gov-btn" data-id="${m.model_id}" data-name="${m.name}" title="Edit governance (owner, policy ref, oversight, description)">✎ Edit</button>
+          <button class="btn small ghost ledger-btn" data-id="${m.model_id}" data-name="${m.name}">Ledger</button>
           <button class="btn small ghost remove-model-btn" data-id="${m.model_id}" data-name="${m.name}" title="Remove from inventory (e.g. a discovery false-positive)">🗑</button>
         </td>
       </tr>
@@ -1221,7 +1231,9 @@ function renderModelTable() {
       });
     });
 
-    tbody.querySelectorAll(".close-gaps-btn").forEach((btn) => {
+    // Both the "N gap(s) — Close" CTA and the always-present "✎ Edit" action open
+    // the same governance editor — a compliant model must still be editable.
+    tbody.querySelectorAll(".close-gaps-btn, .edit-gov-btn").forEach((btn) => {
       btn.addEventListener("click", () => openGovernancePanel(btn.dataset.id, btn.dataset.name));
     });
 
