@@ -6,7 +6,7 @@ import {
   GovernanceGap,
   Grievance,
   provider,
-} from '../providers/governance';
+} from '../providers';
 
 /** Fetch-state for everything the dashboard shows; `load()` doubles as retry
  *  and as the post-save refetch. */

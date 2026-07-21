@@ -1,7 +1,7 @@
 import { FileDown, MessageSquarePlus, Moon, ShieldCheck, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { provider } from '../../providers/governance';
+import { provider } from '../../providers';
 import { EnvFilter, useConsoleUi } from '../../stores/consoleUi';
 
 const ENVS: EnvFilter[] = ['All', 'PROD', 'STAGING', 'DEV'];
@@ -23,7 +23,8 @@ export function HeaderBar() {
   const exportAudit = async () => {
     try {
       const { url } = await provider.exportAudit();
-      toast(`Audit report ready · ${url.split('/').pop()}`, 'positive');
+      if (url.startsWith('blob:')) window.open(url, '_blank');
+      toast('Audit report ready', 'positive');
     } catch {
       toast('Audit export failed', 'negative');
     }

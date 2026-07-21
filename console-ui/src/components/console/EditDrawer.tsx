@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
-import { AIComponent, provider, SUTRAS } from '../../providers/governance';
+import { AIComponent, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
 
@@ -35,7 +35,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
         autonomousScope: component.autonomousScope ?? '',
         useCase: component.useCase ?? component.description,
         riskRationale: component.riskRationale ?? '',
-        sutras: SUTRAS.map((_, i) => i < component.sutrasDeclared),
+        // Prefer the exact declared sutras (HTTP mode); fall back to count-only.
+        sutras: component.sutras
+          ? SUTRA_ENUM.map((v) => component.sutras!.includes(v))
+          : SUTRAS.map((_, i) => i < component.sutrasDeclared),
       });
       setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
     }
@@ -74,6 +77,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
         useCase: form.useCase,
         riskRationale: form.riskRationale,
         sutrasDeclared: form.sutras.filter(Boolean).length,
+        sutras: SUTRA_ENUM.filter((_, i) => form.sutras[i]),
       });
       await load();
       toast('Compliance re-checked', 'positive');

@@ -1,6 +1,6 @@
 import { CheckCircle2, Link2, MinusCircle, XCircle } from 'lucide-react';
 
-import { FrameworkCheck } from '../../providers/governance';
+import { FrameworkCheck } from '../../providers';
 
 /**
  * One framework check: status icon + evidence affordance. Compliance must be

@@ -7,7 +7,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
-import { STATIC_DIR, IMAGES_DIR } from './common/paths';
+import { STATIC_DIR, IMAGES_DIR, DASHBOARD_DIR } from './common/paths';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -59,6 +59,8 @@ import { AiModule } from './ai/ai.module';
     ServeStaticModule.forRoot(
       { rootPath: STATIC_DIR, serveRoot: '/static' },
       { rootPath: IMAGES_DIR, serveRoot: '/images' },
+      // The React fleet dashboard (console-ui), built into public/dashboard.
+      { rootPath: DASHBOARD_DIR, serveRoot: '/dashboard' },
     ),
   ],
   controllers: [AppController],

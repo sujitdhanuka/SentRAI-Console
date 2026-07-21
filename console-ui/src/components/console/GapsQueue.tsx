@@ -1,4 +1,4 @@
-import { AIComponent, GovernanceGap } from '../../providers/governance';
+import { AIComponent, GovernanceGap } from '../../providers';
 import { Badge } from '../ui/Badge';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';

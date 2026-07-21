@@ -1,4 +1,5 @@
 import {
+  PanelsTopLeft,
   Boxes,
   FileText,
   LayoutDashboard,
@@ -48,6 +49,14 @@ export function IconRail() {
           <Icon size={17} strokeWidth={1.75} />
         </button>
       ))}
+      <a
+        href="/console"
+        title="Classic console (projects, scanning, AI settings)"
+        aria-label="Classic console"
+        className="mt-auto flex h-9 w-9 items-center justify-center rounded-md text-text-tertiary hover:bg-surface-hover hover:text-text-secondary"
+      >
+        <PanelsTopLeft size={17} strokeWidth={1.75} />
+      </a>
     </nav>
   );
 }

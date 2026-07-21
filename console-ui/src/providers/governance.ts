@@ -32,6 +32,8 @@ export interface AIComponent {
   boardPolicyRef: string | null;
   useCase?: string;
   riskRationale?: string;
+  /** Exact sutra enum values when known (HTTP mode); count-only in the mock. */
+  sutras?: string[];
   frameworks: {
     rbi: FrameworkCheck;
     nist: FrameworkCheck;
@@ -77,8 +79,9 @@ export interface GovernanceProvider {
   getCalendar(): Promise<CalendarEvent[]>;
   getGrievances(): Promise<Grievance[]>;
   saveComponent(c: Partial<AIComponent> & { id: string }): Promise<void>;
-  /** Returns the generated id so the UI can toast it. */
-  fileGrievance(g: Pick<Grievance, 'subject' | 'description'>): Promise<{ id: string }>;
+  /** Returns the generated id so the UI can toast it. componentId targets the
+   *  model the grievance concerns (required by the live backend; mock ignores). */
+  fileGrievance(g: Pick<Grievance, 'subject' | 'description'> & { componentId?: string }): Promise<{ id: string }>;
   exportAudit(): Promise<{ url: string }>;
 }
 
@@ -213,10 +216,10 @@ export class MockGovernanceProvider implements GovernanceProvider {
     this.append('saveComponent', c.id);
   }
 
-  async fileGrievance(g: Pick<Grievance, 'subject' | 'description'>): Promise<{ id: string }> {
+  async fileGrievance(g: Pick<Grievance, 'subject' | 'description'> & { componentId?: string }): Promise<{ id: string }> {
     await delay(300);
     const id = `GRV-${this.grievanceSeq++}`;
-    this.grievances.unshift({ id, ...g, status: 'open', filedAt: new Date().toISOString().slice(0, 10) });
+    this.grievances.unshift({ id, subject: g.subject, description: g.description, status: 'open', filedAt: new Date().toISOString().slice(0, 10) });
     this.append('fileGrievance', id);
     return { id };
   }
@@ -227,5 +230,3 @@ export class MockGovernanceProvider implements GovernanceProvider {
     return { url: 'https://reports.sentrai.demo/audit-latest.pdf' };
   }
 }
-
-export const provider: GovernanceProvider = new MockGovernanceProvider();

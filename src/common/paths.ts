@@ -10,6 +10,7 @@ export const PUBLIC_DIR = join(process.cwd(), 'public');
 export const DOCS_DIR = join(PUBLIC_DIR, 'docs');
 export const IMAGES_DIR = join(DOCS_DIR, 'images');
 export const STATIC_DIR = join(PUBLIC_DIR, 'static');
+export const DASHBOARD_DIR = join(PUBLIC_DIR, 'dashboard');
 export const INDEX_HTML = join(PUBLIC_DIR, 'index.html');
 export const LANDING_HTML = join(PUBLIC_DIR, 'landing.html');
 /**
