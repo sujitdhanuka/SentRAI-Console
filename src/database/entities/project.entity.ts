@@ -45,4 +45,21 @@ export class ProjectEntity {
   @Index()
   @Column('varchar', { length: 36, nullable: true })
   tenantId!: string | null;
+
+  /**
+   * Board-facing executive summary of this project's governance posture, with
+   * the same provenance scheme as the per-model generations. Regenerated on
+   * demand — it reflects the portfolio at the moment it was drafted.
+   */
+  @Column('text', { nullable: true })
+  execNarrative!: string | null;
+
+  @Column('varchar', { length: 20, nullable: true })
+  execNarrativeSource!: string | null;
+
+  @Column('varchar', { length: 100, nullable: true })
+  execNarrativeModel!: string | null;
+
+  @Column('datetime', { nullable: true })
+  execNarrativeAt!: Date | null;
 }

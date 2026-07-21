@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -33,6 +34,7 @@ import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { DiscoveredCandidate, scanDirectory } from '../discovery/codebase-scanner';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { SummarizerService } from '../summarizer/summarizer.service';
+import { GenerationQueueService } from './generation-queue.service';
 import { SummarizationContext } from '../summarizer/summarizer.types';
 import { redactSecrets } from '../summarizer/redact';
 import { existsSync, readFileSync, statSync } from 'fs';
@@ -89,7 +91,7 @@ const PLAN_MODEL_LIMITS: Record<string, number | null> = {
 };
 
 @Injectable()
-export class InventoryService {
+export class InventoryService implements OnModuleInit {
   constructor(
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
@@ -103,7 +105,22 @@ export class InventoryService {
     private readonly notifier: NotifierService,
     private readonly config: ConfigService,
     private readonly summarizer: SummarizerService,
+    private readonly genQueue: GenerationQueueService,
   ) {}
+
+  /**
+   * The queue holds only ids; the actual drafting lives here, so it is wired in
+   * once at boot. Going through the same public methods the buttons call means
+   * auto-generated content is identical to hand-triggered content — same
+   * prompts, same provenance, same ledger events.
+   */
+  onModuleInit(): void {
+    this.genQueue.setRunner(async (user, modelId, kind) => {
+      if (kind === 'summary') await this.summarizeModel(user, modelId);
+      else if (kind === 'risk_rationale') await this.draftRiskRationale(user, modelId);
+      else await this.draftGapRemediation(user, modelId);
+    });
+  }
 
   /** Append a ledger event; eventData is PII-masked before persistence. */
   private async recordLedger(modelId: string, eventType: string, eventData: Record<string, any>, actor: string): Promise<void> {
@@ -170,6 +187,12 @@ export class InventoryService {
       risk_rationale: orm.riskRationale ?? null,
       risk_rationale_source: orm.riskRationaleSource ?? null,
       risk_rationale_model: orm.riskRationaleModel ?? null,
+      gap_remediation: orm.gapRemediation ?? null,
+      gap_remediation_source: orm.gapRemediationSource ?? null,
+      gap_remediation_model: orm.gapRemediationModel ?? null,
+      // Every file this record covers, plus how the extra ones got here.
+      source_refs: orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []),
+      merge_history: orm.mergeHistory ?? [],
     };
   }
 
@@ -501,6 +524,14 @@ export class InventoryService {
       user?.email ?? 'dashboard_user',
     );
 
+    // Persisted like the other generations so it survives a reload and can be
+    // auto-populated on scan; attaching it as evidence remains a human step.
+    orm.gapRemediation = result.text;
+    orm.gapRemediationSource = result.source;
+    orm.gapRemediationModel = result.model;
+    orm.updatedAt = new Date();
+    await this.models.save(orm);
+
     await this.recordLedger(modelId, 'REMEDIATION_PLAN_DRAFTED',
       { source: result.source, model: result.model ?? 'n/a', open_gaps: gapLines.length },
       user?.email ?? 'dashboard_user');
@@ -780,7 +811,9 @@ export class InventoryService {
       return candidates;
     };
 
-    const summary: RescanSummary = { rescanned: models.length, risk_changed: 0, source_missing: 0, models: [] };
+    const summary: RescanSummary = {
+      rescanned: models.length, risk_changed: 0, source_missing: 0, models: [], generations_queued: 0,
+    };
 
     for (const m of models) {
       const oldRisk = m.riskLevel as RiskLevel;
@@ -843,6 +876,11 @@ export class InventoryService {
         source_found: sourceFound,
       });
     }
+
+    // Backfill any generation a model is still missing. Idempotent by design:
+    // models that already have all three are skipped, so a routine re-scan
+    // costs nothing and only older records get topped up.
+    summary.generations_queued = await this.genQueue.enqueueMissing(user, models.map((m) => m.id));
 
     return summary;
   }

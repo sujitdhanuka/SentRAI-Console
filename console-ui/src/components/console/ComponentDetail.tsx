@@ -1,7 +1,8 @@
-import { PencilLine, Sparkles } from 'lucide-react';
+import { PencilLine } from 'lucide-react';
 
 import { AIComponent } from '../../providers';
 import { useConsoleUi } from '../../stores/consoleUi';
+import { AiGenerations } from './AiGenerations';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';
 
@@ -25,7 +26,7 @@ export function ComponentDetail({
   error: string | null;
   onRetry: () => void;
 }) {
-  const { setDrawer, toast } = useConsoleUi();
+  const setDrawer = useConsoleUi((s) => s.setDrawer);
 
   let body;
   if (error) body = <PanelError onRetry={onRetry} />;
@@ -47,19 +48,17 @@ export function ComponentDetail({
             <Kv label="Last red-team" value={`${component.lastRedTeamDaysAgo}d ago`} />
             <Kv label="Oversight" value={component.humanOversight ? 'HUMAN' : 'AUTO'} />
           </div>
+
+          <div className="-mx-3 mt-3">
+            <AiGenerations component={component} onChanged={onRetry} />
+          </div>
         </div>
-        <div className="flex shrink-0 gap-2 border-t border-border p-2.5">
+        <div className="shrink-0 border-t border-border p-2.5">
           <button
             onClick={() => setDrawer(true)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-[11px] font-medium text-white hover:opacity-90"
+            className="flex w-full items-center justify-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-[11px] font-medium text-white hover:opacity-90"
           >
             <PencilLine size={12} /> Edit Entry
-          </button>
-          <button
-            onClick={() => toast('Remediation draft queued (demo)')}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover"
-          >
-            <Sparkles size={12} /> Draft Remediation
           </button>
         </div>
       </div>

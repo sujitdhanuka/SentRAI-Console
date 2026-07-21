@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
@@ -17,6 +17,13 @@ export class ComplianceController {
   @Get('portfolio')
   portfolio(@CurrentUser() user: CurrentUserType, @Query('project_id') projectId?: string) {
     return this.compliance.portfolio(user, projectId ?? null);
+  }
+
+  /** Draft the board-facing executive paragraph, grounded in the rollup numbers. */
+  @Post('exec-narrative')
+  @HttpCode(HttpStatus.OK)
+  execNarrative(@CurrentUser() user: CurrentUserType, @Query('project_id') projectId?: string) {
+    return this.compliance.execNarrative(user, projectId ?? null);
   }
 
   /** Fleet matrix for the dashboard: per-model framework verdicts + drift + gaps in one call. */

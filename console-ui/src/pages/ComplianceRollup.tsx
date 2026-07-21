@@ -1,4 +1,4 @@
-import { FileDown, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { FileDown, ShieldAlert, ShieldCheck, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, apiBlobUrl } from '../api/client';
@@ -63,6 +63,25 @@ export function ComplianceRollup() {
   const [report, setReport] = useState<PortfolioReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [narrative, setNarrative] = useState<{ narrative: string; narrative_source: string } | null>(null);
+  const [drafting, setDrafting] = useState(false);
+
+  const draftNarrative = async () => {
+    setDrafting(true);
+    try {
+      const qs = activeProjectId ? `?project_id=${encodeURIComponent(activeProjectId)}` : '';
+      const res = await api<{ narrative: string; narrative_source: string; ai_enabled: boolean }>(
+        `/compliance/exec-narrative${qs}`,
+        { method: 'POST' },
+      );
+      setNarrative(res);
+      toast(res.ai_enabled ? 'Narrative drafted by AI' : 'Narrative drafted locally', 'positive');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not draft narrative', 'negative');
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,6 +161,39 @@ export function ComplianceRollup() {
                 {Object.entries(report.risk_tiers).map(([tier, n]) => (
                   <Badge key={tier} tone={TIER_TONE[tier] ?? 'neutral'}>{tier} · {n}</Badge>
                 ))}
+              </div>
+
+              {/* The board-facing paragraph: longer-form prose drafted from the
+                  same numbers shown above, so the two can be checked against
+                  each other before it leaves the building. */}
+              <div className="mt-3 border-t border-border pt-2">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <Sparkles size={11} className="text-purple" />
+                  <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">
+                    Board narrative
+                  </span>
+                  {narrative && (
+                    <Badge tone={narrative.narrative_source === 'ai' ? 'purple' : 'warning'}>
+                      {narrative.narrative_source === 'ai' ? 'AI draft' : 'auto draft'}
+                    </Badge>
+                  )}
+                  <button
+                    onClick={draftNarrative}
+                    disabled={drafting}
+                    className="ml-auto flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    <Sparkles size={9} /> {drafting ? 'Drafting…' : narrative ? 'Re-draft' : 'Draft narrative'}
+                  </button>
+                </div>
+                {narrative ? (
+                  <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-text-secondary">
+                    {narrative.narrative}
+                  </p>
+                ) : (
+                  <p className="text-[10.5px] italic text-text-tertiary">
+                    Not drafted yet — generates a board-ready paragraph from the figures above.
+                  </p>
+                )}
               </div>
             </div>
 

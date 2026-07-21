@@ -6,6 +6,7 @@ import { AIModelEntity, DeploymentGateEventEntity, DriftReportEntity, ProjectEnt
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
+import { SummarizerService } from '../summarizer/summarizer.service';
 import { FRAMEWORK_NAMES, frameworkReadiness, gapStatement } from './control-plain-english';
 
 const FRAMEWORK_IDS = ['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001'] as const;
@@ -52,6 +53,7 @@ export class ComplianceService {
     @InjectRepository(DriftReportEntity)
     private readonly drifts: Repository<DriftReportEntity>,
     private readonly inventory: InventoryService,
+    private readonly summarizer: SummarizerService,
   ) {}
 
   /**
@@ -117,6 +119,16 @@ export class ComplianceService {
         grievance_count: m.grievanceCount,
         has_evidence: (m.evidenceArtifacts?.length ?? 0) > 0,
         drift: driftUi(driftByModel.get(m.id)),
+        // Generation state, so the console can show provenance and offer a
+        // re-draft without a second round trip per model.
+        description_source: m.descriptionSource ?? 'static',
+        risk_rationale: m.riskRationale ?? null,
+        risk_rationale_source: m.riskRationaleSource ?? null,
+        gap_remediation: m.gapRemediation ?? null,
+        gap_remediation_source: m.gapRemediationSource ?? null,
+        // Every file this record covers — more than one means hits were merged.
+        source_refs: m.sourceRefs ?? (m.sourceRef ? [m.sourceRef] : []),
+        merge_history: m.mergeHistory ?? [],
         frameworks,
       });
     }
@@ -224,6 +236,69 @@ export class ComplianceService {
       })),
       top_gaps: topGaps,
       ci_gate: ciGate,
+    };
+  }
+
+  /**
+   * Draft the board-facing executive paragraph for a portfolio. Grounded in the
+   * rollup's actual numbers — the model is given the computed statistics, not
+   * asked to infer them — and persisted per project so the readiness report and
+   * the console show the same text. Org-wide scope is returned but not stored.
+   */
+  async execNarrative(user: CurrentUser, projectId?: string | null) {
+    const report = await this.portfolio(user, projectId);
+    const s = report.summary;
+
+    const portfolioStats = [
+      `${s.total_models} models registered`,
+      `${s.fully_compliant} fully compliant across all four frameworks (${Math.round(s.compliance_rate * 100)}%)`,
+      `${s.high_risk_models} high-risk`,
+      `${s.open_blocking_gaps} blocking control gaps open`,
+      ...report.frameworks.map((f) => `${f.name}: ${f.models_passing}/${f.models_assessed} passing`),
+    ].join('; ');
+
+    const topGaps = report.top_gaps.length
+      ? report.top_gaps.map((g) => `${g.statement} — ${g.framework} ${g.control}, ${g.count} models`).join('; ')
+      : 'none';
+
+    const ci = report.ci_gate;
+    const ciMetrics = ci.events_recorded
+      ? `${ci.events_recorded} gate evaluations, ${ci.active_blocked_gates} active blocked deployments, ` +
+        `${ci.shadow_ai_assets} shadow-AI assets caught pre-deployment`
+      : 'no CI gate evaluations recorded yet';
+
+    const result = await this.summarizer.draftForOrg(
+      user?.tenantId ?? null,
+      'exec_narrative',
+      { portfolio_stats: portfolioStats, top_gaps: topGaps, ci_metrics: ciMetrics },
+      () =>
+        `${s.headline} Across the four frameworks the portfolio shows ` +
+        `${report.frameworks.map((f) => `${f.name} at ${Math.round(f.pass_rate * 100)}%`).join(', ')}. ` +
+        `Most material gaps: ${topGaps}. Pre-deployment enforcement: ${ciMetrics}. ` +
+        '(Auto-generated — review before board circulation.)',
+      user?.email ?? 'dashboard_user',
+    );
+
+    if (projectId) {
+      const project = await this.projects.findOne({ where: { id: projectId } });
+      if (project) {
+        project.execNarrative = result.text;
+        project.execNarrativeSource = result.source;
+        project.execNarrativeModel = result.model;
+        project.execNarrativeAt = new Date();
+        await this.projects.save(project);
+      }
+    }
+
+    return {
+      project_id: projectId ?? null,
+      narrative: result.text,
+      narrative_source: result.source,
+      narrative_model: result.model,
+      ai_enabled: result.source === 'ai',
+      provider: result.provider,
+      generated_at: new Date().toISOString(),
+      grounded_in: { portfolio_stats: portfolioStats, top_gaps: topGaps, ci_metrics: ciMetrics },
     };
   }
 

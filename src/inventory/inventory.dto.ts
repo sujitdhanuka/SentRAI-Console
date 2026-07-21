@@ -72,6 +72,8 @@ export interface RescanSummary {
   risk_changed: number;
   source_missing: number;
   models: RescanResultRow[];
+  /** Missing AI generations queued for background backfill by this re-scan. */
+  generations_queued?: number;
 }
 
 export interface ModelResponse {
@@ -104,6 +106,11 @@ export interface ModelResponse {
   risk_rationale: string | null;
   risk_rationale_source: string | null;
   risk_rationale_model: string | null;
+  gap_remediation: string | null;
+  gap_remediation_source: string | null;
+  gap_remediation_model: string | null;
+  source_refs: string[];
+  merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
   /** Set when the org crossed its plan's soft model limit (registration never blocks). */
   plan_warning?: string | null;
 }

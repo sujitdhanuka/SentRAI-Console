@@ -32,6 +32,14 @@ export interface AIComponent {
   boardPolicyRef: string | null;
   useCase?: string;
   riskRationale?: string;
+  /** Provenance of each generation: 'static' | 'heuristic' | 'ai' | 'human'. */
+  descriptionSource?: string;
+  riskRationaleSource?: string | null;
+  gapRemediation?: string | null;
+  gapRemediationSource?: string | null;
+  /** Files this record covers; more than one means duplicate hits were merged. */
+  sourceRefs?: string[];
+  mergeHistory?: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
   /** Exact sutra enum values when known (HTTP mode); count-only in the mock. */
   sutras?: string[];
   frameworks: {

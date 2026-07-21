@@ -164,6 +164,20 @@ Configure the AI model your organization uses for drafting (✨ Summarize, ✨ D
 
 All AI output is a **draft with provenance** (✨ AI-drafted / ⚙ Auto-draft / ✓ human-confirmed): a human reviews and saves before it becomes part of the governance record.
 
+### 14. LLM Usage
+*Visible to: ADMIN, CISO, OWNER — the people accountable for AI spend and reliability.*
+
+What your organization is actually spending on LLM calls, and how reliably they succeed. Pick a window (7 / 30 / 90 days).
+
+- **Headline figures** — total calls, success rate, tokens in/out, average and p95 latency. A success rate below 90% turns red.
+- **Daily volume** — one bar per day, with failures stacked in red above successes, so a bad day is obvious at a glance.
+- **Breakdowns** — by use case (summary, risk rationale, gap remediation, executive narrative), by model, by provider, and by actor, each with call counts, token totals and average latency. This is what answers "who is driving the spend".
+- **Recent failures and recent calls** — the individual events behind the numbers, including who invoked them.
+
+Only calls that actually reach a configured provider are counted. Generations that fall back to the built-in rule-based engine cost no tokens and are deliberately **not** recorded as LLM usage — so an empty dashboard with a busy inventory means no provider is configured, not that nothing happened.
+
+Scans generate summaries, risk rationales and remediation plans automatically, so this is also where the cost of that automation shows up.
+
 ---
 
 ## Roles & permissions

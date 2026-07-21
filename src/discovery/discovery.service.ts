@@ -23,6 +23,7 @@ import { expandAndResolve } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
 import { candidateAsDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
 import { TreeSitterService } from './tree-sitter-parser';
+import { GenerationQueueService } from '../inventory/generation-queue.service';
 import { Neo4jClient } from './neo4j-client';
 import { SupervisorCoordinator } from './agents/supervisor';
 import { Neo4jLineageAgent } from './agents/neo4j-lineage-agent';
@@ -47,6 +48,7 @@ export class DiscoveryService {
     private readonly treeSitter: TreeSitterService,
     private readonly neo4j: Neo4jClient,
     private readonly config: ConfigService,
+    private readonly genQueue: GenerationQueueService,
   ) {}
 
   /** Server-filesystem access (browse / raw-path scan) is gated in production. */
@@ -232,6 +234,93 @@ export class DiscoveryService {
     await this.models.delete({ id: modelId });
   }
 
+  /**
+   * Fold a second scan hit into an existing governed model. Everything is
+   * additive — file list, detection signals and security findings are unioned,
+   * and risk can only rise — so a merge never quietly weakens a record that has
+   * already been through governance.
+   */
+  private async mergeIntoExisting(
+    orm: AIModelEntity,
+    cand: DiscoveredCandidate,
+  ): Promise<ImportedModel> {
+    const matchedOn = orm.sourceRef === cand.filePath ? 'source_ref' : 'name';
+    const known = new Set(orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []));
+    const isNewFile = !known.has(cand.filePath);
+
+    if (isNewFile) {
+      known.add(cand.filePath);
+      orm.sourceRefs = [...known];
+      orm.mergeHistory = [
+        ...(orm.mergeHistory ?? []),
+        { source_ref: cand.filePath, merged_at: new Date().toISOString(), matched_on: matchedOn },
+      ];
+
+      orm.detectionSignals = [
+        ...new Set([...(orm.detectionSignals ?? []), ...cand.signals.map((s) => s.category)]),
+      ];
+
+      // Union security findings, keyed by type+line so re-scans don't duplicate.
+      const findings = [...(orm.securityFindings ?? [])];
+      const seen = new Set(findings.map((f) => `${f.type}:${f.line}`));
+      for (const s of cand.secrets) {
+        const finding = { type: String(s.type), masked_value: String(s.masked_value), line: Number(s.line) };
+        const key = `${finding.type}:${finding.line}`;
+        if (!seen.has(key)) {
+          findings.push(finding);
+          seen.add(key);
+        }
+      }
+      orm.securityFindings = findings.length ? findings : null;
+
+      // Risk is monotonic under merge: the new file can raise it, never lower it.
+      const withHint =
+        RISK_ORDER[orm.riskLevel as RiskLevel] >= RISK_ORDER[cand.riskHint]
+          ? (orm.riskLevel as RiskLevel)
+          : cand.riskHint;
+      orm.riskLevel = floorRiskForSecurityFindings(withHint, findings.length);
+      orm.updatedAt = new Date();
+      await this.models.save(orm);
+
+      for (const p of cand.prompts) {
+        await this.prompts.save(this.prompts.create({
+          id: uuidv4(),
+          modelId: orm.id,
+          rawText: p.raw_text,
+          promptType: p.prompt_type,
+          injectionRisk: p.injection_risk,
+          piiDetected: p.pii_detected,
+        }));
+      }
+
+      await this.ledger.save(this.ledger.create({
+        id: uuidv4(),
+        modelId: orm.id,
+        eventType: 'MODEL_SOURCES_MERGED',
+        eventData: {
+          merged_source_ref: cand.filePath,
+          matched_on: matchedOn,
+          all_source_refs: orm.sourceRefs,
+          resulting_risk_level: orm.riskLevel,
+          security_findings: findings.length,
+        },
+        actor: 'codebase_scanner',
+        occurredAt: orm.updatedAt,
+      }));
+    }
+
+    return {
+      model_id: orm.id,
+      name: orm.name,
+      source_ref: cand.filePath,
+      risk_level: orm.riskLevel as RiskLevel,
+      remaining_gaps: cand.gaps,
+      merged: true,
+      source_refs: orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []),
+      matched_on: matchedOn,
+    };
+  }
+
   async import(user: CurrentUser, dto: ImportDto): Promise<ImportedModel[]> {
     const { dir, project } = await this.resolveDirectory(user, dto.directory, dto.project_id);
     const candidates = scanDirectory(expandAndResolve(dir), this.treeSitter);
@@ -255,6 +344,11 @@ export class DiscoveryService {
         if (dto.overwrite) {
           for (const m of existing) await this.deleteModelCascade(m.id);
         } else {
+          // Not a duplicate to discard — the same model found in another file.
+          // Fold this hit into the record that already governs it so the
+          // inventory count matches what the scan actually found.
+          const merged = await this.mergeIntoExisting(existing[0], cand);
+          imported.push(merged);
           continue;
         }
       }
@@ -319,6 +413,8 @@ export class DiscoveryService {
         grievanceCount: 0,
         grievanceResolutionNotes: '',
         sourceRef: entry.sourceRef,
+        // Seeded with the discovering file; later hits for the same model append here.
+        sourceRefs: entry.sourceRef ? [entry.sourceRef] : null,
         securityFindings: cand.secrets.length ? cand.secrets : null,
         // Unique signal categories — evidence for AI summaries / risk rationale.
         detectionSignals: [...new Set(cand.signals.map((s) => s.category))],
@@ -361,6 +457,8 @@ export class DiscoveryService {
         source_ref: cand.filePath,
         risk_level: finalRisk,
         remaining_gaps: cand.gaps,
+        merged: false,
+        source_refs: entry.sourceRef ? [entry.sourceRef] : [],
       });
     }
 
@@ -368,6 +466,12 @@ export class DiscoveryService {
       project.lastScannedAt = new Date();
       await this.projects.save(project);
     }
+
+    // Populate the AI generations for everything this import touched. Queued,
+    // not awaited: the caller gets their inventory straight away and the
+    // summaries fill in behind them.
+    await this.genQueue.enqueueMissing(user, [...new Set(imported.map((m) => m.model_id))]);
+
     return imported;
   }
 

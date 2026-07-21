@@ -19,6 +19,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CurrentUser as CurrentUserType } from '../common/interfaces/current-user.interface';
 import { RiskLevel } from '../common/enums';
 import { InventoryService } from './inventory.service';
+import { GenerationQueueService } from './generation-queue.service';
 import {
   EvidenceDto,
   GovernanceUpdateDto,
@@ -35,7 +36,10 @@ import {
 @ApiBearerAuth()
 @Controller('api/v1/inventory')
 export class InventoryController {
-  constructor(private readonly inventory: InventoryService) {}
+  constructor(
+    private readonly inventory: InventoryService,
+    private readonly genQueue: GenerationQueueService,
+  ) {}
 
   @Post('models')
   @HttpCode(HttpStatus.CREATED)
@@ -103,11 +107,31 @@ export class InventoryController {
     return this.inventory.draftRiskRationale(user, modelId);
   }
 
-  /** Draft one remediation step per open compliance gap (returned for review, not persisted). */
+  /** Draft one remediation step per open compliance gap; persisted with provenance. */
   @Post('models/:modelId/draft-remediation')
   @HttpCode(HttpStatus.OK)
   draftRemediation(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
     return this.inventory.draftGapRemediation(user, modelId);
+  }
+
+  /** Progress of the background auto-generation started by a scan or re-scan. */
+  @Get('generation-status')
+  generationStatus() {
+    return this.genQueue.status();
+  }
+
+  /**
+   * Queue the missing generations for specific models (or force a full regen).
+   * Lets the console top up records that predate auto-generation.
+   */
+  @Post('generate')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async generate(
+    @CurrentUser() user: CurrentUserType,
+    @Body() dto: { model_ids: string[]; force?: boolean },
+  ) {
+    const queued = await this.genQueue.enqueueMissing(user, dto.model_ids ?? [], Boolean(dto.force));
+    return { queued, models: (dto.model_ids ?? []).length };
   }
 
   @Get('models/:modelId/compliance-check')
