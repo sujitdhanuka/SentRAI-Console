@@ -389,7 +389,7 @@ export class InventoryService {
       hasHardcodedSecret: Boolean(orm.securityFindings?.length),
       snippet: await this.readMaskedSnippet(orm, aiEnabled),
     };
-    const result = await this.summarizer.summarizeForOrg(user?.tenantId ?? null, ctx);
+    const result = await this.summarizer.summarizeForOrg(user?.tenantId ?? null, ctx, user?.email ?? 'dashboard_user');
 
     orm.useCaseDescription = result.text;
     orm.descriptionSource = result.source;
@@ -445,6 +445,7 @@ export class InventoryService {
       () =>
         `${orm.name} is classified ${orm.riskLevel} risk. Basis: ${factors.join('; ')}. ` +
         '(Auto-generated rationale — review and confirm before governance sign-off.)',
+      user?.email ?? 'dashboard_user',
     );
 
     orm.riskRationale = result.text;
@@ -497,6 +498,7 @@ export class InventoryService {
         gaps: gapLines.join('\n'),
       },
       () => gapLines.map((g) => `• ${g}\n  → Action: ${heuristicRemediationStep(g)}`).join('\n'),
+      user?.email ?? 'dashboard_user',
     );
 
     await this.recordLedger(modelId, 'REMEDIATION_PLAN_DRAFTED',

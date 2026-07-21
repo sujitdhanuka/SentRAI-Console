@@ -835,6 +835,7 @@ const CONTEXT_HELP_SECTIONS = {
   docs: "Docs",
   users: "Users",
   orgs: "Organizations",
+  "ai-settings": "AI Settings",
 };
 
 async function getDocsMarkdown() {
@@ -3023,6 +3024,29 @@ async function loadAiProviders() {
   } catch (e) {
     list.innerHTML = `<div class="empty-state">Failed to load AI providers — ${escapeHtml(e.message)}</div>`;
   }
+  loadAiUsage();
+}
+
+// Cost + reliability visibility: how much AI the org has used, at a glance.
+async function loadAiUsage() {
+  const strip = document.getElementById("ai-usage-strip");
+  if (!strip) return;
+  if (isAdminNoOrg() && !ACTIVE_ORG_FOR_AI) { strip.innerHTML = ""; return; }
+  try {
+    const u = await api(`/ai/usage${aiOrgQs()}`);
+    if (!u.total_calls) { strip.innerHTML = ""; return; }
+    const uc = Object.entries(u.by_use_case || {}).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ");
+    strip.innerHTML = `
+      <div class="card" style="padding:12px 16px;">
+        <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; font-size:0.76rem;">
+          <span><b>${u.total_calls}</b> AI call(s)</span>
+          <span class="muted">${u.ok_calls} ok${u.failed_calls ? ` · <span style="color:var(--danger,#c0392b)">${u.failed_calls} failed</span>` : ""}</span>
+          <span class="muted">tokens in <b>${u.tokens_in.toLocaleString()}</b> / out <b>${u.tokens_out.toLocaleString()}</b></span>
+          ${u.avg_latency_ms != null ? `<span class="muted">avg ${u.avg_latency_ms} ms</span>` : ""}
+          ${uc ? `<span class="muted" style="font-size:0.68rem;">${escapeHtml(uc)}</span>` : ""}
+        </div>
+      </div>`;
+  } catch { strip.innerHTML = ""; }
 }
 
 let ACTIVE_ORG_FOR_AI = "";
@@ -3062,7 +3086,7 @@ function renderAiProviders() {
             ${escapeHtml(p.adapter)} · ${escapeHtml(p.model)} · ${escapeHtml(p.base_url)}
             ${p.has_api_key ? ` · key ${escapeHtml(p.api_key_masked || "set")}` : " · no key (keyless endpoint)"}
           </div>
-          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">${egressBadge(p)} ${testBadge(p)}</div>
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">${egressBadge(p)} ${testBadge(p)}${p.linked_model_id ? ` <span class="badge neutral" title="Self-governance: this LLM is registered in your own Model Inventory (project 'AI Governance Tooling') and carries governance obligations like any other AI system.">📋 in Model Inventory</span>` : ""}</div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
           <button class="btn small secondary ai-test-btn" data-id="${p.provider_id}">⚡ Test</button>

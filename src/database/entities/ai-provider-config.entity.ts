@@ -55,6 +55,12 @@ export class AiProviderConfigEntity {
   @Column('varchar', { length: 50, nullable: true })
   defaultForUseCase!: string | null;
 
+  /** The inventory model auto-registered for this endpoint (self-governance):
+   *  the LLM an org uses for governance drafting is itself an AI system in use,
+   *  so it appears in the org's own model inventory. */
+  @Column('varchar', { length: 36, nullable: true })
+  linkedModelId!: string | null;
+
   /** Result of the last connection test, for the settings UI. */
   @Column('varchar', { length: 20, nullable: true })
   lastTestStatus!: string | null; // 'ok' | 'failed'

@@ -967,6 +967,90 @@ describe('SentrAI Console (e2e)', () => {
     }
   });
 
+  it('AI GOVERNANCE: configured LLM self-registers in inventory; usage metered; breaker trips', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const httpMod = await import('http');
+
+    // Mock that reports token usage — and can be switched into failure mode.
+    let failMode = false;
+    let hits = 0;
+    const mock = httpMod.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c: any) => (body += c));
+      req.on('end', () => {
+        hits++;
+        res.setHeader('content-type', 'application/json');
+        if (failMode) { res.statusCode = 500; res.end('{"error":"boom"}'); return; }
+        res.end(JSON.stringify({
+          choices: [{ message: { content: 'METER-MOCK output.' } }],
+          usage: { prompt_tokens: 111, completion_tokens: 22 },
+        }));
+      });
+    });
+    await new Promise<void>((r) => mock.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.address() as any).port;
+
+    try {
+      const orgId = (await request(http).post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`)
+        .send({ name: 'Meter Org' })).body.organization_id;
+      await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+        .send({ email: 'meter@x.test', full_name: 'M', password: 'pw123456', role: 'CISO', organization_id: orgId }).expect(201);
+      const ciso = await login('meter@x.test', 'pw123456');
+
+      // Creating a provider SELF-REGISTERS the LLM in the org's own inventory.
+      const created = await request(http).post('/api/v1/ai/providers').set('Authorization', `Bearer ${ciso}`)
+        .send({ label: 'Meter Mock', adapter: 'openai-compat', base_url: `http://127.0.0.1:${mockPort}/v1`, model: 'mm-1' }).expect(201);
+      expect(created.body.linked_model_id).toBeTruthy();
+      const inv = await request(http).get('/api/v1/inventory/models').set('Authorization', `Bearer ${ciso}`).expect(200);
+      const selfModel = inv.body.find((m: any) => m.model_id === created.body.linked_model_id);
+      expect(selfModel).toBeDefined(); // visible to the org (lives in its Governance Tooling project)
+      expect(selfModel.name).toBe('LLM: Meter Mock');
+      expect(selfModel.compliance_pass).toBe(false); // a governance obligation, like any model
+
+      // A summarize call is metered with the provider-reported token counts.
+      const reg = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${ciso}`)
+        .send({ name: 'Metered Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'risk_scoring', use_case_description: 'scores' }).expect(201);
+      await request(http).post(`/api/v1/inventory/models/${reg.body.model_id}/summarize`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      const usage1 = await request(http).get('/api/v1/ai/usage').set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(usage1.body.total_calls).toBe(1);
+      expect(usage1.body.tokens_in).toBe(111);
+      expect(usage1.body.tokens_out).toBe(22);
+      expect(usage1.body.recent[0].use_case).toBe('model_summary');
+      expect(usage1.body.recent[0].actor).toBe('meter@x.test');
+
+      // Circuit breaker: 3 consecutive failures open it; the 4th call doesn't
+      // even reach the provider and degrades to the labeled heuristic.
+      failMode = true;
+      for (let i = 0; i < 3; i++) {
+        const r = await request(http).post(`/api/v1/inventory/models/${reg.body.model_id}/risk-rationale`)
+          .set('Authorization', `Bearer ${ciso}`).expect(200);
+        expect(r.body.risk_rationale_source).toBe('heuristic'); // failed → fell back
+      }
+      const hitsAfterFailures = hits;
+      const r4 = await request(http).post(`/api/v1/inventory/models/${reg.body.model_id}/risk-rationale`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(r4.body.risk_rationale_source).toBe('heuristic');
+      expect(hits).toBe(hitsAfterFailures); // breaker open — provider NOT called
+
+      // Failures were metered too — full reliability visibility.
+      const usage2 = await request(http).get('/api/v1/ai/usage').set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(usage2.body.failed_calls).toBe(3);
+      expect(usage2.body.ok_calls).toBe(1);
+
+      // Deleting the provider retires (never deletes) the self-registered model.
+      await request(http).delete(`/api/v1/ai/providers/${created.body.provider_id}`).set('Authorization', `Bearer ${ciso}`).expect(204);
+      const invAfter = await request(http).get('/api/v1/inventory/models').set('Authorization', `Bearer ${ciso}`).expect(200);
+      expect(invAfter.body.find((m: any) => m.model_id === created.body.linked_model_id)).toBeUndefined(); // inactive
+      const ledger = await request(http).get(`/api/v1/inventory/models/${created.body.linked_model_id}/ledger`)
+        .set('Authorization', `Bearer ${ciso}`).expect(200);
+      const events = (ledger.body.events ?? ledger.body).map((e: any) => e.event_type ?? e.eventType);
+      expect(events).toContain('MODEL_DECOMMISSIONED'); // history preserved
+    } finally {
+      await new Promise<void>((r) => mock.close(() => r()));
+    }
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)

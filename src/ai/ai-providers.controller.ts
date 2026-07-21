@@ -19,6 +19,20 @@ import { Role } from '../common/enums';
 import { AiProvidersService } from './ai-providers.service';
 import { CreateProviderDto, ProviderResponse, TestResult, UpdateProviderDto } from './ai.dto';
 
+/** Org AI usage metering — same governance-role surface as the registry. */
+@ApiTags('AI Usage')
+@ApiBearerAuth()
+@Roles(Role.ADMIN, Role.CISO, Role.OWNER)
+@Controller('api/v1/ai/usage')
+export class AiUsageController {
+  constructor(private readonly providers: AiProvidersService) {}
+
+  @Get()
+  usage(@CurrentUser() user: CurrentUserType, @Query('organization_id') organizationId?: string) {
+    return this.providers.usageSummary(user, organizationId);
+  }
+}
+
 /**
  * Per-organization AI provider registry (BYO-LLM). Choosing where model code
  * snippets are sent is a governance decision, so this surface is limited to
