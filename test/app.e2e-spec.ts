@@ -1321,4 +1321,51 @@ describe('SentrAI Console (e2e)', () => {
       .set('Authorization', `Bearer ${admin}`);
     expect(audit.status).toBe(200);
   });
+
+  it('DRIFT: stored score windows evaluate on demand and trip the circuit breaker', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    const proj = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Drift App', description: 'drift test' });
+    const projectId = proj.body.project_id;
+
+    const model = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Collections Propensity',
+        model_type: 'MACHINE_LEARNING',
+        functional_area: 'collections',
+        use_case_description: 'Scores repayment propensity for collections routing',
+        human_oversight_required: true,
+        board_policy_ref: 'BP-11',
+        project_id: projectId,
+      });
+    const modelId = model.body.model_id;
+
+    // With no windows pushed there is nothing to compare — a clear 400, not a crash.
+    await request(http).post(`/api/v1/monitoring/drift/${modelId}/evaluate`)
+      .set('Authorization', `Bearer ${admin}`).expect(400);
+
+    // Reference clusters low, live clusters high: a large, unambiguous shift.
+    const reference = Array.from({ length: 200 }, (_, i) => 0.20 + (i % 20) * 0.005);
+    const live = Array.from({ length: 200 }, (_, i) => 0.70 + (i % 20) * 0.005);
+    await request(http).post(`/api/v1/monitoring/scores/${modelId}`).set('Authorization', `Bearer ${admin}`)
+      .send({ kind: 'reference', scores: reference, accuracy: 0.9 }).expect(201);
+    await request(http).post(`/api/v1/monitoring/scores/${modelId}`).set('Authorization', `Bearer ${admin}`)
+      .send({ kind: 'live', scores: live, accuracy: 0.78 }).expect(201);
+
+    const evaluated = await request(http).post(`/api/v1/monitoring/drift/${modelId}/evaluate`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(evaluated.status).toBe(201);
+    expect(evaluated.body.psi_score).toBeGreaterThan(0.2);
+    expect(evaluated.body.accuracy_delta).toBeCloseTo(-0.12, 2);
+    expect(evaluated.body.circuit_breaker_active).toBe(true);
+    expect(evaluated.body.remediation_action).toBeTruthy();
+
+    // The report is persisted and readable from history.
+    const history = await request(http).get(`/api/v1/monitoring/drift/${modelId}/history`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(history.status).toBe(200);
+    expect(history.body).toHaveLength(1);
+    expect(history.body[0].status).toBe(evaluated.body.status);
+  });
 });

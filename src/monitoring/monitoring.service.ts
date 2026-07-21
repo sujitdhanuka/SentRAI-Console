@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -149,6 +149,37 @@ export class MonitoringService {
     }
 
     return { evaluated, tripped };
+  }
+
+  /**
+   * Evaluate one model's newest live window against its reference window.
+   * Lets an operator force the evaluation the hourly cron would eventually do,
+   * without the caller having to hold the raw score arrays.
+   */
+  async evaluateStoredWindows(modelId: string): Promise<DriftReportResponse> {
+    const reference = await this.windows.findOne({ where: { modelId, kind: 'reference' } });
+    if (!reference) {
+      throw new BadRequestException('No reference score window for this model — push one first.');
+    }
+    const live = await this.windows.find({
+      where: { modelId, kind: 'live' },
+      order: { capturedAt: 'DESC' },
+      take: 1,
+    });
+    if (!live.length) {
+      throw new BadRequestException('No live score window for this model — push one first.');
+    }
+
+    const baseline = reference.accuracy ?? 1.0;
+    const report = await this.evaluateDrift({
+      model_id: modelId,
+      training_scores: reference.scores,
+      live_scores: live[0].scores,
+      baseline_accuracy: baseline,
+      current_accuracy: live[0].accuracy ?? baseline,
+    });
+    await this.windows.update({ id: live[0].id }, { evaluated: true });
+    return report;
   }
 
   async driftHistory(modelId: string, limit = 30): Promise<DriftReportResponse[]> {
