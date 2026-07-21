@@ -23,3 +23,7 @@
 
 # uploaded project codebases (per-project scan workspaces)
 /workspaces
+
+# Local operator files with live credentials — never commit these.
+.access_token
+ci.sh
