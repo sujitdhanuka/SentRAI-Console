@@ -167,7 +167,7 @@ export function ComplianceRollup() {
                   generated {new Date(report.generated_at).toLocaleString()}
                 </span>
               </div>
-              <p className="text-[12px] leading-relaxed text-text">{s!.headline}</p>
+              <p className="font-serif text-[13px] leading-relaxed text-text">{s!.headline}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {Object.entries(report.risk_tiers).map(([tier, n]) => (
                   <Badge key={tier} tone={TIER_TONE[tier] ?? 'neutral'}>{tier} · {n}</Badge>
