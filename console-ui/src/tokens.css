@@ -27,27 +27,41 @@
   --negative-soft: rgba(185, 58, 43, 0.09);
   --warning: #b97416; /* caution */
   --warning-soft: rgba(185, 116, 22, 0.1);
+  /* Drafting grid — faint ink on paper. */
+  --grid-line: rgba(16, 32, 47, 0.04);
+  --grid-gap: 28px;
 }
 
 [data-theme='dark'] {
-  /* Plate world — figures & dark mode */
-  --bg: #081d38; /* plate-deep */
-  --bg-elevated: #0e2a4e; /* plate */
-  --surface: #0e2a4e; /* plate */
-  --surface-hover: #123457;
-  --border: rgba(185, 214, 236, 0.16); /* pale cyan line-work */
-  --border-strong: rgba(185, 214, 236, 0.3);
-  --text: #e7edf6;
-  --text-secondary: #9fb6ce;
-  --text-tertiary: #4e7196; /* plate-dim */
-  --accent: #5e7bf0; /* Signal lifted for contrast on plate */
-  --accent-soft: rgba(94, 123, 240, 0.16);
+  /* Plate world — navy blueprint ground */
+  --bg: #0a1c40; /* navy page ground */
+  --bg-elevated: #112a58; /* lifted navy — cards, inputs */
+  --surface: #112a58;
+  --surface-hover: #183465;
+  --border: rgba(170, 198, 230, 0.15); /* pale cyan line-work */
+  --border-strong: rgba(170, 198, 230, 0.28);
+  --text: #e9eef8;
+  --text-secondary: #a6bcd8;
+  --text-tertiary: #6b86a8;
+  --accent: #6a8bf5; /* Signal lifted for contrast on navy */
+  --accent-soft: rgba(106, 139, 245, 0.18);
   --positive: #4fb185;
   --positive-soft: rgba(79, 177, 133, 0.16);
   --negative: #e06b5d;
   --negative-soft: rgba(224, 107, 93, 0.16);
   --warning: #d9a63c;
   --warning-soft: rgba(217, 166, 60, 0.16);
+  /* Drafting grid — pale cyan on navy (the blueprint look). */
+  --grid-line: rgba(185, 214, 236, 0.07);
+  --grid-gap: 28px;
+}
+
+/* Blueprint drafting grid, drawn behind the page ground in both themes.
+   Cards (opaque --surface) sit on top; the grid shows in the negative space. */
+.blueprint-grid {
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px var(--grid-gap)),
+    repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-gap));
 }
 
 html,

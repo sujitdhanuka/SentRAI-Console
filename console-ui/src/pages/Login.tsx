@@ -19,7 +19,7 @@ export function Login() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-bg px-4 font-ui text-text">
+    <div className="blueprint-grid flex h-screen items-center justify-center bg-bg px-4 font-ui text-text">
       <div className="w-full max-w-[340px]">
         <div className="mb-6 flex flex-col items-center gap-2">
           <img src="/static/logo.png" alt="sentRAI Console" className="h-12 w-12 rounded-xl object-contain" />
