@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, apiUpload } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
 import { GithubImportModal } from '../components/console/GithubImportModal';
+import { ScanResultsModal, type ScanCandidate, type ScanReview } from '../components/console/ScanResultsModal';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -78,8 +79,11 @@ export function Projects() {
         for (const f of Array.from(files)) form.append('files', f, f.webkitRelativePath || f.name);
         await apiUpload(`/projects/${projectId}/codebase/folder`, form);
       }
-      toast('Codebase uploaded — run Scan to discover models', 'positive');
+      toast('Codebase uploaded — review the discovered AI components', 'positive');
       void load();
+      // The upload already scanned server-side; fetch the result and open the
+      // review so the user can pick what enters the inventory.
+      await scan(projectId);
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Upload failed', 'negative');
     } finally {
@@ -91,30 +95,28 @@ export function Projects() {
   // instead of window.prompt — the API needs owner/repo, not a raw URL.
   const [githubFor, setGithubFor] = useState<Project | null>(null);
 
-  const scan = async (projectId: string) => {
+  // The review step between scan and inventory: scan, then show every
+  // discovered component with a checkbox so the user chooses what to govern.
+  const [scanReview, setScanReview] = useState<ScanReview | null>(null);
+
+  const scan = async (projectId: string, projectName?: string) => {
     setBusyId(projectId);
     try {
-      const res = await api<{ candidates: Array<{ file_path: string }> }>('/discovery/scan', {
+      const res = await api<{ candidates: ScanCandidate[]; ast_coverage?: string }>('/discovery/scan', {
         method: 'POST',
         body: JSON.stringify({ project_id: projectId }),
       });
       if (res.candidates.length === 0) {
         toast('Scan complete — no AI components detected', 'positive');
-      } else {
-        // Register everything found straight into the inventory — repeat scans
-        // are safe: a file already governed merges into its existing record.
-        const imported = await api<Array<{ merged?: boolean }>>('/discovery/import', {
-          method: 'POST',
-          body: JSON.stringify({ project_id: projectId, file_paths: res.candidates.map((c) => c.file_path) }),
-        });
-        const merged = imported.filter((m) => m.merged).length;
-        toast(
-          `Scan complete — ${res.candidates.length} AI component(s) detected · ${imported.length - merged} new in inventory` +
-            (merged ? `, ${merged} merged into existing models` : ''),
-          'positive',
-        );
+        void load();
+        return;
       }
-      void load();
+      const name = projectName ?? projects.find((p) => p.project_id === projectId)?.name ?? 'project';
+      setScanReview({
+        project: { project_id: projectId, name },
+        candidates: res.candidates,
+        astCoverage: res.ast_coverage,
+      });
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Scan failed', 'negative');
     } finally {
@@ -156,7 +158,7 @@ export function Projects() {
         <p className="mb-3 max-w-[80ch] text-[11px] leading-relaxed text-text-secondary">
           Each project tracks one application's codebase — its own scan history and its own scoped model
           inventory. Add a codebase by uploading a .zip, uploading a folder, or importing a GitHub repository,
-          then scan to discover the AI components inside it.
+          then scan to discover its AI components and choose which ones to govern in the inventory.
         </p>
 
         {creating && (
@@ -211,7 +213,7 @@ export function Projects() {
                     <button onClick={() => activate(p)} className="flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[10.5px] font-medium text-white hover:opacity-90">
                       <Zap size={11} /> Select
                     </button>
-                    <button disabled={busy} onClick={() => scan(p.project_id)} title="Scan the uploaded codebase for AI components" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
+                    <button disabled={busy} onClick={() => scan(p.project_id, p.name)} title="Scan the uploaded codebase for AI components" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
                       {busy ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />} Scan
                     </button>
                     <button disabled={busy} onClick={() => { uploadTarget.current = p.project_id; zipRef.current?.click(); }} title="Upload a .zip of the codebase" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
@@ -241,6 +243,16 @@ export function Projects() {
       <GithubImportModal
         project={githubFor}
         onClose={() => setGithubFor(null)}
+        onImported={() => {
+          void load();
+          // Import scans on upload — open the review straight away.
+          if (githubFor) void scan(githubFor.project_id, githubFor.name);
+        }}
+      />
+
+      <ScanResultsModal
+        review={scanReview}
+        onClose={() => setScanReview(null)}
         onImported={() => void load()}
       />
     </AppShell>
