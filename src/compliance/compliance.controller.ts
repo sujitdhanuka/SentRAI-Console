@@ -3,8 +3,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser as CurrentUserType } from '../common/interfaces/current-user.interface';
 import { ComplianceService } from './compliance.service';
+import { coverageSummary } from './coverage.data';
 import { generatePortfolioPdf } from './pdf-generator';
 
 @ApiTags('Compliance')
@@ -12,6 +14,17 @@ import { generatePortfolioPdf } from './pdf-generator';
 @Controller('api/v1/compliance')
 export class ComplianceController {
   constructor(private readonly compliance: ComplianceService) {}
+
+  /**
+   * Public coverage disclosure: exactly which controls each framework validator
+   * evaluates, against the size of the full regime. Public by design — the
+   * honesty page is a trust asset, not a secret.
+   */
+  @Public()
+  @Get('coverage')
+  coverage() {
+    return coverageSummary();
+  }
 
   /** Executive portfolio rollup: per-framework pass rates, risk tiers, top gaps. */
   @Get('portfolio')

@@ -10,7 +10,7 @@ import { DriftCell, RedTeamAge } from './DriftCell';
 import { StatusCell } from './StatusCell';
 
 const ENV_TONE = { PROD: 'positive', STAGING: 'purple', DEV: 'accent' } as const;
-const TIER_TONE = { Minimal: 'positive', Limited: 'warning', High: 'negative' } as const;
+const TIER_TONE = { Low: 'positive', Medium: 'warning', High: 'negative' } as const;
 
 const TH = 'sticky top-0 z-10 bg-surface px-2 py-1.5 text-left text-[9px] font-medium uppercase tracking-widest text-text-tertiary border-b border-border';
 const TD = 'px-2 py-1.5 align-middle';

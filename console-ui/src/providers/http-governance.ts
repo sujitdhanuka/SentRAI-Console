@@ -16,7 +16,7 @@ import type {
  *
  * Mappings (documented in README):
  *  - env       ← lifecycle_stage (DEPLOYED/MONITORING→PROD, VALIDATION→STAGING, else DEV)
- *  - riskTier  ← risk_level (LOW/MINIMAL→Minimal, MEDIUM/LIMITED→Limited, else High)
+ *  - riskTier  ← risk_level (LOW/MINIMAL→Low, MEDIUM/LIMITED→Medium, else High) — one vocabulary, backend's
  *  - evidence  ← an 'ok' check links the model's audit PDF only when the model
  *                has attached evidence artifacts; ok-without-evidence stays null
  *                so the amber "compliant-but-unevidenced" dot fires.
@@ -30,7 +30,7 @@ const ENV_BY_STAGE: Record<string, Env> = {
   DESIGN: 'DEV', DEVELOPMENT: 'DEV', DECOMMISSIONED: 'DEV',
 };
 const TIER = (risk: string): AIComponent['riskTier'] =>
-  ['LOW', 'MINIMAL'].includes(risk) ? 'Minimal' : ['MEDIUM', 'LIMITED'].includes(risk) ? 'Limited' : 'High';
+  ['LOW', 'MINIMAL'].includes(risk) ? 'Low' : ['MEDIUM', 'LIMITED'].includes(risk) ? 'Medium' : 'High';
 
 export const SUTRA_ENUM = [
   'TRUST_IS_THE_FOUNDATION', 'PEOPLE_FIRST', 'INNOVATION_OVER_RESTRAINT', 'FAIRNESS_AND_EQUITY',
