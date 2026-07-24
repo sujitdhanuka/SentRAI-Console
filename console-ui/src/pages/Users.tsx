@@ -19,7 +19,7 @@ interface User {
 }
 
 const ROLE_TONE: Record<string, BadgeTone> = {
-  ADMIN: 'negative', OWNER: 'purple', CISO: 'warning', APPROVER: 'accent',
+  ADMIN: 'negative', OWNER: 'accent', CISO: 'warning', APPROVER: 'neutral',
   REVIEWER: 'accent', AUDITOR: 'accent', VIEWER: 'neutral',
 };
 

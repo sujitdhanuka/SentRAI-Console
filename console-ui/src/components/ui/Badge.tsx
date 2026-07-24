@@ -1,12 +1,11 @@
 import { ReactNode } from 'react';
 
-export type BadgeTone = 'positive' | 'negative' | 'warning' | 'purple' | 'accent' | 'neutral';
+export type BadgeTone = 'positive' | 'negative' | 'warning' | 'accent' | 'neutral';
 
 const TONES: Record<BadgeTone, string> = {
   positive: 'bg-positive-soft text-positive',
   negative: 'bg-negative-soft text-negative',
   warning: 'bg-warning-soft text-warning',
-  purple: 'bg-purple-soft text-purple',
   accent: 'bg-accent-soft text-accent',
   neutral: 'bg-surface-hover text-text-secondary',
 };
