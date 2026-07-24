@@ -1,9 +1,11 @@
-import { X } from 'lucide-react';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FileStack, Paperclip, Sparkles, X } from 'lucide-react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
+import { api } from '../../api/client';
 import { AIComponent, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
+import { Badge } from '../ui/Badge';
 
 const daysAgoToISO = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
 const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -11,8 +13,40 @@ const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new D
 const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
 const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
 
-/** Right-side drawer editing the selected component. Focus-trapped; Esc closes;
- *  Save round-trips through the provider (which appends a ledger entry). */
+/* Per-framework compliance as returned by /inventory/models/:id/compliance-check. */
+interface FrameworkReport {
+  overall_pass?: boolean;
+  blocking_gaps?: string[];
+}
+interface ComplianceCheck extends FrameworkReport {
+  nist_rmf?: FrameworkReport;
+  eu_ai_act?: FrameworkReport;
+  iso_42001?: FrameworkReport;
+}
+
+const FRAMEWORKS: Array<{ key: 'rbi' | 'nist' | 'eu' | 'iso'; label: string }> = [
+  { key: 'rbi', label: 'RBI FREE-AI 7 Sutras' },
+  { key: 'nist', label: 'NIST AI RMF 1.0' },
+  { key: 'eu', label: 'EU AI Act' },
+  { key: 'iso', label: 'ISO 42001' },
+];
+
+function frameworkOf(check: ComplianceCheck | null, key: string): FrameworkReport | null {
+  if (!check) return null;
+  if (key === 'rbi') return check; // the sutras report is the top-level object
+  if (key === 'nist') return check.nist_rmf ?? null;
+  if (key === 'eu') return check.eu_ai_act ?? null;
+  return check.iso_42001 ?? null;
+}
+
+/**
+ * Governance workspace popup — opened by "Edit Entry". One screen carries the
+ * whole glance the classic console offered: live per-framework verdicts with
+ * their blocking gaps, the persisted remediation plan (re-draftable and
+ * attachable as evidence), AI drafting on both narrative fields, and the
+ * governance form. Saving re-checks compliance and updates the verdict cards
+ * in place, so the effect of an edit is visible without closing the popup.
+ */
 export function EditDrawer({ component }: { component: AIComponent | null }) {
   const open = useConsoleUi((s) => s.drawerOpen);
   const setDrawer = useConsoleUi((s) => s.setDrawer);
@@ -20,10 +54,25 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const load = useGovernanceData((s) => s.load);
   const ref = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [check, setCheck] = useState<ComplianceCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [remediation, setRemediation] = useState('');
   const [form, setForm] = useState({
     owner: '', boardPolicyRef: '', humanOversight: true, redTeamDate: '',
     autonomousScope: '', useCase: '', riskRationale: '', sutras: [] as boolean[],
   });
+
+  const refreshCheck = useCallback(async (id: string) => {
+    setChecking(true);
+    try {
+      setCheck(await api<ComplianceCheck>(`/inventory/models/${id}/compliance-check`));
+    } catch {
+      setCheck(null);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (open && component) {
@@ -31,18 +80,19 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
         owner: component.owner,
         boardPolicyRef: component.boardPolicyRef ?? '',
         humanOversight: component.humanOversight,
-        redTeamDate: daysAgoToISO(component.lastRedTeamDaysAgo),
+        redTeamDate: component.lastRedTeamDaysAgo < 9000 ? daysAgoToISO(component.lastRedTeamDaysAgo) : '',
         autonomousScope: component.autonomousScope ?? '',
         useCase: component.useCase ?? component.description,
         riskRationale: component.riskRationale ?? '',
-        // Prefer the exact declared sutras (HTTP mode); fall back to count-only.
         sutras: component.sutras
           ? SUTRA_ENUM.map((v) => component.sutras!.includes(v))
           : SUTRAS.map((_, i) => i < component.sutrasDeclared),
       });
+      setRemediation(component.gapRemediation ?? '');
+      void refreshCheck(component.id);
       setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
     }
-  }, [open, component]);
+  }, [open, component, refreshCheck]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,6 +113,65 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
 
   if (!open || !component) return null;
 
+  /* ── AI drafting, same endpoints the detail panel and classic console use ── */
+
+  const draftSummary = async () => {
+    setBusy('summary');
+    try {
+      const r = await api<{ summary: string; ai_enabled: boolean; provider?: string }>(
+        `/inventory/models/${component.id}/summarize`, { method: 'POST' });
+      setForm((f) => ({ ...f, useCase: r.summary }));
+      toast(r.ai_enabled ? `Drafted by ${r.provider ?? 'AI'} — review before saving` : 'Drafted locally — review before saving', 'positive');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Draft failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const draftRationale = async () => {
+    setBusy('rationale');
+    try {
+      const r = await api<{ risk_rationale: string; ai_enabled: boolean; provider?: string }>(
+        `/inventory/models/${component.id}/risk-rationale`, { method: 'POST' });
+      setForm((f) => ({ ...f, riskRationale: r.risk_rationale }));
+      toast(r.ai_enabled ? `Drafted by ${r.provider ?? 'AI'} — review before saving` : 'Drafted locally — review before saving', 'positive');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Draft failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const draftRemediation = async () => {
+    setBusy('remediation');
+    try {
+      const r = await api<{ draft: string | null; open_gaps: number; message?: string }>(
+        `/inventory/models/${component.id}/draft-remediation`, { method: 'POST' });
+      if (!r.draft) { toast(r.message ?? 'No open gaps — nothing to remediate.'); return; }
+      setRemediation(r.draft);
+      toast(`Remediation drafted for ${r.open_gaps} open gap(s) — review before attaching`, 'positive');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Draft failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const attachRemediation = async () => {
+    setBusy('attach');
+    try {
+      await api(`/inventory/models/${component.id}/evidence`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'remediation_plan',
+          ref: `remediation-draft:${new Date().toISOString().slice(0, 10)}`,
+          description: remediation,
+          actor: 'dashboard_user',
+        }),
+      });
+      toast('Remediation plan attached as evidence', 'positive');
+      await refreshCheck(component.id);
+      await load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Attach failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -80,8 +189,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
         sutras: SUTRA_ENUM.filter((_, i) => form.sutras[i]),
       });
       await load();
-      toast('Compliance re-checked', 'positive');
-      setDrawer(false);
+      // Keep the popup open: refresh the verdict cards so the effect of the
+      // edit is visible immediately — that's the point of the single screen.
+      await refreshCheck(component.id);
+      toast('Saved — compliance re-checked', 'positive');
     } catch {
       toast('Save failed', 'negative');
     } finally {
@@ -89,57 +200,178 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     }
   };
 
+  const sourceRefs = component.sourceRefs ?? [];
+
   return (
-    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={`Edit ${component.name}`}>
-      <div className="absolute inset-0 bg-black/40" onClick={() => setDrawer(false)} />
-      <div ref={ref} className="absolute right-0 top-0 flex h-full w-[400px] max-w-full flex-col border-l border-border-strong bg-surface shadow-2xl">
-        <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 md:p-8" role="dialog" aria-modal="true" aria-label={`Edit ${component.name}`}>
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setDrawer(false)} />
+      <div ref={ref} className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
-            <h2 className="font-heading text-[13px] font-medium">Edit Entry</h2>
-            <div className="font-mono text-[9px] text-text-tertiary">{component.name} · {component.id}</div>
+            <h2 className="font-heading text-[15px] font-medium">Close Governance Gaps — {component.name}</h2>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              <Badge tone={component.riskTier === 'High' ? 'negative' : component.riskTier === 'Limited' ? 'warning' : 'positive'}>
+                {component.riskTier} risk
+              </Badge>
+              <span className="font-mono text-[9px] text-text-tertiary">{component.model} · {component.id.slice(0, 8)}</span>
+              {sourceRefs.length > 0 && (
+                <span className="flex items-center gap-1 font-mono text-[9px] text-text-tertiary">
+                  <FileStack size={10} className="text-accent" />
+                  {sourceRefs.length > 1 ? `merged from ${sourceRefs.length} files` : sourceRefs[0]}
+                </span>
+              )}
+            </div>
           </div>
           <button onClick={() => setDrawer(false)} aria-label="Close" className="rounded p-1 text-text-tertiary hover:bg-surface-hover">
-            <X size={15} />
+            <X size={16} />
           </button>
         </header>
-        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-            <div><label className={LABEL}>Owner team<input className={FIELD} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label></div>
-            <div><label className={LABEL}>Board policy reference<input className={FIELD} placeholder="e.g. AI-POL-2026-014" value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} /></label></div>
-            <label className="flex items-center gap-2 text-[11px] text-text">
-              <input type="checkbox" checked={form.humanOversight} onChange={(e) => setForm({ ...form, humanOversight: e.target.checked })} />
-              Human oversight required
-            </label>
-            <div><label className={LABEL}>Last red-team date<input type="date" className={`${FIELD} font-mono`} value={form.redTeamDate} onChange={(e) => setForm({ ...form, redTeamDate: e.target.value })} /></label></div>
-            <div><label className={LABEL}>Autonomous scope<input className={FIELD} placeholder="empty = fully supervised" value={form.autonomousScope} onChange={(e) => setForm({ ...form, autonomousScope: e.target.value })} /></label></div>
-            <div><label className={LABEL}>Use case description<textarea rows={3} className={FIELD} value={form.useCase} onChange={(e) => setForm({ ...form, useCase: e.target.value })} /></label></div>
-            <div><label className={LABEL}>Risk rationale<textarea rows={3} className={FIELD} value={form.riskRationale} onChange={(e) => setForm({ ...form, riskRationale: e.target.value })} /></label></div>
-            <fieldset className="rounded-md border border-border p-2.5">
-              <legend className="px-1 text-[9px] font-medium uppercase tracking-widest text-text-tertiary">7 Sutras declared</legend>
-              <div className="grid grid-cols-1 gap-1.5">
-                {SUTRAS.map((s, i) => (
-                  <label key={s} className="flex items-center gap-2 text-[10.5px] text-text-secondary">
-                    <input
-                      type="checkbox"
-                      checked={form.sutras[i] ?? false}
-                      onChange={(e) => {
-                        const sutras = [...form.sutras];
-                        sutras[i] = e.target.checked;
-                        setForm({ ...form, sutras });
-                      }}
-                    />
-                    {s}
-                  </label>
-                ))}
+
+        <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-5">
+
+          {/* ── Left: the glance — verdicts, gaps, remediation ── */}
+          <div className="space-y-3 border-b border-border p-4 lg:col-span-2 lg:border-b-0 lg:border-r">
+            <div className="grid gap-2">
+              {FRAMEWORKS.map(({ key, label }) => {
+                const fw = frameworkOf(check, key);
+                const pass = fw?.overall_pass ?? null;
+                const gaps = fw?.blocking_gaps ?? [];
+                return (
+                  <section key={key} className="rounded-md border border-border bg-bg-elevated p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-text">{label}</span>
+                      {checking ? (
+                        <span className="font-mono text-[9px] text-text-tertiary">checking…</span>
+                      ) : (
+                        <Badge tone={pass == null ? 'neutral' : pass ? 'positive' : 'negative'}>
+                          {pass == null ? '—' : pass ? 'Compliant' : 'Non-compliant'}
+                        </Badge>
+                      )}
+                    </div>
+                    {pass === true && <p className="mt-1 text-[10px] text-positive">✓ All checks satisfied.</p>}
+                    {gaps.length > 0 && (
+                      <ul className="mt-1.5 space-y-1">
+                        {gaps.map((g, i) => (
+                          <li key={i} className="text-[10px] leading-snug text-text-secondary">• {g}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+
+            <section className="rounded-md border border-border p-2.5">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Remediation plan</span>
+                <button
+                  type="button"
+                  onClick={draftRemediation}
+                  disabled={busy !== null}
+                  className="ml-auto flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+                >
+                  <Sparkles size={9} /> {busy === 'remediation' ? 'Drafting…' : remediation ? 'Re-draft' : 'Draft plan'}
+                </button>
               </div>
-            </fieldset>
+              {remediation ? (
+                <>
+                  <textarea
+                    rows={7}
+                    value={remediation}
+                    onChange={(e) => setRemediation(e.target.value)}
+                    className={`${FIELD} font-mono text-[10px] leading-relaxed`}
+                  />
+                  <button
+                    type="button"
+                    onClick={attachRemediation}
+                    disabled={busy !== null || !remediation.trim()}
+                    className="mt-1.5 flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    <Paperclip size={10} /> {busy === 'attach' ? 'Attaching…' : 'Attach as evidence (remediation_plan)'}
+                  </button>
+                </>
+              ) : (
+                <p className="text-[10px] italic text-text-tertiary">
+                  One actionable step per open gap, drafted for review — attaching it as evidence is how it
+                  enters the compliance record.
+                </p>
+              )}
+            </section>
           </div>
-          <footer className="shrink-0 border-t border-border p-3">
-            <button type="submit" disabled={saving} className="w-full rounded-md bg-accent py-2 text-[11.5px] font-medium text-white hover:opacity-90 disabled:opacity-50">
-              {saving ? 'Saving…' : 'Save & Re-check Compliance'}
-            </button>
-          </footer>
-        </form>
+
+          {/* ── Right: the governance form ── */}
+          <form onSubmit={submit} className="flex min-h-0 flex-col lg:col-span-3">
+            <div className="min-h-0 flex-1 space-y-3 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div><label className={LABEL}>Owner team<input className={FIELD} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label></div>
+                <div><label className={LABEL}>Board policy reference<input className={FIELD} placeholder="e.g. AI-POL-2026-014" value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} /></label></div>
+                <div><label className={LABEL}>Last red-team date<input type="date" className={`${FIELD} font-mono`} value={form.redTeamDate} onChange={(e) => setForm({ ...form, redTeamDate: e.target.value })} /></label></div>
+                <label className="flex items-center gap-2 self-end pb-1.5 text-[11px] text-text">
+                  <input type="checkbox" checked={form.humanOversight} onChange={(e) => setForm({ ...form, humanOversight: e.target.checked })} className="accent-accent" />
+                  Human oversight required
+                </label>
+              </div>
+              <div><label className={LABEL}>Autonomous scope<input className={FIELD} placeholder="empty = fully supervised" value={form.autonomousScope} onChange={(e) => setForm({ ...form, autonomousScope: e.target.value })} /></label></div>
+
+              <div>
+                <span className="flex items-center justify-between gap-2">
+                  <label className={LABEL}>Use case description</label>
+                  <button type="button" onClick={draftSummary} disabled={busy !== null}
+                    className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
+                    <Sparkles size={9} /> {busy === 'summary' ? 'Drafting…' : 'Summarize'}
+                  </button>
+                </span>
+                <textarea rows={4} className={FIELD} value={form.useCase} onChange={(e) => setForm({ ...form, useCase: e.target.value })} />
+              </div>
+
+              <div>
+                <span className="flex items-center justify-between gap-2">
+                  <label className={LABEL}>Risk rationale</label>
+                  <button type="button" onClick={draftRationale} disabled={busy !== null}
+                    className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
+                    <Sparkles size={9} /> {busy === 'rationale' ? 'Drafting…' : 'Draft rationale'}
+                  </button>
+                </span>
+                <textarea rows={4} className={FIELD} placeholder="Why this model carries its assigned risk level — drafted on demand, editable, saved as your confirmed rationale."
+                  value={form.riskRationale} onChange={(e) => setForm({ ...form, riskRationale: e.target.value })} />
+              </div>
+
+              <fieldset className="rounded-md border border-border p-2.5">
+                <legend className="px-1 text-[9px] font-medium uppercase tracking-widest text-text-tertiary">7 Sutras declared</legend>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {SUTRAS.map((s, i) => (
+                    <label key={s} className="flex items-center gap-2 text-[10.5px] text-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={form.sutras[i] ?? false}
+                        onChange={(e) => {
+                          const sutras = [...form.sutras];
+                          sutras[i] = e.target.checked;
+                          setForm({ ...form, sutras });
+                        }}
+                        className="accent-accent"
+                      />
+                      {s}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+
+            <footer className="flex shrink-0 items-center gap-2 border-t border-border p-3">
+              <span className="mr-auto text-[9.5px] text-text-tertiary">
+                Saving appends a ledger entry and re-checks the verdicts on the left.
+              </span>
+              <button type="button" onClick={() => setDrawer(false)} className="rounded-md border border-border px-3 py-2 text-[11px] text-text-secondary hover:bg-surface-hover">
+                Close
+              </button>
+              <button type="submit" disabled={saving} className="rounded-md bg-accent px-4 py-2 text-[11.5px] font-medium text-white hover:opacity-90 disabled:opacity-50">
+                {saving ? 'Saving…' : 'Save & Re-check Compliance'}
+              </button>
+            </footer>
+          </form>
+        </div>
       </div>
     </div>
   );
