@@ -13,8 +13,10 @@ import { DataSource } from 'typeorm';
  * compliance rollup, inventory).
  *
  * This guard closes that gap safely: at boot it adds any missing column from the
- * list below. It is **additive only** — it never drops or alters existing
- * columns, so it cannot lose data. Idempotent: existing columns are skipped.
+ * list below. It is **additive or lossless only** — it never drops a column, and
+ * the only ALTER it performs is widening an undersized TEXT column to MEDIUMTEXT
+ * (see REQUIRED_WIDENINGS), which cannot lose data. Idempotent: existing
+ * columns and already-wide types are skipped.
  * On SQLite dev (`synchronize` on) it's a no-op.
  *
  * When you add a new nullable column to an entity, add one line here.
@@ -51,6 +53,36 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   // ai-provider-config.entity.ts — link to the self-registered inventory model.
   { table: 'ai_provider_configs', column: 'linkedModelId', definition: 'VARCHAR(36) NULL' },
 ];
+
+/**
+ * Columns whose entity mapping WIDENED over time (TEXT → MEDIUMTEXT). A live
+ * table created by an older build keeps its original 64 KB TEXT column, and
+ * MariaDB then silently truncates larger writes — the safe JSON transformer
+ * reads the mangled value back as `null`, so the data simply vanishes.
+ * Verified live 2026-07-24: a 900-file GitHub import scanned 85 models but the
+ * project card showed 0 because `projects.lastScanResult` overran TEXT.
+ *
+ * Widening is the one ALTER that can never lose data (every TEXT value fits in
+ * MEDIUMTEXT), so it keeps the guard's no-data-loss contract. Nullability is
+ * read from the live schema and preserved. Anything already MEDIUMTEXT or
+ * larger is left untouched.
+ */
+interface WidenSpec {
+  table: string;
+  column: string;
+}
+
+const REQUIRED_WIDENINGS: WidenSpec[] = [
+  // project.entity.ts — lastScanResult holds the full scan JSON (candidates,
+  // signals, snippets); a big repo's result far exceeds 64 KB.
+  { table: 'projects', column: 'lastScanResult' },
+  // deployment-gate-event.entity.ts — blockingGaps carries AST evidence
+  // snippets for every flagged model; same overflow class.
+  { table: 'deployment_gate_events', column: 'blockingGaps' },
+];
+
+/** Text types strictly smaller than MEDIUMTEXT — the only ones we widen. */
+const NARROW_TEXT_TYPES = new Set(['tinytext', 'text', 'varchar', 'char']);
 
 /** Whole tables added after a deploy froze the schema. CREATE TABLE IF NOT
  *  EXISTS is inherently additive — an existing table is never touched. The
@@ -154,9 +186,35 @@ export class SchemaGuardService implements OnApplicationBootstrap {
         }
       }
       if (added) this.logger.log(`Schema guard: ${added} column(s) added additively (no data touched).`);
+      for (const spec of REQUIRED_WIDENINGS) {
+        try {
+          const live = await this.columnInfo(runner, spec.table, spec.column);
+          if (!live || !NARROW_TEXT_TYPES.has(live.dataType)) continue;
+          await runner.query(
+            `ALTER TABLE \`${spec.table}\` MODIFY \`${spec.column}\` MEDIUMTEXT ${live.nullable ? 'NULL' : 'NOT NULL'}`,
+          );
+          this.logger.log(`Schema guard: widened ${spec.table}.${spec.column} ${live.dataType} → mediumtext (lossless).`);
+        } catch (e) {
+          this.logger.warn(`Schema guard: could not widen ${spec.table}.${spec.column}: ${String(e)}`);
+        }
+      }
     } finally {
       await runner.release();
     }
+  }
+
+  private async columnInfo(
+    runner: any,
+    table: string,
+    column: string,
+  ): Promise<{ dataType: string; nullable: boolean } | null> {
+    const rows = await runner.query(
+      `SELECT DATA_TYPE AS dataType, IS_NULLABLE AS isNullable FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+      [table, column],
+    );
+    if (!rows?.length) return null;
+    return { dataType: String(rows[0].dataType).toLowerCase(), nullable: rows[0].isNullable === 'YES' };
   }
 
   private async columnExists(runner: any, table: string, column: string): Promise<boolean> {

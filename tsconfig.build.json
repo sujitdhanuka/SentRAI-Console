@@ -5,6 +5,7 @@
     "test",
     "dist",
     "console-ui",
+    "workspaces",
     "**/*spec.ts"
   ]
 }
