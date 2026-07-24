@@ -298,6 +298,30 @@ export function candidateAsDict(c: DiscoveredCandidate): Record<string, any> {
 }
 
 /**
+ * Inverse of candidateAsDict: rebuilds a candidate from the dict persisted in
+ * `projects.lastScanResult`, so an import can run from the stored scan when
+ * the extracted workspace no longer exists on disk (redeploys wipe it).
+ */
+export function candidateFromDict(d: Record<string, any>): DiscoveredCandidate {
+  return {
+    suggestedName: d.suggested_name,
+    filePath: d.file_path,
+    modelTypeGuess: d.model_type_guess,
+    functionalAreaGuess: d.functional_area_guess,
+    riskHint: d.risk_hint,
+    confidence: d.confidence,
+    domainTags: d.domain_tags ?? [],
+    description: d.description ?? '',
+    prompts: d.prompts ?? [],
+    secrets: d.secrets ?? [],
+    signals: (d.signals ?? []).map((s: Record<string, any>) => ({
+      category: s.category, pattern: s.pattern, lineNumber: s.line, snippet: s.snippet,
+    })),
+    gaps: d.gaps ?? [],
+  };
+}
+
+/**
  * Scans `root` for files matching AI/ML/LLM signal patterns and returns one
  * candidate per matching file. `ast` is optional; when unavailable, only the
  * regex layer runs.

@@ -94,11 +94,26 @@ export function Projects() {
   const scan = async (projectId: string) => {
     setBusyId(projectId);
     try {
-      const res = await api<{ candidates: unknown[] }>('/discovery/scan', {
+      const res = await api<{ candidates: Array<{ file_path: string }> }>('/discovery/scan', {
         method: 'POST',
         body: JSON.stringify({ project_id: projectId }),
       });
-      toast(`Scan complete — ${res.candidates.length} AI component(s) detected`, 'positive');
+      if (res.candidates.length === 0) {
+        toast('Scan complete — no AI components detected', 'positive');
+      } else {
+        // Register everything found straight into the inventory — repeat scans
+        // are safe: a file already governed merges into its existing record.
+        const imported = await api<Array<{ merged?: boolean }>>('/discovery/import', {
+          method: 'POST',
+          body: JSON.stringify({ project_id: projectId, file_paths: res.candidates.map((c) => c.file_path) }),
+        });
+        const merged = imported.filter((m) => m.merged).length;
+        toast(
+          `Scan complete — ${res.candidates.length} AI component(s) detected · ${imported.length - merged} new in inventory` +
+            (merged ? `, ${merged} merged into existing models` : ''),
+          'positive',
+        );
+      }
       void load();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Scan failed', 'negative');
