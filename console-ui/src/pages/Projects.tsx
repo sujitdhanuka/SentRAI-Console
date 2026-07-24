@@ -111,11 +111,18 @@ export function Projects() {
   };
 
   const remove = async (p: Project) => {
-    if (!window.confirm(`Delete project "${p.name}"? Its tracked models must be removed first.`)) return;
+    // A project with a tracked inventory needs cascade=true, which also deletes
+    // its models — spell that out so it's a deliberate choice, not a surprise.
+    const n = p.model_count;
+    const message =
+      n > 0
+        ? `Delete project "${p.name}" and its ${n} tracked model(s)?\n\nThis permanently removes those models and their governance history. This cannot be undone.`
+        : `Delete project "${p.name}"?`;
+    if (!window.confirm(message)) return;
     try {
-      await api(`/projects/${p.project_id}`, { method: 'DELETE' });
+      await api(`/projects/${p.project_id}${n > 0 ? '?cascade=true' : ''}`, { method: 'DELETE' });
       if (activeProjectId === p.project_id) setActiveProject(null);
-      toast('Project deleted');
+      toast(n > 0 ? `Project and ${n} model(s) deleted` : 'Project deleted');
       void load();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Delete failed', 'negative');
