@@ -1,5 +1,7 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import type { Response } from 'express';
 import { readFile } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
@@ -15,10 +17,16 @@ import { BUILD_TAG } from './common/build';
  *  the browser/proxy cache (new HTML, stale JS → buttons that do nothing). */
 const ASSET_VERSION = encodeURIComponent(BUILD_TAG);
 
+/** Process start, for the /health uptime signal. */
+const STARTED_AT = Date.now();
+
 @ApiTags('Root')
 @Controller()
 export class AppController {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @InjectDataSource() private readonly dataSource: DataSource,
+  ) {}
 
   /** Serves the public marketing landing page (product, pricing, responsible-AI story). */
   @Public()
@@ -72,28 +80,36 @@ export class AppController {
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SentRAI — Framework Coverage Disclosure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,400..600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0b0f14;--card:#121722;--line:#232b3a;--fg:#e8ebf3;--muted:#8b94aa;--accent:#4c7eff;--ok:#25c98d;--warn:#f2a93b}
-  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  .wrap{max-width:860px;margin:0 auto;padding:48px 24px 80px}
-  h1{font-size:26px;margin:0 0 6px} .sub{color:var(--muted);max-width:70ch}
-  .fw{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
-  .fw-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .fw h2{font-size:17px;margin:0} .jur{color:var(--muted);font-size:12px;font-weight:400}
-  .depth{margin-left:auto;font-size:10px;letter-spacing:.08em;padding:3px 10px;border-radius:12px;font-weight:700}
-  .depth.deep{background:rgba(37,201,141,.14);color:var(--ok)} .depth.partial{background:rgba(242,169,59,.14);color:var(--warn)}
-  .count{color:var(--muted);font-size:13px;margin:8px 0 6px} .count b{color:var(--fg)}
-  .stmt{font-size:13.5px;margin:0 0 8px}
-  details{border-top:1px solid var(--line);padding:8px 0 2px;font-size:13px}
-  summary{cursor:pointer;color:var(--accent)}
-  ul{margin:8px 0 4px;padding-left:20px} li{margin:3px 0;color:var(--muted)}
-  code{background:#0e1420;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:11.5px;color:var(--accent)}
-  .why{background:rgba(76,126,255,.08);border:1px solid rgba(76,126,255,.35);border-radius:10px;padding:14px 18px;margin:20px 0;font-size:13.5px}
-  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-  .foot{color:var(--muted);font-size:12px;margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
+  /* SR-DL-001 · paper world, one Signal Blue, three type families. */
+  :root{--paper:#F5F6F3;--raise:#fff;--ink:#10202F;--graphite:#55677A;--hairline:#D6DCDE;--signal:#2240C9;--signal-tint:#E4E9FB;--verify:#1E8A5A;--caution:#B97416;
+    --sans:Archivo,'Helvetica Neue',Arial,sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:16px;line-height:1.62}
+  .wrap{max-width:880px;margin:0 auto;padding:44px 24px 80px}
+  a{color:var(--signal);text-decoration:none} a:hover{text-decoration:underline}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--graphite);display:block;margin:14px 0 6px}
+  h1{font-family:var(--sans);font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin:0 0 8px}
+  .sub{color:var(--graphite);max-width:66ch}
+  .fw{background:var(--raise);border:1px solid var(--hairline);border-radius:3px;padding:18px 22px;margin:16px 0}
+  .fw-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--hairline);padding-bottom:10px;margin-bottom:10px}
+  .fw h2{font-family:var(--sans);font-size:18px;font-weight:600;margin:0;letter-spacing:-.01em} .jur{font-family:var(--mono);color:var(--graphite);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .depth{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;padding:3px 10px;border-radius:10px;font-weight:600}
+  .depth.deep{background:rgba(30,138,90,.1);color:var(--verify)} .depth.partial{background:rgba(185,116,22,.12);color:var(--caution)}
+  .count{font-family:var(--mono);color:var(--graphite);font-size:12.5px;margin:0 0 8px} .count b{color:var(--ink)}
+  .stmt{font-size:15px;margin:0 0 10px;max-width:74ch}
+  details{border-top:1px solid var(--hairline);padding:8px 0 2px;font-size:14px}
+  summary{cursor:pointer;font-family:var(--sans);color:var(--signal);font-size:13px}
+  ul{margin:8px 0 4px;padding-left:20px} li{margin:4px 0;color:var(--graphite)}
+  code{font-family:var(--mono);background:var(--signal-tint);border-radius:2px;padding:1px 6px;font-size:12px;color:var(--signal)}
+  .why{background:var(--signal-tint);border:1px solid var(--signal);border-left-width:3px;border-radius:3px;padding:14px 18px;margin:20px 0;font-size:14.5px;max-width:74ch}
+  .foot{color:var(--graphite);font-family:var(--mono);font-size:11.5px;margin-top:26px;border-top:1px solid var(--hairline);padding-top:14px}
 </style></head><body><div class="wrap">
   <p><a href="/">&larr; SentRAI</a></p>
-  <h1>Framework Coverage Disclosure</h1>
+  <span class="eyebrow">SR-DL · Coverage disclosure</span>
+  <h1>Framework coverage disclosure</h1>
   <p class="sub">Exactly which controls SentRAI evaluates per framework, measured against the full size of each regime — published so our claims can never drift from our code. This page and the product are generated from the same manifest.</p>
   <div class="why"><b>Why we publish this.</b> A governance product that overstates its own coverage invites exactly the audit it sells protection from. Where coverage is partial we say so, say what a verdict means, and say what is on the roadmap.</div>
   ${cards}
@@ -103,10 +119,31 @@ export class AppController {
     res.type('html').send(html);
   }
 
+  /**
+   * Liveness + readiness for an uptime monitor. Fast, unauthenticated, and it
+   * pings the database with `SELECT 1` so an "app up but DB down" outage
+   * returns 503 (and pages you) instead of a misleading 200. The body also
+   * carries the build tag and uptime for a human glancing at it.
+   */
   @Public()
   @Get('/health')
-  health(): { status: string; service: string } {
-    return { status: 'ok', service: this.config.get<string>('appName')! };
+  async health(
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ status: string; service: string; db: string; uptime_s: number; build: string }> {
+    let db = 'ok';
+    try {
+      await this.dataSource.query('SELECT 1');
+    } catch {
+      db = 'unreachable';
+      res.status(503);
+    }
+    return {
+      status: db === 'ok' ? 'ok' : 'degraded',
+      service: this.config.get<string>('appName')!,
+      db,
+      uptime_s: Math.floor((Date.now() - STARTED_AT) / 1000),
+      build: BUILD_TAG,
+    };
   }
 
   /** Serves the HELP.md content as JSON (mirrors GET /api/v1/docs). */

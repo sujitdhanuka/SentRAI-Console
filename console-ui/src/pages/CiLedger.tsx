@@ -58,7 +58,7 @@ const timeAgo = (iso: string): string => {
 function VerdictBadge({ ev }: { ev: GateEvent }) {
   if (ev.overridden) {
     return (
-      <Badge tone="purple" title={`Original verdict: FAIL — signed off by ${ev.overridden_by ?? 'an auditor'}`}>
+      <Badge tone="accent" title={`Original verdict: FAIL — signed off by ${ev.overridden_by ?? 'an auditor'}`}>
         overridden
       </Badge>
     );
@@ -156,7 +156,7 @@ export function CiLedger() {
         </div>
         <div className="bg-surface px-3 py-2">
           <div className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Overridden</div>
-          <div className="font-mono text-base leading-tight text-purple">{events.filter((e) => e.overridden).length}</div>
+          <div className="font-mono text-base leading-tight text-accent">{events.filter((e) => e.overridden).length}</div>
           <div className="font-mono text-[8.5px] text-text-tertiary">auditor sign-offs</div>
         </div>
       </div>

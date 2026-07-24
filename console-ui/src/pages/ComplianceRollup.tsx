@@ -1,4 +1,4 @@
-import { FileDown, ShieldAlert, ShieldCheck, Sparkles } from 'lucide-react';
+import { FileDown, ShieldAlert, ShieldCheck, PenLine } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, apiBlobUrl } from '../api/client';
@@ -167,7 +167,7 @@ export function ComplianceRollup() {
                   generated {new Date(report.generated_at).toLocaleString()}
                 </span>
               </div>
-              <p className="text-[12px] leading-relaxed text-text">{s!.headline}</p>
+              <p className="font-serif text-[13px] leading-relaxed text-text">{s!.headline}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {Object.entries(report.risk_tiers).map(([tier, n]) => (
                   <Badge key={tier} tone={TIER_TONE[tier] ?? 'neutral'}>{tier} · {n}</Badge>
@@ -179,12 +179,12 @@ export function ComplianceRollup() {
                   each other before it leaves the building. */}
               <div className="mt-3 border-t border-border pt-2">
                 <div className="mb-1 flex items-center gap-1.5">
-                  <Sparkles size={11} className="text-purple" />
+                  <PenLine size={11} className="text-accent" />
                   <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">
                     Board narrative
                   </span>
                   {narrative && (
-                    <Badge tone={narrative.narrative_source === 'ai' ? 'purple' : 'warning'}>
+                    <Badge tone={narrative.narrative_source === 'ai' ? 'accent' : 'warning'}>
                       {narrative.narrative_source === 'ai' ? 'AI draft' : 'auto draft'}
                     </Badge>
                   )}
@@ -193,7 +193,7 @@ export function ComplianceRollup() {
                     disabled={drafting}
                     className="ml-auto flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
                   >
-                    <Sparkles size={9} /> {drafting ? 'Drafting…' : narrative ? 'Re-draft' : 'Draft narrative'}
+                    <PenLine size={9} /> {drafting ? 'Drafting…' : narrative ? 'Re-draft' : 'Draft narrative'}
                   </button>
                 </div>
                 {narrative ? (

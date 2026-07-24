@@ -1,4 +1,4 @@
-import { FileArchive, FolderUp, Github, Loader2, Play, Trash2, Zap } from 'lucide-react';
+import { FileArchive, FolderUp, Github, Loader2, Play, Trash2, Check } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, apiUpload } from '../api/client';
@@ -148,7 +148,7 @@ export function Projects() {
       }
     >
       <main className="min-h-0 flex-1 overflow-y-auto p-3">
-        <p className="mb-3 max-w-[80ch] text-[11px] leading-relaxed text-text-secondary">
+        <p className="mb-3 max-w-[80ch] font-serif text-[12.5px] leading-relaxed text-text-secondary">
           Each project tracks one application's codebase — its own scan history and its own scoped model
           inventory. Add a codebase by uploading a .zip, uploading a folder, or importing a GitHub repository,
           then scan to discover its AI components and choose which ones to govern in the inventory.
@@ -196,7 +196,7 @@ export function Projects() {
 
                   <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
                     <button onClick={() => activate(p)} className="flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[10.5px] font-medium text-white hover:opacity-90">
-                      <Zap size={11} /> Select
+                      <Check size={11} /> Select
                     </button>
                     <button disabled={busy} onClick={() => scan(p.project_id, p.name)} title="Scan the uploaded codebase for AI components" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
                       {busy ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />} Scan

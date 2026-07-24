@@ -1,4 +1,4 @@
-import { FileStack, Sparkles } from 'lucide-react';
+import { FileStack, PenLine } from 'lucide-react';
 import { useState } from 'react';
 
 import { api } from '../../api/client';
@@ -9,7 +9,7 @@ import { Badge, BadgeTone } from '../ui/Badge';
 /** Provenance is the point of this panel: an unreviewed draft must look different
  *  from something a human signed off on. */
 const SOURCE_TONE: Record<string, BadgeTone> = {
-  ai: 'purple', heuristic: 'warning', human: 'positive', static: 'neutral',
+  ai: 'accent', heuristic: 'warning', human: 'positive', static: 'neutral',
 };
 const SOURCE_LABEL: Record<string, string> = {
   ai: 'AI draft', heuristic: 'auto draft', human: 'human-reviewed', static: 'from source',
@@ -83,11 +83,11 @@ export function AiGenerations({ component, onChanged }: { component: AIComponent
           disabled={busy !== null}
           className="ml-auto flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
         >
-          <Sparkles size={9} /> {busy === kind ? '…' : body ? 'Re-draft' : 'Draft'}
+          <PenLine size={9} /> {busy === kind ? '…' : body ? 'Re-draft' : 'Draft'}
         </button>
       </div>
       {body ? (
-        <p className="whitespace-pre-wrap text-[10.5px] leading-relaxed text-text-secondary">{body}</p>
+        <p className="whitespace-pre-wrap font-serif text-[12px] leading-relaxed text-text-secondary">{body}</p>
       ) : (
         <p className="text-[10.5px] italic text-text-tertiary">Not generated yet.</p>
       )}
@@ -99,7 +99,7 @@ export function AiGenerations({ component, onChanged }: { component: AIComponent
   return (
     <div className="border-t border-border">
       <div className="flex items-center gap-1.5 bg-bg-elevated px-3 py-1.5">
-        <Sparkles size={11} className="text-purple" />
+        <PenLine size={11} className="text-accent" />
         <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">AI generations</span>
         <button
           onClick={runAll}

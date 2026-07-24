@@ -56,10 +56,18 @@ function healthyContext(): ValidationContext {
 }
 
 describe('framework validators', () => {
-  it('NIST RMF fails an ungoverned, unmonitored HIGH-risk model on 7 mandatory controls', () => {
+  it('NIST RMF fails an ungoverned, unmonitored HIGH-risk model on 9 mandatory controls', () => {
     const report = validateNistRmf(entry());
     expect(frameworkOverallPass(report)).toBe(false);
-    expect(frameworkBlockingGaps(report).length).toBe(7);
+    // 7 original + MANAGE-2.1 (no resourced owner) + MEASURE-3.1 (no ledger history)
+    expect(frameworkBlockingGaps(report).length).toBe(9);
+  });
+
+  it('NIST RMF MANAGE-2.1 rejects the "unassigned" placeholder owner but accepts a real team', () => {
+    const gapsUnassigned = frameworkBlockingGaps(validateNistRmf(entry(), healthyContext()));
+    expect(gapsUnassigned.join(' ').toLowerCase()).toContain('resourced');
+    const gapsOwned = frameworkBlockingGaps(validateNistRmf(entry({ ownerTeam: 'Risk Team' }), healthyContext()));
+    expect(gapsOwned.join(' ').toLowerCase()).not.toContain('resourced');
   });
 
   it('NIST RMF passes a governed model with operational evidence', () => {
@@ -83,19 +91,42 @@ describe('framework validators', () => {
     expect(report.riskTier).toBe('High Risk');
     expect(frameworkOverallPass(report)).toBe(false);
     const gaps = frameworkBlockingGaps(report);
-    // Art-10 data governance, Art-12 record-keeping, Art-14 oversight, Art-15 robustness
-    expect(gaps.length).toBe(4);
+    // Art-10 data governance, Art-12 record-keeping, Art-14 oversight, Art-15 robustness,
+    // Art-17 no QMS audit cadence, Art-26 no deployment record, Art-27 no FRIA/DPIA,
+    // Art-72 no post-market monitoring
+    expect(gaps.length).toBe(8);
     expect(gaps.join(' ').toLowerCase()).toContain('human-in-the-loop');
   });
 
-  it('EU AI Act passes a high-risk model with bias evidence, oversight, and live records', () => {
+  it('EU AI Act Art-27 blocks a high-risk model with no FRIA/DPIA, and clears once one is attached', () => {
+    const base = {
+      ownerTeam: 'Risk Team',
+      boardPolicyRef: 'POLICY-1',
+      sourceRef: 'models/credit.py',
+      humanOversightRequired: true,
+      evidenceArtifacts: [{ type: 'bias_test', ref: 'https://reports/bias-q2.pdf', added_at: new Date().toISOString() }],
+    };
+    const withoutFria = frameworkBlockingGaps(validateEuAiAct(entry(base), healthyContext()));
+    expect(withoutFria.join(' ').toLowerCase()).toContain('fundamental-rights');
+    const withFria = frameworkBlockingGaps(
+      validateEuAiAct(entry({ ...base, evidenceArtifacts: [...base.evidenceArtifacts, { type: 'dpia', ref: 'https://reports/fria.pdf', added_at: new Date().toISOString() }] }), healthyContext()),
+    );
+    expect(withFria.join(' ').toLowerCase()).not.toContain('fundamental-rights');
+  });
+
+  it('EU AI Act passes a fully-governed high-risk model (bias + FRIA, oversight, QMS, deployment record, live records)', () => {
     const report = validateEuAiAct(
       entry({
         ownerTeam: 'Risk Team',
         boardPolicyRef: 'POLICY-1',
         sourceRef: 'models/credit.py',
         humanOversightRequired: true,
-        evidenceArtifacts: [{ type: 'bias_test', ref: 'https://reports/bias-q2.pdf', added_at: new Date().toISOString() }],
+        nextAuditDue: new Date(Date.now() + 30 * 86_400_000),
+        deploymentDate: new Date(Date.now() - 60 * 86_400_000),
+        evidenceArtifacts: [
+          { type: 'bias_test', ref: 'https://reports/bias-q2.pdf', added_at: new Date().toISOString() },
+          { type: 'dpia', ref: 'https://reports/fria.pdf', added_at: new Date().toISOString() },
+        ],
       }),
       healthyContext(),
     );
@@ -113,7 +144,7 @@ describe('framework validators', () => {
   it('ISO 42001 requires active monitoring for MEDIUM/HIGH models', () => {
     const documented = entry({ ownerTeam: 'Risk Team', boardPolicyRef: 'POLICY-1', sourceRef: 'models/credit.py' });
     const withoutMonitoring = validateIso42001(documented);
-    expect(withoutMonitoring.checks.length).toBe(6);
+    expect(withoutMonitoring.checks.length).toBe(8);
     expect(frameworkOverallPass(withoutMonitoring)).toBe(false); // AIMS-9.1 blocks
 
     const withMonitoring = validateIso42001(documented, healthyContext());

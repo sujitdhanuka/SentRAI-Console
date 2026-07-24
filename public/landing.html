@@ -1,202 +1,163 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SentRAI — AI Governance for Financial Services · RBI FREE-AI, NIST AI RMF, EU AI Act, ISO 42001</title>
   <meta name="description" content="SentRAI is a self-hosted AI governance console: discover the models in your code, score them against India's RBI FREE-AI, the US NIST AI RMF, the EU AI Act, and ISO/IEC 42001, monitor drift, and keep regulator-ready evidence." />
   <link rel="icon" type="image/png" href="/static/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400..600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg: #0b0f1a;
-      --surface: #121829;
-      --surface-2: #1a2237;
-      --border: #263049;
-      --text: #e6e9f2;
-      --muted: #8b93a8;
-      --accent: #3b82f6;
-      --accent-2: #60a5fa;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --mono: "SFMono-Regular", "Fira Code", Consolas, monospace;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* ── SentRAI Design Language (SR-DL-001): paper world, one Signal Blue,
+       three type families, 8px scale, 3px radius, no gradients. ── */
+    :root{
+      --paper:#F5F6F3; --raise:#FFFFFF; --ink:#10202F; --graphite:#55677A; --hairline:#D6DCDE;
+      --signal:#2240C9; --signal-tint:#E4E9FB;
+      --plate:#0E2A4E; --plate-deep:#081D38; --plate-line:#B9D6EC; --plate-dim:#4E7196;
+      --verify:#1E8A5A; --caution:#B97416; --fail:#B93A2B;
+      --sans:'Archivo','Helvetica Neue',Arial,sans-serif;
+      --serif:'Source Serif 4',Georgia,serif;
+      --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+      --s2:16px; --s3:24px; --s4:32px; --s5:48px; --s6:64px; --s7:96px;
+      --radius:3px;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+    ::selection{background:var(--signal);color:#fff}
+    a{color:var(--signal);text-decoration:none}
+    .container{max-width:1140px;margin:0 auto;padding:0 var(--s4)}
+    h1,h2,h3,.btn,.nav,.kicker,.stat .num,.n,.chip,.fw-name{font-family:var(--sans)}
+    .mono,code,.eyebrow,.kicker,.stat .lbl,.chip,.tb,.fw-name{font-family:var(--mono)}
+    h1{font-size:clamp(2.1rem,4.6vw,3.4rem);font-weight:700;letter-spacing:-.03em;line-height:1.04}
+    h2{font-size:clamp(1.5rem,2.6vw,1.95rem);font-weight:600;letter-spacing:-.02em;line-height:1.15}
+    h3{font-size:1.14rem;font-weight:600;letter-spacing:-.005em}
+    p{max-width:64ch}
+    code{font-size:.86em;background:var(--signal-tint);color:var(--signal);border-radius:2px;padding:1px 5px}
+    strong,b{font-weight:600}
+    .kicker{font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--signal);font-weight:600;display:block;margin-bottom:12px}
+
+    /* nav */
+    .nav{position:sticky;top:0;z-index:20;background:rgba(245,246,243,.9);backdrop-filter:saturate(140%) blur(6px);border-bottom:1px solid var(--hairline)}
+    .nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
+    .nav-brand{display:flex;align-items:center;gap:10px;font-family:var(--sans);font-weight:700;font-size:1.05rem;color:var(--ink);letter-spacing:-.01em}
+    .nav-brand img{width:26px;height:26px;border-radius:4px}
+    .nav-links{display:flex;align-items:center;gap:var(--s3);font-family:var(--sans);font-size:.92rem}
+    .nav-links a{color:var(--graphite)} .nav-links a:hover{color:var(--ink)}
+
+    /* buttons */
+    .btn{display:inline-block;padding:11px 22px;border-radius:var(--radius);font-weight:600;font-size:.92rem;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:opacity .16s}
+    .btn:hover{opacity:.9}
+    .btn-primary{background:var(--signal);border-color:var(--signal)}
+    .btn-ghost{background:transparent;color:var(--ink)}
+    .btn-sm{padding:7px 15px;font-size:.85rem}
+
+    /* hero */
+    .hero{padding:var(--s7) 0 var(--s6)}
+    .eyebrow{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--graphite);display:block;margin-bottom:20px}
+    .hero h1{max-width:20ch}
+    .hero .sub{font-size:1.24rem;color:var(--graphite);max-width:62ch;margin:var(--s3) 0 var(--s4);line-height:1.5}
+    .hero .sub b{color:var(--ink)}
+    .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:var(--s6)}
+
+    /* plate hero figure */
+    figure{margin:0}
+    .plate{background:
+      repeating-linear-gradient(0deg, rgba(185,214,236,.06) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(185,214,236,.06) 0 1px, transparent 1px 26px),
+      var(--plate);
+      border:1px solid #17456f;border-radius:var(--radius);overflow:hidden;color:var(--plate-line)}
+    .plate .art{padding:var(--s4)}
+    .plate svg{width:100%;height:auto;display:block}
+    .tblock{display:flex;flex-wrap:wrap;border-top:1px solid rgba(185,214,236,.35);font-family:var(--mono);font-size:.66rem;letter-spacing:.06em}
+    .tblock>div{padding:9px 14px;border-right:1px solid rgba(185,214,236,.35)}
+    .tblock b{display:block;color:#fff;font-weight:600;letter-spacing:.1em}
+    .tblock span{color:var(--plate-dim)}
+    figcaption{font-family:var(--mono);font-size:.8rem;color:var(--graphite);margin-top:12px;max-width:74ch}
+
+    /* metric quartet */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--hairline);background:var(--raise);border-radius:var(--radius);margin-top:var(--s5)}
+    .stat{padding:20px 24px} .stat + .stat{border-left:1px solid var(--hairline)}
+    .stat .num{font-size:2.4rem;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+    .stat .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--graphite);margin-top:10px}
+    .stat .det{font-size:.78rem;color:var(--graphite);margin-top:5px;font-family:var(--serif)}
+
+    /* sections */
+    section{padding:var(--s7) 0;border-top:1px solid var(--hairline)}
+    .section-sub{color:var(--graphite);max-width:70ch;margin:14px 0 var(--s5);font-size:1.06rem}
+
+    /* framework cards */
+    .juris-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+    .juris{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s4)}
+    .juris-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--hairline);padding-bottom:12px;margin-bottom:14px}
+    .juris-head h3{font-size:1.05rem}
+    .jcode{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;color:var(--signal);text-transform:uppercase}
+    .fw-name{margin-left:auto;font-size:.72rem;color:var(--graphite);letter-spacing:.04em}
+    .juris .what{font-size:.98rem;margin-bottom:12px}
+    .juris .checks{font-size:.94rem;color:var(--graphite);border-left:2px solid var(--signal);padding-left:14px}
+    .juris .checks b{color:var(--ink)}
+
+    /* pipeline */
+    .pipeline{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s2)}
+    .pipe-step{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s3)}
+    .pipe-step .n{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;color:var(--signal);font-weight:600;margin-bottom:10px}
+    .pipe-step h3{font-size:1rem;margin-bottom:8px}
+    .pipe-step p{font-size:.9rem;color:var(--graphite)}
+
+    /* principles */
+    .prin-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+    .prin{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s4)}
+    .prin h3{display:flex;align-items:baseline;gap:12px;font-size:1.05rem;margin-bottom:12px}
+    .prin h3 .num{font-family:var(--mono);color:var(--signal);font-size:.95rem;font-weight:600}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+    .chip{font-size:.66rem;letter-spacing:.04em;color:var(--graphite);border:1px solid var(--hairline);border-radius:10px;padding:3px 9px}
+    .prin .how{font-size:.94rem;color:var(--graphite)} .prin .how b{color:var(--ink)}
+
+    /* features */
+    .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3)}
+    .feat{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s4)}
+    .feat .eyebrow{color:var(--signal);margin-bottom:10px}
+    .feat h3{font-size:1.02rem;margin-bottom:8px}
+    .feat p{font-size:.92rem;color:var(--graphite)}
+
+    /* final cta */
+    .final{background:
+      repeating-linear-gradient(0deg, rgba(185,214,236,.055) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, rgba(185,214,236,.055) 0 1px, transparent 1px 28px),
+      var(--plate-deep);
+      color:#fff;text-align:center;padding:var(--s7) 0;border:0}
+    .final h2{color:#fff;max-width:22ch;margin:0 auto}
+    .final .section-sub{color:var(--plate-line);margin:16px auto var(--s4);max-width:60ch}
+    .final .hero-ctas{justify-content:center;margin-bottom:0}
+    .final .btn-ghost{color:#fff;border-color:rgba(185,214,236,.5)}
+
+    /* footer */
+    footer{background:var(--raise);border-top:1px solid var(--hairline);padding:var(--s5) 0 var(--s4)}
+    .foot{display:flex;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;font-size:.85rem;color:var(--graphite)}
+    .foot .links{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--sans)}
+    .disclaimer{margin-top:var(--s3);font-size:.78rem;color:var(--graphite);max-width:none;line-height:1.6}
+
+    @media (max-width:900px){
+      .juris-grid,.prin-grid,.feat-grid{grid-template-columns:1fr}
+      .stats{grid-template-columns:repeat(2,1fr)} .stat:nth-child(3),.stat:nth-child(4){border-top:1px solid var(--hairline)}
+      .stat:nth-child(odd){border-left:0}
+      .pipeline{grid-template-columns:1fr 1fr}
     }
-    a { color: var(--accent-2); text-decoration: none; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-    .mono { font-family: var(--mono); }
-
-    /* ---- Nav ---- */
-    .nav {
-      position: sticky; top: 0; z-index: 50;
-      background: rgba(11, 15, 26, 0.85);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-inner { display: flex; align-items: center; gap: 28px; height: 64px; }
-    .nav-brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 1.05rem; }
-    .nav-brand img { height: 32px; width: 32px; }
-    .nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; }
-    .nav-links a { color: var(--muted); font-size: 0.92rem; }
-    .nav-links a:hover { color: var(--text); }
-    .btn {
-      display: inline-block; padding: 10px 20px; border-radius: 8px;
-      font-weight: 600; font-size: 0.95rem; border: 1px solid transparent;
-      cursor: pointer; transition: all 0.15s ease;
-    }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-2); }
-    .btn-ghost { border-color: var(--border); color: var(--text); }
-    .btn-ghost:hover { border-color: var(--accent); }
-    .btn-sm { padding: 7px 16px; font-size: 0.88rem; }
-
-    /* ---- Hero ---- */
-    .hero { padding: 84px 0 68px; text-align: center; position: relative; overflow: hidden; }
-    .hero::before {
-      content: ""; position: absolute; inset: 0; pointer-events: none;
-      background: radial-gradient(ellipse 60% 50% at 50% -10%, rgba(59, 130, 246, 0.18), transparent);
-    }
-    .hero-badge {
-      display: inline-block; padding: 5px 14px; border-radius: 999px;
-      border: 1px solid var(--border); background: var(--surface);
-      color: var(--accent-2); font-size: 0.8rem; font-family: var(--mono);
-      margin-bottom: 24px;
-    }
-    .hero h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.15; letter-spacing: -0.02em; max-width: 880px; margin: 0 auto 20px; }
-    .hero h1 .hl { color: var(--accent-2); }
-    .hero p.sub { font-size: 1.12rem; color: var(--muted); max-width: 720px; margin: 0 auto 36px; }
-    .hero p.sub b { color: var(--text); font-weight: 600; }
-    .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 56px; }
-    .hero-stats { display: flex; justify-content: center; gap: 0; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); max-width: 860px; margin: 0 auto; }
-    .stat { padding: 20px 28px; flex: 1; min-width: 180px; }
-    .stat + .stat { border-left: 1px solid var(--border); }
-    .stat .num { font-size: 1.6rem; font-weight: 700; color: var(--accent-2); font-family: var(--mono); }
-    .stat .lbl { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .stat .det { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
-
-    /* ---- Sections ---- */
-    section { padding: 72px 0; }
-    section.alt { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .kicker { font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-2); margin-bottom: 12px; }
-    h2 { font-size: clamp(1.5rem, 3vw, 2.1rem); letter-spacing: -0.01em; margin-bottom: 14px; }
-    .section-sub { color: var(--muted); max-width: 680px; margin-bottom: 44px; font-size: 1.02rem; }
-    .center { text-align: center; }
-    .center .section-sub { margin-left: auto; margin-right: auto; }
-
-    /* ---- Jurisdiction cards ---- */
-    .juris-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px; }
-    .juris { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 26px; }
-    section.alt .juris { background: var(--surface-2); }
-    .juris-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
-    .juris-head .flag { font-size: 1.3rem; }
-    .juris-head h3 { font-size: 1.1rem; }
-    .juris-head .fw-name { font-family: var(--mono); font-size: 0.82rem; color: var(--accent-2); }
-    .juris .what { font-size: 0.92rem; color: var(--muted); margin: 10px 0 12px; }
-    .juris .checks { font-size: 0.92rem; }
-    .juris .checks b { color: var(--accent-2); font-weight: 600; }
-
-    /* ---- Pipeline ---- */
-    .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-    .pipe-step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px 18px; position: relative; }
-    section.alt .pipe-step { background: var(--surface-2); }
-    .pipe-step .n { font-family: var(--mono); color: var(--accent-2); font-size: 0.78rem; margin-bottom: 8px; }
-    .pipe-step h3 { font-size: 1.02rem; margin-bottom: 6px; }
-    .pipe-step p { font-size: 0.86rem; color: var(--muted); line-height: 1.5; }
-
-    /* ---- Principles ---- */
-    .prin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
-    .prin { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
-    .prin h3 { font-size: 1.02rem; margin-bottom: 10px; }
-    .prin h3 .num { color: var(--accent-2); font-family: var(--mono); margin-right: 8px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-    .chip {
-      font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
-      border: 1px solid var(--border); background: var(--surface);
-      border-radius: 999px; padding: 2px 10px; white-space: nowrap;
-    }
-    .prin .how { font-size: 0.9rem; }
-    .prin .how b { color: var(--accent-2); font-weight: 600; }
-
-    /* ---- Features ---- */
-    .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
-    .feat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-    .feat .icon { font-size: 1.4rem; margin-bottom: 12px; }
-    .feat h3 { font-size: 1.05rem; margin-bottom: 8px; }
-    .feat p { font-size: 0.9rem; color: var(--muted); }
-    .feat code { font-family: var(--mono); font-size: 0.82rem; color: var(--accent-2); background: var(--surface-2); padding: 1px 6px; border-radius: 4px; }
-
-    /* ---- Pricing ---- */
-    .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; align-items: stretch; margin-bottom: 48px; }
-    .plan { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 30px 26px; display: flex; flex-direction: column; position: relative; }
-    .plan.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 18px 44px rgba(59, 130, 246, 0.15); }
-    .plan .flag {
-      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-      background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 700;
-      padding: 3px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em;
-    }
-    .plan h3 { font-size: 1.12rem; }
-    .plan .for { font-size: 0.84rem; color: var(--muted); margin-bottom: 18px; }
-    .plan .price { font-size: 2rem; font-weight: 700; font-family: var(--mono); }
-    .plan .price small { font-size: 0.85rem; color: var(--muted); font-weight: 400; font-family: var(--sans); }
-    .plan .per { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; }
-    .plan ul { list-style: none; margin: 0 0 26px; flex: 1; }
-    .plan li { font-size: 0.9rem; padding: 6px 0 6px 26px; position: relative; color: var(--text); }
-    .plan li::before { content: "✓"; position: absolute; left: 2px; color: var(--success); font-weight: 700; }
-    .plan .btn { text-align: center; }
-
-    .policy { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 30px; }
-    .policy h3 { font-size: 1.1rem; margin-bottom: 18px; }
-    .policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 32px; }
-    .policy-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-    .policy-item b { display: block; color: var(--text); margin-bottom: 2px; }
-    .policy-item span { color: var(--muted); }
-
-    /* ---- CTA / Footer ---- */
-    .final-cta { text-align: center; padding: 88px 0; }
-    footer { border-top: 1px solid var(--border); padding: 36px 0; }
-    .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 0.85rem; }
-    .foot .links { display: flex; gap: 20px; }
-    .foot a { color: var(--muted); }
-    .foot a:hover { color: var(--text); }
-    .disclaimer { font-size: 0.78rem; color: var(--muted); margin-top: 14px; max-width: 820px; }
-
-    @media (max-width: 1000px) {
-      .juris-grid { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 900px) {
-      .pipeline { grid-template-columns: 1fr 1fr; }
-      .nav-links a.nav-hide { display: none; }
-    }
-    @media (max-width: 560px) {
-      .pipeline { grid-template-columns: 1fr; }
-      .stat + .stat { border-left: none; border-top: 1px solid var(--border); }
-      .hero-stats { flex-direction: column; }
-      .juris-grid { grid-template-columns: 1fr; }
-    }
+    @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
   </style>
 </head>
 <body>
 
   <nav class="nav">
     <div class="container nav-inner">
-      <a class="nav-brand" href="/">
-        <img src="/static/logo.png" alt="SentRAI logo" />
-        SentRAI
-      </a>
+      <a class="nav-brand" href="/"><img src="/static/logo.png" alt="SentRAI logo" /> SentRAI</a>
       <div class="nav-links">
-        <a href="#frameworks" class="nav-hide">Frameworks</a>
-        <a href="#product" class="nav-hide">Product</a>
-        <a href="#principles" class="nav-hide">Principles</a>
+        <a href="#frameworks">Frameworks</a>
         <a href="#product">How it works</a>
-        <a href="/docs" class="nav-hide">API Docs</a>
+        <a href="#principles">Principles</a>
+        <a href="/coverage">Coverage</a>
         <a href="/dashboard/" class="btn btn-ghost btn-sm">Sign in</a>
       </div>
     </div>
@@ -204,8 +165,8 @@
 
   <header class="hero">
     <div class="container">
-      <div class="hero-badge">🇮🇳 RBI FREE-AI &nbsp;·&nbsp; 🇺🇸 NIST AI RMF &nbsp;·&nbsp; 🇪🇺 EU AI Act &nbsp;·&nbsp; 🌐 ISO/IEC 42001</div>
-      <h1>Make every AI model you run <span class="hl">provably responsible</span> — in any jurisdiction</h1>
+      <span class="eyebrow">RBI FREE-AI · NIST AI RMF · EU AI Act · ISO/IEC 42001</span>
+      <h1>Governance you can read like a schematic.</h1>
       <p class="sub">
         SentRAI is a self-hosted AI governance console for financial services. It finds the models
         hiding in your code, scores each one against <b>India's RBI FREE-AI framework</b>, the
@@ -216,287 +177,153 @@
         <a class="btn btn-primary" href="/dashboard/">Launch the console</a>
         <a class="btn btn-ghost" href="#product">See how it works</a>
       </div>
-      <div class="hero-stats">
-        <div class="stat">
-          <div class="num">4</div><div class="lbl">Frameworks, one scan</div>
-          <div class="det">FREE-AI · NIST · EU AI Act · ISO 42001</div>
+
+      <figure>
+        <div class="plate">
+          <div class="art">
+            <svg viewBox="0 0 1040 300" role="img" aria-label="The governance graph: estate to repositories to AI artifacts to deployments">
+              <g stroke="#4E7196" stroke-width="1" fill="none">
+                <path d="M150 150 L360 80 M150 150 L360 150 M150 150 L360 220 M360 80 L600 55 M360 80 L600 130 M360 150 L600 130 M360 150 L600 200 M360 220 L600 200 M360 220 L600 260 M600 55 L850 95 M600 130 L850 95 M600 200 L850 95 M600 200 L850 215 M600 260 L850 215"/>
+              </g>
+              <g>
+                <circle cx="150" cy="150" r="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <circle cx="150" cy="150" r="19" fill="none" stroke="#B9D6EC" stroke-width="1" opacity=".4"/>
+                <circle cx="360" cy="80" r="13" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <circle cx="360" cy="150" r="13" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <circle cx="360" cy="220" r="13" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <rect x="587" y="42" width="26" height="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <rect x="587" y="117" width="26" height="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <rect x="587" y="187" width="26" height="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
+                <rect x="587" y="247" width="26" height="26" fill="none" stroke="#7FB3A0" stroke-width="1.5"/>
+                <circle cx="850" cy="95" r="17" fill="none" stroke="#fff" stroke-width="2"/>
+                <circle cx="850" cy="215" r="17" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>
+              </g>
+              <g font-family="IBM Plex Mono" font-size="10.5" fill="#B9D6EC" letter-spacing="1">
+                <text x="124" y="196">ORG ESTATE</text>
+                <text x="330" y="45">REPOSITORIES</text>
+                <text x="560" y="28">MODELS + DATASETS</text>
+                <text x="812" y="66">PRODUCTION</text>
+                <text x="824" y="256">STAGED</text>
+              </g>
+            </svg>
+          </div>
+          <div class="tblock">
+            <div><b>FIG 1.0</b><span>Governance Graph</span></div>
+            <div><b>STYLE</b><span>Blueprint plate</span></div>
+            <div><b>SOURCE</b><span>Live scan</span></div>
+            <div><b>REV</b><span>1.0</span></div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="num">3</div><div class="lbl">Jurisdictions covered</div>
-          <div class="det">India · United States · European Union</div>
-        </div>
-        <div class="stat">
-          <div class="num">7</div><div class="lbl">Principles enforced</div>
-          <div class="det">from ownership to human oversight</div>
-        </div>
-        <div class="stat">
-          <div class="num">100%</div><div class="lbl">Actions audit-logged</div>
-          <div class="det">every mutating action, PII-masked</div>
-        </div>
+        <figcaption>Estate → repositories → AI artifacts → deployments. Emphasis is carried by stroke weight (white = production); state by pattern (dashed = staged) — never by extra colour.</figcaption>
+      </figure>
+
+      <div class="stats">
+        <div class="stat"><div class="num">4</div><div class="lbl">Frameworks, one scan</div><div class="det">FREE-AI · NIST · EU AI Act · ISO 42001</div></div>
+        <div class="stat"><div class="num">3</div><div class="lbl">Jurisdictions covered</div><div class="det">India · United States · European Union</div></div>
+        <div class="stat"><div class="num">7</div><div class="lbl">Principles enforced</div><div class="det">from ownership to human oversight</div></div>
+        <div class="stat"><div class="num">100%</div><div class="lbl">Actions audit-logged</div><div class="det">every mutating action, PII-masked</div></div>
       </div>
     </div>
   </header>
 
   <section id="frameworks">
     <div class="container">
-      <div class="kicker">Regulatory coverage</div>
-      <h2>Four frameworks. One model inventory. Zero duplicate work.</h2>
+      <span class="kicker">Regulatory coverage</span>
+      <h2>Four frameworks, one model inventory, zero duplicate work.</h2>
       <p class="section-sub">
         Wherever you operate — or plan to — the rules differ, but the questions are the same:
         what AI are you running, who owns it, is it fair, can you explain it, and can you prove
-        all of that? SentRAI answers once and maps the answer to each regulator's language.
+        all of that? SentRAI answers once and maps the answer to each regulator's language. Exact
+        control counts are published on the <a href="/coverage">coverage disclosure</a>.
       </p>
       <div class="juris-grid">
         <div class="juris">
-          <div class="juris-head">
-            <span class="flag">🇮🇳</span>
-            <h3>India</h3>
-            <span class="fw-name">RBI FREE-AI + DPDP Act</span>
-          </div>
-          <p class="what">
-            The Reserve Bank of India's 2025 <em>Framework for Responsible and Ethical Enablement
-            of AI</em>: 7 guiding principles ("Sutras"), 6 pillars, and 26 recommendations for
-            banks, NBFCs, and fintechs. India's DPDP Act adds strict personal-data rules.
-          </p>
-          <p class="checks">
-            <b>SentRAI validates:</b> the Governance, Protection, and Assurance pillars
-            (Recommendations 14–26) with a dedicated validator per Sutra, plus DPDP-aligned
-            PII masking across the entire console.
-          </p>
+          <div class="juris-head"><span class="jcode">IN</span><h3>India</h3><span class="fw-name">RBI FREE-AI + DPDP Act</span></div>
+          <p class="what">The Reserve Bank of India's 2025 <em>Framework for Responsible and Ethical Enablement of AI</em>: seven guiding principles (Sutras), six pillars, and 26 recommendations for banks, NBFCs, and fintechs. India's DPDP Act adds strict personal-data rules.</p>
+          <p class="checks"><b>SentRAI validates</b> all seven Sutras on every model plus the Governance, Protection, and Assurance recommendations (14, 16, 20, 24), with DPDP-aligned PII masking across the entire console — the deepest of the four frameworks.</p>
         </div>
         <div class="juris">
-          <div class="juris-head">
-            <span class="flag">🇺🇸</span>
-            <h3>United States</h3>
-            <span class="fw-name">NIST AI RMF 1.0</span>
-          </div>
-          <p class="what">
-            The de-facto US standard for AI risk management, organized into four functions —
-            Govern, Map, Measure, Manage — and referenced by US regulators and enterprise
-            procurement alike.
-          </p>
-          <p class="checks">
-            <b>SentRAI validates:</b> ten controls across the four functions — ownership, board
-            policy and audit cadence (Govern); documented purpose, context and provenance (Map);
-            red-team recency and live drift measurement (Measure); oversight gates, fallback
-            plans and incident-reporting hygiene (Manage).
-          </p>
+          <div class="juris-head"><span class="jcode">US</span><h3>United States</h3><span class="fw-name">NIST AI RMF 1.0</span></div>
+          <p class="what">The de-facto US standard for AI risk management, organised into four functions — Govern, Map, Measure, Manage — and referenced by US regulators and enterprise procurement alike.</p>
+          <p class="checks"><b>SentRAI validates</b> fourteen controls across all four functions — ownership, board policy and audit cadence; documented purpose, context and provenance; red-team recency and live drift measurement; oversight gates, fallback plans, resourced owners, ledger-tracked risks, and incident hygiene.</p>
         </div>
         <div class="juris">
-          <div class="juris-head">
-            <span class="flag">🇪🇺</span>
-            <h3>European Union</h3>
-            <span class="fw-name">EU AI Act</span>
-          </div>
-          <p class="what">
-            The world's first comprehensive AI law. Obligations scale with risk tier, and
-            financial-sector uses like credit scoring sit squarely in the high-risk category —
-            with duties for documentation, record-keeping, human oversight, and robustness.
-          </p>
-          <p class="checks">
-            <b>SentRAI validates:</b> each model's risk classification (with a configurable
-            high-risk domain list) and six high-risk obligations — risk management, bias-tested
-            data governance, technical documentation, automatic record-keeping from its own
-            ledger and drift logs, human oversight, and robustness monitoring.
-          </p>
+          <div class="juris-head"><span class="jcode">EU</span><h3>European Union</h3><span class="fw-name">EU AI Act</span></div>
+          <p class="what">The world's first comprehensive AI law. Obligations scale with risk tier, and financial-sector uses like credit scoring sit squarely in the high-risk category — with duties for documentation, oversight, and robustness.</p>
+          <p class="checks"><b>SentRAI validates</b> each model's risk classification plus fourteen articles: the core high-risk obligations (Articles 9–15, 17), value-chain and deployer duties (25, 26, 27), post-market monitoring (72), and the Article 50 transparency duty.</p>
         </div>
         <div class="juris">
-          <div class="juris-head">
-            <span class="flag">🌐</span>
-            <h3>International</h3>
-            <span class="fw-name">ISO/IEC 42001</span>
-          </div>
-          <p class="what">
-            The management-system standard for AI — think ISO 27001, but for how your
-            organization governs models. Increasingly requested in vendor due-diligence and
-            cross-border deals.
-          </p>
-          <p class="checks">
-            <b>SentRAI validates:</b> the operational evidence an AI-management-system audit
-            asks for — a living model inventory, defined ownership, risk treatment, incident
-            records, and continuous monitoring.
-          </p>
+          <div class="juris-head"><span class="jcode">INT</span><h3>International</h3><span class="fw-name">ISO/IEC 42001</span></div>
+          <p class="what">The management-system standard for AI — think ISO 27001, but for how your organisation governs models. Increasingly requested in vendor due-diligence and cross-border deals.</p>
+          <p class="checks"><b>SentRAI validates</b> eight management-system checks spanning clauses 6, 7, 8, 9 and 10 plus Annex A documentation — a living inventory, accountable ownership, risk treatment, incident records, and continuous monitoring.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="alt" id="product">
+  <section id="product">
     <div class="container">
-      <div class="kicker">How it works</div>
-      <h2>Governance that starts where your AI actually lives: the code</h2>
+      <span class="kicker">How it works</span>
+      <h2>Governance that starts where your AI actually lives: the code.</h2>
       <p class="section-sub">
         Most governance tools begin with a spreadsheet someone forgot to update. SentRAI begins
         with a scan of your repositories and infrastructure, so the model inventory reflects
         reality — then keeps it honest for the model's entire life.
       </p>
       <div class="pipeline">
-        <div class="pipe-step">
-          <div class="n">01 · DISCOVER</div>
-          <h3>Find every model</h3>
-          <p>Regex + AST scanning over local code, GitHub/GitLab repos, and Kubernetes/Triton infrastructure surfaces AI systems you didn't know you were running.</p>
-        </div>
-        <div class="pipe-step">
-          <div class="n">02 · REGISTER</div>
-          <h3>Build the inventory</h3>
-          <p>Every model gets an owner, a risk tier, a purpose, and a ledger entry — scoped per project, with lineage tracked across systems.</p>
-        </div>
-        <div class="pipe-step">
-          <div class="n">03 · VALIDATE</div>
-          <h3>Close the gaps</h3>
-          <p>Automated validators score each model against all four frameworks in one pass — and tell you exactly which artifact or control is missing.</p>
-        </div>
-        <div class="pipe-step">
-          <div class="n">04 · MONITOR</div>
-          <h3>Catch drift early</h3>
-          <p>Your serving layer pushes score windows to the API; an hourly job runs PSI + Wasserstein drift checks, trips a persistent circuit breaker, and fires a webhook with a human-review ticket.</p>
-        </div>
-        <div class="pipe-step">
-          <div class="n">05 · AUDIT</div>
-          <h3>Prove it</h3>
-          <p>Immutable audit trails, incident SLAs, and one-click PDF compliance reports — regulator-ready evidence, not screenshots of dashboards.</p>
-        </div>
+        <div class="pipe-step"><div class="n">01 · DISCOVER</div><h3>Find every model</h3><p>Regex + AST scanning over local code, GitHub repos, and Kubernetes/Triton infrastructure surfaces AI systems you didn't know you were running.</p></div>
+        <div class="pipe-step"><div class="n">02 · REGISTER</div><h3>Build the inventory</h3><p>Every model gets an owner, a risk tier, a purpose, and a ledger entry — scoped per project, with lineage tracked across systems.</p></div>
+        <div class="pipe-step"><div class="n">03 · VALIDATE</div><h3>Close the gaps</h3><p>Automated validators score each model against all four frameworks in one pass — and tell you exactly which artifact or control is missing.</p></div>
+        <div class="pipe-step"><div class="n">04 · MONITOR</div><h3>Catch drift early</h3><p>Your serving layer pushes score windows to the API; an hourly job runs PSI + Wasserstein checks, trips a persistent circuit breaker, and fires a human-review webhook.</p></div>
+        <div class="pipe-step"><div class="n">05 · AUDIT</div><h3>Prove it</h3><p>Immutable audit trails, incident SLAs, and one-click PDF compliance reports — regulator-ready evidence, not screenshots of dashboards.</p></div>
       </div>
     </div>
   </section>
 
   <section id="principles">
     <div class="container">
-      <div class="kicker">Responsible AI, operationalized</div>
-      <h2>Seven principles every framework agrees on — enforced, not framed</h2>
+      <span class="kicker">Responsible AI, operationalised</span>
+      <h2>Seven principles every framework agrees on — enforced, not framed.</h2>
       <p class="section-sub">
         Strip away the acronyms and every serious AI regulation asks for the same seven things.
         India's FREE-AI calls them Sutras; NIST spreads them across four functions; the EU AI Act
-        writes them into articles. SentRAI enforces each one with a concrete mechanism — and the
-        chips show you where it lands in each rulebook.
+        writes them into articles. SentRAI enforces each one with a concrete mechanism.
       </p>
       <div class="prin-grid">
-        <div class="prin">
-          <h3><span class="num">1</span>Accountability &amp; clear ownership</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 Sutra 5 · Accountability</span>
-            <span class="chip">🇺🇸 NIST · Govern</span>
-            <span class="chip">🇪🇺 Art. 16 · provider duties</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> no model can be promoted to a live stage without a named owner, a board policy reference, and a risk tier — the API refuses the promotion and lists exactly what's missing. Incidents carry SLA clocks tracked to closure.</div>
-        </div>
-        <div class="prin">
-          <h3><span class="num">2</span>Human oversight</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 Sutra 2 · People First</span>
-            <span class="chip">🇺🇸 NIST · Manage</span>
-            <span class="chip">🇪🇺 Art. 14 · human oversight</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> when drift crosses the alert threshold, a circuit breaker trips and persists (a restart can't reset it), a mandatory human-review ticket is issued, and your serving layer is notified by webhook to engage the rules fallback.</div>
-        </div>
-        <div class="prin">
-          <h3><span class="num">3</span>Fairness &amp; non-discrimination</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 Sutra 4 · Fairness &amp; Equity</span>
-            <span class="chip">🇺🇸 NIST · Measure</span>
-            <span class="chip">🇪🇺 Art. 10 · data governance</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> MEDIUM/HIGH-risk models must carry an attached bias-test report as an evidence artifact — a self-declared checkbox does not pass. Validators score exactly which evidence you still owe.</div>
-        </div>
-        <div class="prin">
-          <h3><span class="num">4</span>Transparency &amp; explainability</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 Sutra 6 · Understandable by Design</span>
-            <span class="chip">🇺🇸 NIST · Map</span>
-            <span class="chip">🇪🇺 Art. 13 · transparency</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> every inventory entry records the model's purpose, training data, and explainability evidence — so anyone can answer "what does this model do and why?"</div>
-        </div>
-        <div class="prin">
-          <h3><span class="num">5</span>Safety, security &amp; robustness</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 Sutra 7 · Safety &amp; Resilience</span>
-            <span class="chip">🇺🇸 NIST · Measure + Manage</span>
-            <span class="chip">🇪🇺 Art. 15 · accuracy &amp; robustness</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> hourly PSI + Wasserstein drift evaluation over ingested score windows, configurable warning/alert thresholds, and a persistent business-continuity breaker for hard failures.</div>
-        </div>
-        <div class="prin">
-          <h3><span class="num">6</span>Privacy &amp; data protection</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 DPDP Act 2023</span>
-            <span class="chip">🇺🇸 NIST · privacy-enhanced</span>
-            <span class="chip">🇪🇺 GDPR-aligned</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> automatic PII masking (India DPDP + GDPR patterns, credentials included) on every audit event, ledger entry, and notification — plus a fully self-hosted architecture, so model metadata never leaves your jurisdiction.</div>
-        </div>
-        <div class="prin">
-          <h3><span class="num">7</span>Auditability &amp; documented trust</h3>
-          <div class="chips">
-            <span class="chip">🇮🇳 Sutra 1 · Trust is the Foundation</span>
-            <span class="chip">🇺🇸 NIST · Govern</span>
-            <span class="chip">🇪🇺 Art. 12 · record-keeping</span>
-            <span class="chip">🌐 ISO 42001</span>
-          </div>
-          <div class="how"><b>Enforced by:</b> an append-only ledger plus a global audit-event stream covering every mutating action — even an admin purge leaves the model's full history and a tombstone behind. Exportable as one-click PDF evidence packs.</div>
-        </div>
+        <div class="prin"><h3><span class="num">1</span>Accountability &amp; clear ownership</h3><div class="chips"><span class="chip">IN · Sutra 5</span><span class="chip">US · Govern</span><span class="chip">EU · Art. 16</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> no model can be promoted to a live stage without a named owner, a board policy reference, and a risk tier — the API refuses the promotion and lists exactly what's missing. Incidents carry SLA clocks tracked to closure.</div></div>
+        <div class="prin"><h3><span class="num">2</span>Human oversight</h3><div class="chips"><span class="chip">IN · Sutra 2</span><span class="chip">US · Manage</span><span class="chip">EU · Art. 14</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> when drift crosses the alert threshold, a circuit breaker trips and persists (a restart can't reset it), a mandatory human-review ticket is issued, and your serving layer is notified by webhook to engage the rules fallback.</div></div>
+        <div class="prin"><h3><span class="num">3</span>Fairness &amp; non-discrimination</h3><div class="chips"><span class="chip">IN · Sutra 4</span><span class="chip">US · Measure</span><span class="chip">EU · Art. 10</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> MEDIUM/HIGH-risk models must carry an attached bias-test report as an evidence artifact — a self-declared checkbox does not pass. Validators score exactly which evidence you still owe.</div></div>
+        <div class="prin"><h3><span class="num">4</span>Transparency &amp; explainability</h3><div class="chips"><span class="chip">IN · Sutra 6</span><span class="chip">US · Map</span><span class="chip">EU · Art. 13</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> every inventory entry records the model's purpose, training data, and explainability evidence — so anyone can answer "what does this model do and why?"</div></div>
+        <div class="prin"><h3><span class="num">5</span>Safety, security &amp; robustness</h3><div class="chips"><span class="chip">IN · Sutra 7</span><span class="chip">US · Measure + Manage</span><span class="chip">EU · Art. 15</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> hourly PSI + Wasserstein drift evaluation over ingested score windows, configurable warning/alert thresholds, and a persistent business-continuity breaker for hard failures.</div></div>
+        <div class="prin"><h3><span class="num">6</span>Privacy &amp; data protection</h3><div class="chips"><span class="chip">IN · DPDP 2023</span><span class="chip">US · privacy-enhanced</span><span class="chip">EU · GDPR-aligned</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> automatic PII masking (India DPDP + GDPR patterns, credentials included) on every audit event, ledger entry, and notification — plus a fully self-hosted architecture, so model metadata never leaves your jurisdiction.</div></div>
+        <div class="prin"><h3><span class="num">7</span>Auditability &amp; documented trust</h3><div class="chips"><span class="chip">IN · Sutra 1</span><span class="chip">US · Govern</span><span class="chip">EU · Art. 12</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> an append-only ledger plus a global audit-event stream covering every mutating action — even an admin purge leaves the model's full history and a tombstone behind. Exportable as one-click PDF evidence packs.</div></div>
       </div>
     </div>
   </section>
 
-  <section class="alt">
+  <section>
     <div class="container">
-      <div class="kicker">Under the hood</div>
-      <h2>Serious machinery for a serious mandate</h2>
-      <p class="section-sub">
-        SentRAI is a self-hostable console — your model metadata never has to leave your
-        infrastructure.
-      </p>
+      <span class="kicker">Under the hood</span>
+      <h2>Serious machinery for a serious mandate.</h2>
+      <p class="section-sub">SentRAI is a self-hostable console — your model metadata never has to leave your infrastructure.</p>
       <div class="feat-grid">
-        <div class="feat">
-          <div class="icon">🔎</div>
-          <h3>Code-level discovery</h3>
-          <p>Regex plus <code>tree-sitter</code> AST analysis finds model definitions in real source, not self-reported forms. Scans local paths, GitHub, GitLab, and k8s/Triton serving infra.</p>
-        </div>
-        <div class="feat">
-          <div class="icon">📐</div>
-          <h3>Pluggable validators</h3>
-          <p>Framework checks are plugins with a shared registry — run <code>FREE-AI</code>, <code>NIST AI RMF</code>, <code>EU AI Act</code>, and <code>ISO 42001</code> in one pass, or add your own internal policy as a fifth.</p>
-        </div>
-        <div class="feat">
-          <div class="icon">📉</div>
-          <h3>Statistical drift detection</h3>
-          <p>Push score windows to <code>/monitoring/scores</code>; an hourly job computes Population Stability Index and 1-D Wasserstein distance against the reference window, with configurable thresholds.</p>
-        </div>
-        <div class="feat">
-          <div class="icon">🛡️</div>
-          <h3>Privacy-preserving by default</h3>
-          <p>PII masking with India DPDP and GDPR patterns (PAN, Aadhaar, emails, IBANs, credentials) automatically applied to audit events, ledger entries, and outbound notifications.</p>
-        </div>
-        <div class="feat">
-          <div class="icon">🧾</div>
-          <h3>Regulator-ready exports</h3>
-          <p>One-click PDF compliance reports per model, immutable audit trails, and incident histories with SLA status — evidence in the format audits actually want.</p>
-        </div>
-        <div class="feat">
-          <div class="icon">🔌</div>
-          <h3>Fits your stack</h3>
-          <p>JWT auth with role-based access, Prometheus <code>/metrics</code>, outbound webhooks for breaker trips and overdue incidents, optional Neo4j lineage, daily re-scans that register new findings as drafts, and a full REST API with Swagger docs.</p>
-        </div>
+        <div class="feat"><span class="eyebrow">Discovery</span><h3>Code-level discovery</h3><p>Regex plus <code>tree-sitter</code> AST analysis finds model definitions in real source, not self-reported forms. Scans local paths, GitHub, and k8s/Triton serving infra.</p></div>
+        <div class="feat"><span class="eyebrow">Validators</span><h3>Pluggable validators</h3><p>Framework checks are plugins with a shared registry — run <code>FREE-AI</code>, <code>NIST AI RMF</code>, <code>EU AI Act</code>, and <code>ISO 42001</code> in one pass, or add your own internal policy as a fifth.</p></div>
+        <div class="feat"><span class="eyebrow">Monitoring</span><h3>Statistical drift detection</h3><p>Push score windows to <code>/monitoring/scores</code>; an hourly job computes Population Stability Index and 1-D Wasserstein distance against the reference window, with configurable thresholds.</p></div>
+        <div class="feat"><span class="eyebrow">Privacy</span><h3>Privacy-preserving by default</h3><p>PII masking with India DPDP and GDPR patterns (PAN, Aadhaar, emails, IBANs, credentials) automatically applied to audit events, ledger entries, and outbound notifications.</p></div>
+        <div class="feat"><span class="eyebrow">Evidence</span><h3>Regulator-ready exports</h3><p>One-click PDF compliance reports per model, immutable audit trails, and incident histories with SLA status — evidence in the format audits actually want.</p></div>
+        <div class="feat"><span class="eyebrow">Integration</span><h3>Fits your stack</h3><p>JWT auth with role-based access, Prometheus <code>/metrics</code>, outbound webhooks for breaker trips and overdue incidents, optional Neo4j lineage, daily re-scans, and a full REST API.</p></div>
       </div>
     </div>
   </section>
 
-  <div class="final-cta">
+  <div class="final">
     <div class="container">
       <h2>Responsible AI is a practice, not a promise.</h2>
-      <p class="section-sub" style="margin: 14px auto 32px;">
-        Scan your first repository and see your real model inventory in under ten minutes.
-      </p>
-      <div class="hero-ctas" style="margin-bottom: 0;">
+      <p class="section-sub">Scan your first repository and see your real model inventory in under ten minutes.</p>
+      <div class="hero-ctas">
         <a class="btn btn-primary" href="/dashboard/">Launch the console</a>
-        <a class="btn btn-ghost" href="/docs">Explore the API</a>
+        <a class="btn btn-ghost" href="/coverage">Read the coverage disclosure</a>
       </div>
     </div>
   </div>
@@ -512,7 +339,7 @@
           <a href="/dashboard/">Console</a>
           <a href="/console">Classic console</a>
           <a href="/coverage">Coverage disclosure</a>
-          <a href="/docs">API Docs</a>
+          <a href="/docs">API docs</a>
         </div>
       </div>
       <p class="disclaimer">
@@ -520,7 +347,7 @@
         the Reserve Bank of India, NIST, the European Commission, or ISO. "FREE-AI" refers to the
         RBI committee report <em>Framework for Responsible and Ethical Enablement of AI</em>
         (August 2025); NIST AI RMF, the EU AI Act, and ISO/IEC 42001 are the property of their
-        respective bodies. SentRAI helps organizations operationalize these frameworks; using it
+        respective bodies. SentRAI helps organisations operationalise these frameworks; using it
         does not by itself constitute regulatory compliance or legal advice.
       </p>
     </div>

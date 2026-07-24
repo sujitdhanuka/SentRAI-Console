@@ -2,51 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── sentRAI Console design tokens ──────────────────────────────────────────
-   Dark is the default; [data-theme="light"] overrides. Components consume
-   these ONLY through the Tailwind color mapping — no hex in components. */
-:root {
-  --bg: #080b10;
-  --bg-elevated: #0c0f16;
-  --surface: #12161f;
-  --surface-hover: #171c27;
-  --border: #1f2532;
-  --border-strong: #2b3245;
-  --text: #e8ebf3;
-  --text-secondary: #8b94aa;
-  --text-tertiary: #586075;
-  --accent: #4c7eff;
-  --accent-soft: rgba(76, 126, 255, 0.13);
-  --positive: #25c98d;
-  --positive-soft: rgba(37, 201, 141, 0.12);
-  --negative: #f0506e;
-  --negative-soft: rgba(240, 80, 110, 0.12);
-  --warning: #f2a93b;
-  --warning-soft: rgba(242, 169, 59, 0.12);
-  --purple: #9b7bff;
-  --purple-soft: rgba(155, 123, 255, 0.12);
+/* ── SentRAI Console design tokens (SR-DL-001) ──────────────────────────────
+   Paper is the default reading world; the plate world is dark mode. One brand
+   accent — Signal Blue — and three functional colors (verify/caution/fail).
+   No purple, no second accent. Components consume these ONLY through the
+   Tailwind color mapping — no hex in components. */
+:root,
+[data-theme='light'] {
+  /* Paper world — reading surfaces */
+  --bg: #f5f6f3; /* paper */
+  --bg-elevated: #ffffff; /* raise */
+  --surface: #ffffff; /* raise — cards, panels */
+  --surface-hover: #eef0eb;
+  --border: #d6dcde; /* hairline */
+  --border-strong: #c3ccc8;
+  --text: #10202f; /* ink */
+  --text-secondary: #55677a; /* graphite */
+  --text-tertiary: #8a939a;
+  --accent: #2240c9; /* Signal Blue — the one accent */
+  --accent-soft: rgba(34, 64, 201, 0.08);
+  --positive: #1e8a5a; /* verify */
+  --positive-soft: rgba(30, 138, 90, 0.1);
+  --negative: #b93a2b; /* fail */
+  --negative-soft: rgba(185, 58, 43, 0.09);
+  --warning: #b97416; /* caution */
+  --warning-soft: rgba(185, 116, 22, 0.1);
+  /* Drafting grid — faint ink on paper. */
+  --grid-line: rgba(16, 32, 47, 0.04);
+  --grid-gap: 28px;
 }
 
-[data-theme='light'] {
-  --bg: #eff1f6;
-  --bg-elevated: #f6f7fa;
-  --surface: #ffffff;
-  --surface-hover: #f1f3f7;
-  --border: #e0e3eb;
-  --border-strong: #c9ceda;
-  --text: #12151c;
-  --text-secondary: #596173;
-  --text-tertiary: #8a90a0;
-  --accent: #3763de;
-  --accent-soft: rgba(55, 99, 222, 0.09);
-  --positive: #0f9e6e;
-  --positive-soft: rgba(15, 158, 110, 0.1);
-  --negative: #d93a59;
-  --negative-soft: rgba(217, 58, 89, 0.1);
-  --warning: #b97d14;
-  --warning-soft: rgba(185, 125, 20, 0.1);
-  --purple: #7452d9;
-  --purple-soft: rgba(116, 82, 217, 0.1);
+[data-theme='dark'] {
+  /* Plate world — navy blueprint ground */
+  --bg: #0a1c40; /* navy page ground */
+  --bg-elevated: #112a58; /* lifted navy — cards, inputs */
+  --surface: #112a58;
+  --surface-hover: #183465;
+  --border: rgba(170, 198, 230, 0.15); /* pale cyan line-work */
+  --border-strong: rgba(170, 198, 230, 0.28);
+  --text: #e9eef8;
+  --text-secondary: #a6bcd8;
+  --text-tertiary: #6b86a8;
+  --accent: #6a8bf5; /* Signal lifted for contrast on navy */
+  --accent-soft: rgba(106, 139, 245, 0.18);
+  --positive: #4fb185;
+  --positive-soft: rgba(79, 177, 133, 0.16);
+  --negative: #e06b5d;
+  --negative-soft: rgba(224, 107, 93, 0.16);
+  --warning: #d9a63c;
+  --warning-soft: rgba(217, 166, 60, 0.16);
+  /* Drafting grid — pale cyan on navy (the blueprint look). */
+  --grid-line: rgba(185, 214, 236, 0.07);
+  --grid-gap: 28px;
+}
+
+/* Blueprint drafting grid, drawn behind the page ground in both themes.
+   Cards (opaque --surface) sit on top; the grid shows in the negative space. */
+.blueprint-grid {
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px var(--grid-gap)),
+    repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px var(--grid-gap));
 }
 
 html,
@@ -55,10 +70,24 @@ body,
   height: 100%;
 }
 
+/* Motion character (SR-DL-001 · §14): elements settle with the drafting
+   ease-out curve. This only sets the timing function, so it changes how
+   existing transitions feel without adding any. Reduced-motion (below) wins. */
+:root {
+  --ease-out: cubic-bezier(0.19, 0.66, 0.28, 0.99);
+  --dur-fast: 160ms;
+  --dur-base: 280ms;
+  --dur-slow: 520ms;
+}
+* {
+  transition-timing-function: var(--ease-out);
+}
+
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, sans-serif;
+  /* Archivo speaks for the system (SR-DL-001); prose opts into .font-serif. */
+  font-family: Archivo, 'Helvetica Neue', Arial, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
@@ -90,10 +119,11 @@ body {
   }
 }
 
-/* ── Docs (HELP.md) typography ────────────────────────────────────────────── */
-.docs-body { font-size: 12px; line-height: 1.65; color: var(--text-secondary); max-width: 78ch; }
+/* ── Docs (HELP.md) typography ──────────────────────────────────────────────
+   Docs are prose — the reading register (Source Serif 4); headings in Archivo. */
+.docs-body { font-family: 'Source Serif 4', Georgia, serif; font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); max-width: 72ch; }
 .docs-body h1, .docs-body h2, .docs-body h3 {
-  font-family: 'Space Grotesk', sans-serif; color: var(--text); font-weight: 600; line-height: 1.3;
+  font-family: Archivo, 'Helvetica Neue', sans-serif; color: var(--text); font-weight: 600; line-height: 1.3;
 }
 .docs-body h1 { font-size: 18px; margin: 0 0 12px; }
 .docs-body h2 { font-size: 14px; margin: 22px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); scroll-margin-top: 8px; }

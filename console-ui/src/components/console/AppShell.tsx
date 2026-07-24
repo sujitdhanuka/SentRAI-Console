@@ -28,7 +28,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
   const clock = useClock();
 
   return (
-    <div className="flex h-screen flex-col overflow-auto bg-bg font-ui text-text lg:overflow-hidden">
+    <div className="blueprint-grid flex h-screen flex-col overflow-auto bg-bg font-ui text-text lg:overflow-hidden">
       <div className="flex min-h-0 flex-1">
         <IconRail />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -85,7 +85,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
           {children}
 
           <footer className="shrink-0 border-t border-border py-1 text-center font-mono text-[8.5px] text-text-tertiary">
-            sentRAI Console · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
+            sentRAI Console · v1.0.0 · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
           </footer>
         </div>
       </div>

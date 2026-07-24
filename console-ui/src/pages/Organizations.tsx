@@ -18,7 +18,7 @@ interface Org {
 }
 
 const PLANS = ['COMMUNITY', 'GROWTH', 'ENTERPRISE'];
-const PLAN_TONE: Record<string, BadgeTone> = { COMMUNITY: 'neutral', GROWTH: 'accent', ENTERPRISE: 'purple' };
+const PLAN_TONE: Record<string, BadgeTone> = { COMMUNITY: 'neutral', GROWTH: 'accent', ENTERPRISE: 'positive' };
 
 const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
 

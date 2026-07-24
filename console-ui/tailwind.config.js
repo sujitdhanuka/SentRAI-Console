@@ -21,12 +21,23 @@ export default {
         'negative-soft': 'var(--negative-soft)',
         warning: 'var(--warning)',
         'warning-soft': 'var(--warning-soft)',
-        purple: 'var(--purple)',
-        'purple-soft': 'var(--purple-soft)',
+      },
+      // SR-DL-001 radius is 3px. Override the small/medium steps used across the
+      // console so components read as engineering-drawing, not rounded chips.
+      // rounded-full is untouched (pills, avatars stay circular).
+      borderRadius: {
+        sm: '2px',
+        DEFAULT: '3px',
+        md: '3px',
+        lg: '4px',
+        xl: '6px',
       },
       fontFamily: {
-        heading: ['"Space Grotesk"', 'sans-serif'],
-        ui: ['Inter', 'sans-serif'],
+        // SR-DL-001 type roles. Archivo speaks for the system, Source Serif 4
+        // speaks to the reader, IBM Plex Mono speaks in evidence.
+        heading: ['Archivo', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+        ui: ['Archivo', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+        serif: ['"Source Serif 4"', 'Georgia', 'serif'],
         mono: ['"IBM Plex Mono"', 'monospace'],
       },
     },

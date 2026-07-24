@@ -1,4 +1,4 @@
-import { FileStack, Paperclip, Sparkles, X } from 'lucide-react';
+import { FileStack, Paperclip, PenLine, X } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client';
@@ -271,7 +271,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   disabled={busy !== null}
                   className="ml-auto flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
                 >
-                  <Sparkles size={9} /> {busy === 'remediation' ? 'Drafting…' : remediation ? 'Re-draft' : 'Draft plan'}
+                  <PenLine size={9} /> {busy === 'remediation' ? 'Drafting…' : remediation ? 'Re-draft' : 'Draft plan'}
                 </button>
               </div>
               {remediation ? (
@@ -319,7 +319,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   <label className={LABEL}>Use case description</label>
                   <button type="button" onClick={draftSummary} disabled={busy !== null}
                     className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                    <Sparkles size={9} /> {busy === 'summary' ? 'Drafting…' : 'Summarize'}
+                    <PenLine size={9} /> {busy === 'summary' ? 'Drafting…' : 'Summarize'}
                   </button>
                 </span>
                 <textarea rows={4} className={FIELD} value={form.useCase} onChange={(e) => setForm({ ...form, useCase: e.target.value })} />
@@ -330,7 +330,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   <label className={LABEL}>Risk rationale</label>
                   <button type="button" onClick={draftRationale} disabled={busy !== null}
                     className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                    <Sparkles size={9} /> {busy === 'rationale' ? 'Drafting…' : 'Draft rationale'}
+                    <PenLine size={9} /> {busy === 'rationale' ? 'Drafting…' : 'Draft rationale'}
                   </button>
                 </span>
                 <textarea rows={4} className={FIELD} placeholder="Why this model carries its assigned risk level — drafted on demand, editable, saved as your confirmed rationale."

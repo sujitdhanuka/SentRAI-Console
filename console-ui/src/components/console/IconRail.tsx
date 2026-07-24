@@ -10,7 +10,7 @@ import {
   ScrollText,
   Settings,
   Siren,
-  Sparkles,
+  Cpu,
   Users,
 } from 'lucide-react';
 
@@ -35,7 +35,7 @@ const NAV: NavItem[] = [
   { route: 'audit', icon: FileText, label: 'Audit Trail' },
   { route: 'incidents', icon: Siren, label: 'Incidents' },
   { route: 'lineage', icon: GitBranch, label: 'Lineage Graph' },
-  { route: 'ai-settings', icon: Sparkles, label: 'AI Settings', roles: ['ADMIN', 'CISO', 'OWNER'] },
+  { route: 'ai-settings', icon: Cpu, label: 'AI Settings', roles: ['ADMIN', 'CISO', 'OWNER'] },
   { route: 'ai-usage', icon: Activity, label: 'LLM Usage', roles: ['ADMIN', 'CISO', 'OWNER'] },
   { route: 'users', icon: Users, label: 'Users', roles: ['ADMIN', 'OWNER'] },
   { route: 'orgs', icon: MessageSquareWarning, label: 'Organizations', globalAdminOnly: true },
