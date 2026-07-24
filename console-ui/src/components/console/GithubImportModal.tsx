@@ -31,12 +31,18 @@ export function parseGithubRepo(input: string): { owner: string; repo: string; b
  * optional access token for private repositories. Replaces the old
  * window.prompt, which collected a bare URL the API never accepted.
  */
+/** 'github:owner/repo@branch' (as persisted on the project) → its parts. */
+function parseStoredSource(source?: string | null): { owner: string; repo: string; branch?: string } | null {
+  const m = source?.match(/^github:([^/\s]+)\/([^@\s]+?)(?:@(.+))?$/);
+  return m ? { owner: m[1], repo: m[2], branch: m[3] } : null;
+}
+
 export function GithubImportModal({
   project,
   onClose,
   onImported,
 }: {
-  project: { project_id: string; name: string } | null;
+  project: { project_id: string; name: string; codebase_source?: string | null } | null;
   onClose: () => void;
   onImported: () => void;
 }) {
@@ -52,7 +58,13 @@ export function GithubImportModal({
 
   useEffect(() => {
     if (project) {
-      setUrl(''); setBranch(''); setToken(''); setError(null);
+      // A project previously imported from GitHub prefills its repo and branch.
+      // The token is intentionally blank every time: it is used once per import
+      // and never stored, so each re-import asks for it afresh.
+      const prev = parseStoredSource(project.codebase_source);
+      setUrl(prev ? `https://github.com/${prev.owner}/${prev.repo}` : '');
+      setBranch(prev?.branch ?? '');
+      setToken(''); setError(null);
       setTimeout(() => ref.current?.querySelector<HTMLElement>('input')?.focus(), 0);
     }
   }, [project]);
@@ -114,11 +126,17 @@ export function GithubImportModal({
           </button>
         </header>
 
-        <form onSubmit={submit} className="space-y-3 p-4">
+        {/* autoComplete choices matter: browsers heuristically treat a text
+            input next to a password input as a username field and fill the
+            saved email + password into it (branch showed the user's email).
+            new-password on the token plus off + non-credential names stops it. */}
+        <form onSubmit={submit} autoComplete="off" className="space-y-3 p-4">
           <div>
             <label className={LABEL}>Repository URL</label>
             <input
               className={`${FIELD} font-mono`}
+              name="github-repo-url"
+              autoComplete="off"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://github.com/owner/repo · git@github.com:owner/repo.git · owner/repo"
@@ -141,6 +159,10 @@ export function GithubImportModal({
               <label className={LABEL}>Branch</label>
               <input
                 className={`${FIELD} font-mono`}
+                name="github-branch"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
                 placeholder="main (default)"
@@ -153,17 +175,20 @@ export function GithubImportModal({
                 <input
                   type="password"
                   className="w-full bg-transparent py-1.5 font-mono text-[11px] text-text placeholder:text-text-tertiary focus:outline-none"
+                  name="github-access-token"
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   placeholder="ghp_… / fine-grained PAT"
-                  autoComplete="off"
                 />
               </span>
             </div>
           </div>
           <p className="text-[9.5px] leading-snug text-text-tertiary">
-            The token needs read-only contents access and is used once to download the archive — it is never stored.
-            Public repositories need no token.
+            The token needs read-only contents access and is used once to download the archive — it is never stored,
+            so every import asks for it again. Public repositories need no token.
           </p>
 
           {error && (

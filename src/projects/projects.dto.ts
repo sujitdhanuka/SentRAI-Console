@@ -65,4 +65,6 @@ export interface ProjectResponse {
   tenant_name: string | null;
   has_scan_result: boolean;
   models_discovered: number | null;
+  /** 'zip' | 'folder' | 'github:owner/repo@branch' — how the codebase was loaded. */
+  codebase_source: string | null;
 }

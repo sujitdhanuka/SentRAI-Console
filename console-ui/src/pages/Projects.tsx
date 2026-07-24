@@ -19,6 +19,7 @@ interface Project {
   compliant_count?: number;
   last_scanned_at: string | null;
   has_scan_result?: boolean;
+  codebase_source?: string | null;
 }
 
 const CARD = 'rounded-md border border-border bg-surface p-3';

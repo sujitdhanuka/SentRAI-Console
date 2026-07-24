@@ -81,6 +81,7 @@ export class ProjectsService {
       tenant_name: tenantName,
       has_scan_result: orm.lastScanResult != null,
       models_discovered: orm.lastScanResult ? orm.lastScanResult.files_flagged : null,
+      codebase_source: orm.codebaseSource ?? null,
     };
   }
 
@@ -206,6 +207,7 @@ export class ProjectsService {
     }
 
     project.rootDirectory = target;
+    project.codebaseSource = source;
     project.lastScannedAt = now;
     project.lastScanResult = {
       scanned_at: now.toISOString(),
