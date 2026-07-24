@@ -70,6 +70,19 @@ body,
   height: 100%;
 }
 
+/* Motion character (SR-DL-001 · §14): elements settle with the drafting
+   ease-out curve. This only sets the timing function, so it changes how
+   existing transitions feel without adding any. Reduced-motion (below) wins. */
+:root {
+  --ease-out: cubic-bezier(0.19, 0.66, 0.28, 0.99);
+  --dur-fast: 160ms;
+  --dur-base: 280ms;
+  --dur-slow: 520ms;
+}
+* {
+  transition-timing-function: var(--ease-out);
+}
+
 body {
   background: var(--bg);
   color: var(--text);
