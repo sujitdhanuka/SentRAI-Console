@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
 import { Badge } from '../components/ui/Badge';
+import { FigurePlate, PLATE } from '../components/ui/FigurePlate';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useSession } from '../stores/session';
@@ -74,33 +75,28 @@ function BarList({ rows, empty }: { rows: Breakdown[]; empty: string }) {
   );
 }
 
-/** Daily call volume as an inline sparkline-style column chart. */
+/** Daily call volume as a column chart, drawn in the plate palette (it lives
+ *  inside a blueprint FigurePlate). Cyan line-work for calls, fail red stacked
+ *  on top so a bad day is unmistakable. */
 function DailyChart({ daily }: { daily: Usage['daily'] }) {
   const max = Math.max(...daily.map((d) => d.calls), 1);
   return (
-    <div className="px-3 py-2">
-      <div className="flex h-[72px] items-end gap-[2px]">
+    <div>
+      <div className="flex h-[76px] items-end gap-[2px]">
         {daily.map((d) => (
           <div
             key={d.date}
             className="group relative flex-1"
             title={`${d.date}: ${d.calls} calls, ${d.failed} failed, ${num(d.tokens)} tokens`}
           >
-            {/* Failures stack on top in negative so a bad day is obvious. */}
-            <div
-              className="w-full rounded-sm bg-negative"
-              style={{ height: `${(d.failed / max) * 72}px` }}
-            />
-            <div
-              className="w-full rounded-sm bg-accent"
-              style={{ height: `${((d.calls - d.failed) / max) * 72}px` }}
-            />
+            <div className="w-full" style={{ height: `${(d.failed / max) * 76}px`, background: '#E06B5D' }} />
+            <div className="w-full" style={{ height: `${((d.calls - d.failed) / max) * 76}px`, background: PLATE.line }} />
           </div>
         ))}
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[9px] text-text-tertiary">
+      <div className="mt-1.5 flex justify-between font-mono text-[9px]" style={{ color: PLATE.dim }}>
         <span>{daily[0]?.date}</span>
-        <span>peak {num(max)}/day</span>
+        <span style={{ color: PLATE.line }}>peak {num(max)}/day</span>
         <span>{daily[daily.length - 1]?.date}</span>
       </div>
     </div>
@@ -229,9 +225,20 @@ export function AiUsage() {
               </p>
             )}
 
-            <Panel title="Daily volume" className="shrink-0" right={<Badge tone="neutral">{usage.window_days}d</Badge>}>
-              <DailyChart daily={usage.daily} />
-            </Panel>
+            <div className="shrink-0">
+              <FigurePlate
+                fig="7.1"
+                title="Daily call volume"
+                fields={[
+                  { label: 'WINDOW', value: `${usage.window_days}d` },
+                  { label: 'PEAK', value: `${num(Math.max(...usage.daily.map((d) => d.calls), 1))}/day` },
+                  { label: 'REF', value: 'P3' },
+                ]}
+                caption="Metered LLM calls per day. Failures stack on top in fail red; only calls that reached a configured provider are counted."
+              >
+                <DailyChart daily={usage.daily} />
+              </FigurePlate>
+            </div>
 
             <div className="grid shrink-0 gap-2 lg:grid-cols-2">
               <Panel title="By use case" className="shrink-0"><BarList rows={usage.use_cases} empty="No calls yet." /></Panel>
