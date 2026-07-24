@@ -92,8 +92,9 @@ describe('framework validators', () => {
     expect(frameworkOverallPass(report)).toBe(false);
     const gaps = frameworkBlockingGaps(report);
     // Art-10 data governance, Art-12 record-keeping, Art-14 oversight, Art-15 robustness,
-    // Art-27 no FRIA/DPIA, Art-72 no post-market monitoring
-    expect(gaps.length).toBe(6);
+    // Art-17 no QMS audit cadence, Art-26 no deployment record, Art-27 no FRIA/DPIA,
+    // Art-72 no post-market monitoring
+    expect(gaps.length).toBe(8);
     expect(gaps.join(' ').toLowerCase()).toContain('human-in-the-loop');
   });
 
@@ -113,13 +114,15 @@ describe('framework validators', () => {
     expect(withFria.join(' ').toLowerCase()).not.toContain('fundamental-rights');
   });
 
-  it('EU AI Act passes a high-risk model with bias + FRIA evidence, oversight, and live records', () => {
+  it('EU AI Act passes a fully-governed high-risk model (bias + FRIA, oversight, QMS, deployment record, live records)', () => {
     const report = validateEuAiAct(
       entry({
         ownerTeam: 'Risk Team',
         boardPolicyRef: 'POLICY-1',
         sourceRef: 'models/credit.py',
         humanOversightRequired: true,
+        nextAuditDue: new Date(Date.now() + 30 * 86_400_000),
+        deploymentDate: new Date(Date.now() - 60 * 86_400_000),
         evidenceArtifacts: [
           { type: 'bias_test', ref: 'https://reports/bias-q2.pdf', added_at: new Date().toISOString() },
           { type: 'dpia', ref: 'https://reports/fria.pdf', added_at: new Date().toISOString() },

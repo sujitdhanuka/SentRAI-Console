@@ -16,7 +16,7 @@ purpose-built demo repo — never the internal Dhancept projects.
 - [ ] Production on the latest build: `curl -s https://sentraiconsole.com/api/v1/auth/bootstrap-status` → build tag is the expected one.
 - [ ] Demo tenant reset clean: re-run `node scripts/seed-demo.mjs` (idempotent). Confirm ~6 Meridian models, one drift-armed model, one open + one resolved incident.
 - [ ] Signed in as the **Meridian demo CISO** (credentials in your presenter notes — not in this repo). Internal Dhancept projects are in a different org and not visible here.
-- [ ] The demo repo is reachable for a live GitHub import (small public mirror), **or** its `.zip` is on the desktop as the upload fallback.
+- [ ] Demo repo staged for beat 2 — run `scripts/demo/stage-demo-repo.sh` (builds `demo-repo.zip` to your Desktop for the upload fallback; add `--publish <owner>/sentrai-demo-repo` to also create the public GitHub mirror the live-import beat uses). Both paths ready = beat 2 can't fail.
 - [ ] Browser: one window, display scaling for **1080p projector** (zoom so the rail + a full card are legible from the back row). Close all other tabs. Dark or light — pick one and stick to it.
 - [ ] Local fallback instance running on the laptop (snapshot-restored) + the narrated video open in a background tab. Phone hotspot ready.
 - [ ] Nothing that trips the drift breaker has been clicked since the reset (the "Evaluate now" click is a demo beat — save it for beat 7).

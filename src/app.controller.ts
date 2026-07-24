@@ -1,5 +1,7 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import type { Response } from 'express';
 import { readFile } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
@@ -15,10 +17,16 @@ import { BUILD_TAG } from './common/build';
  *  the browser/proxy cache (new HTML, stale JS → buttons that do nothing). */
 const ASSET_VERSION = encodeURIComponent(BUILD_TAG);
 
+/** Process start, for the /health uptime signal. */
+const STARTED_AT = Date.now();
+
 @ApiTags('Root')
 @Controller()
 export class AppController {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @InjectDataSource() private readonly dataSource: DataSource,
+  ) {}
 
   /** Serves the public marketing landing page (product, pricing, responsible-AI story). */
   @Public()
@@ -103,10 +111,31 @@ export class AppController {
     res.type('html').send(html);
   }
 
+  /**
+   * Liveness + readiness for an uptime monitor. Fast, unauthenticated, and it
+   * pings the database with `SELECT 1` so an "app up but DB down" outage
+   * returns 503 (and pages you) instead of a misleading 200. The body also
+   * carries the build tag and uptime for a human glancing at it.
+   */
   @Public()
   @Get('/health')
-  health(): { status: string; service: string } {
-    return { status: 'ok', service: this.config.get<string>('appName')! };
+  async health(
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ status: string; service: string; db: string; uptime_s: number; build: string }> {
+    let db = 'ok';
+    try {
+      await this.dataSource.query('SELECT 1');
+    } catch {
+      db = 'unreachable';
+      res.status(503);
+    }
+    return {
+      status: db === 'ok' ? 'ok' : 'degraded',
+      service: this.config.get<string>('appName')!,
+      db,
+      uptime_s: Math.floor((Date.now() - STARTED_AT) / 1000),
+      build: BUILD_TAG,
+    };
   }
 
   /** Serves the HELP.md content as JSON (mirrors GET /api/v1/docs). */

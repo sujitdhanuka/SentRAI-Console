@@ -388,6 +388,33 @@ export function validateEuAiAct(entry: AIModelEntry, ctx: ValidationContext = {}
         : 'Post-market monitoring incomplete: needs a configured continuity plan and recent drift evaluations',
       'High-risk providers must operate a documented post-market monitoring plan (continuity plan + ongoing drift evaluation).',
     ));
+
+    // Art-17 — a quality-management system, evidenced by a planned internal audit cadence.
+    const qmsOk = Boolean(entry.nextAuditDue) && entry.nextAuditDue!.getTime() > Date.now();
+    checks.push(check(
+      'Art-17',
+      'Quality Management System',
+      qmsOk,
+      qmsOk
+        ? `Planned internal audit on ${entry.nextAuditDue!.toISOString().slice(0, 10)}`
+        : entry.nextAuditDue
+          ? 'Quality-management audit is past due'
+          : 'No quality-management audit cadence scheduled',
+      'High-risk providers must operate a quality-management system with a planned internal audit cadence.',
+    ));
+
+    // Art-26 — the deployer keeps an operational deployment record, so operation
+    // can be monitored from the moment the system is put into service.
+    const deployRecordOk = entry.deploymentDate != null;
+    checks.push(check(
+      'Art-26',
+      'Deployer Operational Record',
+      deployRecordOk,
+      deployRecordOk
+        ? `Put into service on ${entry.deploymentDate!.toISOString().slice(0, 10)}`
+        : 'No deployment date recorded — operation cannot be monitored from a known start',
+      'Deployers of high-risk systems must record the deployment date so operation is monitored from putting-into-service.',
+    ));
   } else if (riskTier === 'Limited Risk') {
     const descStr = entry.useCaseDescription || '';
     const hasDesc = descStr.length > 10;

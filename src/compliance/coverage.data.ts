@@ -103,7 +103,9 @@ export const COVERAGE: FrameworkCoverage[] = [
       { code: 'Art-13', name: 'Transparency & Information to Deployers' },
       { code: 'Art-14', name: 'Human Oversight Gate' },
       { code: 'Art-15', name: 'Accuracy, Robustness & Cybersecurity' },
+      { code: 'Art-17', name: 'Quality Management System' },
       { code: 'Art-25', name: 'Provider Responsibilities Along the Value Chain' },
+      { code: 'Art-26', name: 'Deployer Operational Record' },
       { code: 'Art-27', name: 'Fundamental Rights Impact Assessment' },
       { code: 'Art-50', name: 'Transparency & Disclosure' },
       { code: 'Art-72', name: 'Post-Market Monitoring' },
@@ -111,11 +113,12 @@ export const COVERAGE: FrameworkCoverage[] = [
     ],
     universe: { total: 113, unit: 'articles in the Act' },
     statement:
-      'Twelve articles are evaluated per model: the core high-risk provider obligations ' +
-      '(Articles 9–15), value-chain and deployer duties (Articles 25, 27), post-market ' +
+      'Fourteen articles are evaluated per model: the core high-risk provider obligations ' +
+      '(Articles 9–15, 17), value-chain and deployer duties (Articles 25, 26, 27), post-market ' +
       'monitoring (Article 72), and the Article 50 transparency duty, plus a risk-tier check for ' +
-      'minimal-risk systems. Annex III use-case classification, conformity assessment and ' +
-      'CE-marking workflows are not yet implemented and are on the pack roadmap.',
+      'minimal-risk systems. Conformity assessment, CE-marking and EU-database registration ' +
+      '(e.g. Article 16) are process/paperwork obligations we do not implement — we deliberately ' +
+      'do not claim them. Annex III use-case classification is on the pack roadmap.',
   },
   {
     id: 'iso_42001',
