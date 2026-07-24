@@ -26,6 +26,9 @@ const RISK_TONE = (r: string): 'negative' | 'warning' | 'neutral' =>
 const CONF_TONE = (c: string): 'positive' | 'warning' | 'neutral' =>
   c === 'HIGH' ? 'positive' : c === 'MEDIUM' ? 'warning' : 'neutral';
 
+const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
+const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+
 /**
  * The review step between a scan and the inventory (parity with the classic
  * console): every discovered component is listed with a checkbox, and only the
@@ -43,11 +46,17 @@ export function ScanResultsModal({
 }) {
   const toast = useConsoleUi((s) => s.toast);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [ownerTeam, setOwnerTeam] = useState('');
+  const [boardRef, setBoardRef] = useState('');
   const [busy, setBusy] = useState(false);
 
   // Everything is pre-selected — the common case is "govern all of it".
   useEffect(() => {
-    if (review) setChecked(new Set(review.candidates.map((c) => c.file_path)));
+    if (review) {
+      setChecked(new Set(review.candidates.map((c) => c.file_path)));
+      setOwnerTeam('');
+      setBoardRef('');
+    }
   }, [review]);
 
   useEffect(() => {
@@ -85,7 +94,12 @@ export function ScanResultsModal({
     try {
       const imported = await api<Array<{ merged?: boolean }>>('/discovery/import', {
         method: 'POST',
-        body: JSON.stringify({ project_id: review.project.project_id, file_paths: [...checked] }),
+        body: JSON.stringify({
+          project_id: review.project.project_id,
+          file_paths: [...checked],
+          ...(ownerTeam.trim() && { owner_team: ownerTeam.trim() }),
+          ...(boardRef.trim() && { board_policy_ref: boardRef.trim() }),
+        }),
       });
       const merged = imported.filter((m) => m.merged).length;
       toast(
@@ -172,6 +186,30 @@ export function ScanResultsModal({
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Governance defaults applied to every model imported in this batch. */}
+        <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-2">
+          <div>
+            <label className={LABEL}>Owner team</label>
+            <input
+              className={FIELD}
+              value={ownerTeam}
+              onChange={(e) => setOwnerTeam(e.target.value)}
+              placeholder="e.g. Credit Risk Engineering (default: UNASSIGNED — pending review)"
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label className={LABEL}>Board policy reference</label>
+            <input
+              className={FIELD}
+              value={boardRef}
+              onChange={(e) => setBoardRef(e.target.value)}
+              placeholder="e.g. BP-AI-2026-04"
+              autoComplete="off"
+            />
+          </div>
         </div>
 
         <footer className="flex items-center gap-3 border-t border-border px-4 py-3">
