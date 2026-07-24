@@ -64,6 +64,7 @@ export interface CalendarEvent {
   label: string;
   type: 'redteam' | 'drift' | 'audit' | 'policy';
   overdue: boolean;
+  componentId?: string; // omitted for org-wide events (e.g. board policy refresh)
 }
 
 export interface Grievance {
@@ -184,11 +185,11 @@ const seedGaps: GovernanceGap[] = [
 ];
 
 const seedCalendar: CalendarEvent[] = [
-  { date: 'Jul 12', label: 'Fraud Signal Model · red-team review', type: 'redteam', overdue: true },
-  { date: 'Jul 24', label: 'Drift review · Recommendation Engine', type: 'drift', overdue: false },
+  { date: 'Jul 12', label: 'Fraud Signal Model · red-team review', type: 'redteam', overdue: true, componentId: 'cmp-003' },
+  { date: 'Jul 24', label: 'Drift review · Recommendation Engine', type: 'drift', overdue: false, componentId: 'cmp-004' },
   { date: 'Jul 29', label: 'Q3 internal AI audit kickoff', type: 'audit', overdue: false },
   { date: 'Aug 05', label: 'Board AI policy annual refresh', type: 'policy', overdue: false },
-  { date: 'Aug 14', label: 'Customer Support Copilot · red-team', type: 'redteam', overdue: false },
+  { date: 'Aug 14', label: 'Customer Support Copilot · red-team', type: 'redteam', overdue: false, componentId: 'cmp-001' },
 ];
 
 const seedGrievances: Grievance[] = [
