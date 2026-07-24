@@ -115,11 +115,14 @@
 
             <div class="src-pane hidden" id="src-pane-github">
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <input id="gh-owner" placeholder="owner (e.g. octocat)" style="flex:1; min-width:150px;" />
-                <input id="gh-repo" placeholder="repository (e.g. hello-world)" style="flex:1; min-width:150px;" />
-                <input id="gh-branch" placeholder="branch (default: main)" style="width:170px;" />
+                <input id="gh-owner" autocomplete="off" placeholder="owner (e.g. octocat)" style="flex:1; min-width:150px;" />
+                <input id="gh-repo" autocomplete="off" placeholder="repository (e.g. hello-world)" style="flex:1; min-width:150px;" />
+                <input id="gh-branch" autocomplete="off" data-1p-ignore data-lpignore="true" placeholder="branch (default: main)" style="width:170px;" />
               </div>
-              <input id="gh-token" type="password" autocomplete="off" placeholder="access token — only for private repos" style="width:100%; margin-top:8px;" />
+              <!-- new-password (not off): browsers ignore autocomplete="off" on password
+                   fields and fill saved credentials into this field and an email into the
+                   text input beside it. -->
+              <input id="gh-token" type="password" autocomplete="new-password" data-1p-ignore data-lpignore="true" placeholder="access token — only for private repos" style="width:100%; margin-top:8px;" />
               <span class="muted" style="font-size:0.78rem; display:block; margin-top:4px;">
                 Public repositories need no token. Any token is used once to download and is never stored.
               </span>

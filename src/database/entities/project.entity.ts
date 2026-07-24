@@ -36,6 +36,15 @@ export class ProjectEntity {
   @Column({ type: largeJsonColumnType(), nullable: true, transformer: safeJsonTransformer })
   lastScanResult!: { scanned_at: string; ast_coverage: string; files_flagged: number; candidates: any[] } | null;
 
+  /**
+   * Where the codebase came from: 'zip', 'folder', or 'github:owner/repo@branch'.
+   * Lets the console prefill a re-import. Access tokens are deliberately NOT
+   * part of this — a token is used once to download the archive and never
+   * persisted, so every re-import asks for it again.
+   */
+  @Column('varchar', { length: 300, nullable: true })
+  codebaseSource!: string | null;
+
   @Column('datetime')
   createdAt!: Date;
 
