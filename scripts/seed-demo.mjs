@@ -11,6 +11,12 @@
  *   [MERIDIAN_LLM_URL=http://localhost:11434/v1 MERIDIAN_LLM_MODEL=llama3.1 MERIDIAN_LLM_KEY=ollama] \
  *   node scripts/seed-demo.mjs
  *
+ * SEED_CONTEXT_ONLY=1 stages only the tenant (org + CISO + empty project) and
+ * then stops BEFORE discovery — leaving the codebase to be imported LIVE in the
+ * console (GitHub import) in front of a judge. Run the script again afterwards
+ * WITHOUT the flag to layer governance + drift + incidents onto the models the
+ * live import created (it auto-skips discovery once models exist).
+ *
  * Requires the `zip` CLI (used to package scripts/demo/repo for upload).
  */
 import { execSync } from 'node:child_process';
@@ -83,6 +89,14 @@ async function main() {
     log('created');
   } else log('exists');
   const projectId = project.project_id;
+
+  if (process.env.SEED_CONTEXT_ONLY === '1' || process.env.SEED_CONTEXT_ONLY === 'true') {
+    console.log(`\n✔ Tenant staged on ${BASE} — no discovery (ready for a LIVE GitHub import).`);
+    console.log(`  Sign in:   ${CISO_EMAIL} / ${CISO_PASSWORD}`);
+    console.log(`  Live beat: open "${PROJECT_NAME}" → Codebase → GitHub import → Scan → Import → set owner + policy.`);
+    console.log(`  Then run this script again WITHOUT SEED_CONTEXT_ONLY to layer drift + incidents onto the imported models.`);
+    return;
+  }
 
   step('Codebase upload + scan + import');
   let models = await api(`/inventory/models?project_id=${projectId}`, { token: ciso });
