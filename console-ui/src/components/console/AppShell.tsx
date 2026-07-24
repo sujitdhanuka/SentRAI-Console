@@ -28,7 +28,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
   const clock = useClock();
 
   return (
-    <div className="flex h-screen flex-col overflow-auto bg-bg font-ui text-text lg:overflow-hidden">
+    <div className="blueprint-grid flex h-screen flex-col overflow-auto bg-bg font-ui text-text lg:overflow-hidden">
       <div className="flex min-h-0 flex-1">
         <IconRail />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
