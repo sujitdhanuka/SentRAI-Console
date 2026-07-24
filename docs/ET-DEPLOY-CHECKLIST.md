@@ -115,9 +115,32 @@ clean).
 
 ## A2 — Backup + monitor (Sat–Sun 26–27 Jul)
 
-- Daily DB dump cron on the server; keep 7 days; copy latest off-server weekly.
-- Prove ONE restore into a scratch database before 27 Jul — an unproven backup
-  is a hope, not a backup.
+The scripts are in the repo — `scripts/backup.sh` and `scripts/restore.sh`. Both
+read the same DB env the app uses (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`,
+and `MYSQL_PWD`/`DB_PASSWORD`); the password never appears on a command line.
+
+```bash
+# 0. On the server, put the DB creds in the environment (or source your env file).
+export DB_HOST=... DB_USER=... DB_NAME=sentrai_compliance MYSQL_PWD='...'
+
+# 1. Take a backup NOW (DB dump + workspaces archive → ~/sentrai-backups, 7-day retention)
+./scripts/backup.sh
+
+# 2. PROVE the restore before 27 Jul — safe: loads into a scratch DB, prints row
+#    counts, then drops it. "DRILL PASSED" is the proof. An unproven backup is a
+#    hope, not a backup.
+./scripts/restore.sh ~/sentrai-backups/sentrai-db-YYYYMMDD-HHMMSS.sql.gz
+
+# 3. Schedule a daily backup at 02:00 (keeps 7 days automatically):
+#    crontab -e  →  add (adjust the path + an env file that exports the DB creds):
+#    0 2 * * * . ~/.sentrai-db.env && /path/to/repo/scripts/backup.sh >> ~/sentrai-backups/cron.log 2>&1
+```
+
+- Copy the latest dump **off-server** weekly (download it, or rsync elsewhere) —
+  a backup on the same disk as the DB dies with the disk.
+- Real disaster recovery (deliberate, destructive) is
+  `./scripts/restore.sh <dump> --target "$DB_NAME" --prod` — it double-confirms
+  before overwriting live data.
 - Uptime monitor: any free pinger (UptimeRobot etc.) on
   `https://sentraiconsole.com/health`, 5-min interval, alert to your phone.
 
