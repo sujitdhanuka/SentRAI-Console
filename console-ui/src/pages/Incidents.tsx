@@ -148,8 +148,17 @@ export function Incidents() {
   };
 
   const overdueCount = rows.filter((r) => r.is_overdue && IS_LIVE(r.status)).length;
-  const descShort = form.description.trim().length < MIN_DESC;
-  const actionShort = form.immediate_action_taken.trim().length < MIN_ACTION;
+  const descNeed = Math.max(0, MIN_DESC - form.description.trim().length);
+  const actionNeed = Math.max(0, MIN_ACTION - form.immediate_action_taken.trim().length);
+  const descShort = descNeed > 0;
+  const actionShort = actionNeed > 0;
+
+  // The submit button is gated on the regulatory minimums; when it is disabled
+  // the reason must be spelled out next to it, not implied by counter colors.
+  const blockers = [
+    descShort && `${descNeed} more character${descNeed === 1 ? '' : 's'} in the description`,
+    actionShort && `${actionNeed} more in the immediate action`,
+  ].filter(Boolean).join(' and ');
 
   return (
     <AppShell
@@ -251,9 +260,19 @@ export function Incidents() {
                 </label>
               ))}
             </div>
-            <div className="mt-2 flex justify-end gap-2">
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+              {blockers && (
+                <p className="mr-auto max-w-[60ch] text-[10.5px] text-warning">
+                  Regulators require a substantive account — add {blockers} to submit.
+                </p>
+              )}
               <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-              <button type="submit" disabled={busy || descShort || actionShort} className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={busy || descShort || actionShort}
+                title={blockers ? `Add ${blockers} to submit` : undefined}
+                className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 {busy ? 'Reporting…' : 'Report incident'}
               </button>
             </div>
