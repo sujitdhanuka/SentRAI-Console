@@ -57,7 +57,7 @@ npm ci --omit=dev
 
 # 4. Verify from OUTSIDE the server:
 curl -s https://sentraiconsole.com/health
-curl -s https://sentraiconsole.com/api/v1/auth/bootstrap-status   # build must be "2026-07-24.scan-column-widen"
+curl -s https://sentraiconsole.com/api/v1/auth/bootstrap-status   # build must be "1.0.0"
 curl -s -o /dev/null -w "%{http_code}\n" https://sentraiconsole.com/coverage   # expect 200
 ```
 
