@@ -3,9 +3,44 @@ import { Boxes, CornerDownRight, FolderGit2 } from 'lucide-react';
 import { useModels } from '../api/models';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
+import { FigurePlate, PLATE } from '../components/ui/FigurePlate';
 import { Panel } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useSession } from '../stores/session';
+
+const PROD_STAGES = new Set(['DEPLOYED', 'MONITORING']);
+
+/** A blueprint schematic of the estate → its lifecycle stages, derived from the
+ *  real inventory. Production stages carry white 2px stroke (emphasis by weight,
+ *  not colour, per SR-DL-001). */
+function GovernanceGraph({ stages, byStage, total }: { stages: string[]; byStage: Record<string, unknown[]>; total: number }) {
+  const top = 20, stageH = 34, gap = 16, stageX = 430, stageW = 200, estateX = 110, estateR = 26;
+  // Floor keeps the estate node + its label from clipping when few stages exist.
+  const H = Math.max(112, top * 2 + stages.length * stageH + Math.max(0, stages.length - 1) * gap);
+  const midY = H / 2;
+  const stageY = (i: number) => top + stageH / 2 + i * (stageH + gap);
+  return (
+    <svg viewBox={`0 0 760 ${H}`} className="w-full" style={{ height: H }} role="img" aria-label="Governance graph: estate to lifecycle stages">
+      {stages.map((s, i) => (
+        <line key={`e-${s}`} x1={estateX + estateR} y1={midY} x2={stageX} y2={stageY(i)} stroke={PLATE.dim} strokeWidth={1} />
+      ))}
+      <circle cx={estateX} cy={midY} r={estateR} fill="none" stroke={PLATE.line} strokeWidth={1.5} />
+      <circle cx={estateX} cy={midY} r={estateR - 6} fill="none" stroke={PLATE.line} strokeWidth={1} opacity={0.4} />
+      <text x={estateX} y={midY + 4} textAnchor="middle" fontFamily="IBM Plex Mono" fontSize={13} fill={PLATE.white}>{total}</text>
+      <text x={estateX} y={midY + estateR + 16} textAnchor="middle" fontFamily="IBM Plex Mono" fontSize={10} fill={PLATE.line} letterSpacing={1}>ORG ESTATE</text>
+      {stages.map((s, i) => {
+        const y = stageY(i), prod = PROD_STAGES.has(s);
+        return (
+          <g key={s}>
+            <rect x={stageX} y={y - stageH / 2} width={stageW} height={stageH} rx={3} fill="none" stroke={prod ? PLATE.white : PLATE.line} strokeWidth={prod ? 2 : 1.5} />
+            <text x={stageX + 12} y={y + 4} fontFamily="IBM Plex Mono" fontSize={10.5} fill={prod ? PLATE.white : PLATE.line} letterSpacing={0.5}>{s}</text>
+            <text x={stageX + stageW - 12} y={y + 4} textAnchor="end" fontFamily="IBM Plex Mono" fontSize={11} fill={PLATE.line}>{(byStage[s] ?? []).length}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 const RISK_TONE: Record<string, BadgeTone> = {
   LOW: 'positive', MINIMAL: 'positive', MEDIUM: 'warning', LIMITED: 'warning',
@@ -44,6 +79,21 @@ export function Lineage() {
             </p>
           ) : (
             <div className="p-3">
+              <div className="mb-4">
+                <FigurePlate
+                  fig="9.1"
+                  title="Governance Graph"
+                  fields={[
+                    { label: 'STYLE', value: 'Blueprint' },
+                    { label: 'REV', value: '1.0' },
+                    { label: 'REF', value: 'P3' },
+                  ]}
+                  caption="Estate → lifecycle stage, from the live inventory. Production stages (deployed, monitoring) are drawn in white — emphasis is carried by stroke weight, not colour."
+                >
+                  <GovernanceGraph stages={stages} byStage={byStage} total={models.length} />
+                </FigurePlate>
+              </div>
+
               <div className="mb-3 flex items-center gap-2">
                 <FolderGit2 size={15} className="text-accent" />
                 <span className="text-[12px] font-medium text-text">
