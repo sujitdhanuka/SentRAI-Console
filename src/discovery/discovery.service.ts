@@ -21,7 +21,7 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { AIModelEntry, triageAiModel, floorRiskForSecurityFindings } from '../domain/model-inventory';
 import { expandAndResolve } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
-import { candidateAsDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
+import { candidateAsDict, candidateFromDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
 import { TreeSitterService } from './tree-sitter-parser';
 import { GenerationQueueService } from '../inventory/generation-queue.service';
 import { Neo4jClient } from './neo4j-client';
@@ -323,7 +323,24 @@ export class DiscoveryService {
 
   async import(user: CurrentUser, dto: ImportDto): Promise<ImportedModel[]> {
     const { dir, project } = await this.resolveDirectory(user, dto.directory, dto.project_id);
-    const candidates = scanDirectory(expandAndResolve(dir), this.treeSitter);
+
+    // Import from a live scan when the workspace is on disk; otherwise fall
+    // back to the scan persisted at upload time — same contract as scan(), so
+    // a redeploy that wipes the workspace can never strand discovered models.
+    const resolved = expandAndResolve(dir);
+    const readable =
+      existsSync(resolved) && statSync(resolved).isDirectory() &&
+      (this.isManagedWorkspace(dir) || this.config.get<boolean>('allowServerFs'));
+    let candidates: DiscoveredCandidate[];
+    if (readable) {
+      candidates = scanDirectory(resolved, this.treeSitter);
+    } else if (project?.lastScanResult) {
+      candidates = project.lastScanResult.candidates.map(candidateFromDict);
+    } else {
+      throw new BadRequestException(
+        'No codebase found for this project. Upload a codebase (zip/folder/GitHub) — it is scanned on upload and the result is stored.',
+      );
+    }
 
     const wanted = new Set(dto.file_paths);
     const selected = candidates.filter((c) => wanted.has(c.filePath));
