@@ -26,7 +26,8 @@ interface ConsoleUiState {
 }
 
 let toastSeq = 1;
-const storedTheme = (localStorage.getItem('sentrai-theme') as Theme | null) ?? 'dark';
+// Paper is the default reading world (SR-DL-001); the plate world is opt-in dark.
+const storedTheme = (localStorage.getItem('sentrai-theme') as Theme | null) ?? 'light';
 
 export const useConsoleUi = create<ConsoleUiState>((set, get) => ({
   theme: storedTheme,

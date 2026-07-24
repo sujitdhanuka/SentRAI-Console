@@ -1,4 +1,4 @@
-import { Boxes, Globe, KeyRound, Lock, Plus, Trash2, Zap } from 'lucide-react';
+import { Boxes, Globe, KeyRound, Lock, Plus, Trash2, Activity } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
@@ -252,7 +252,7 @@ export function AiProviders({ orgId, onChanged }: { orgId: string; onChanged: ()
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <button disabled={busy === p.provider_id} onClick={() => test(p)} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                        <Zap size={11} /> {busy === p.provider_id ? 'Testing…' : 'Test'}
+                        <Activity size={11} /> {busy === p.provider_id ? 'Testing…' : 'Test'}
                       </button>
                       <button onClick={() => openForm(p)} className="rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover">Edit</button>
                       <button onClick={() => toggle(p)} className="rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover">{p.enabled ? 'Disable' : 'Enable'}</button>

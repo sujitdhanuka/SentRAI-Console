@@ -21,8 +21,16 @@ export default {
         'negative-soft': 'var(--negative-soft)',
         warning: 'var(--warning)',
         'warning-soft': 'var(--warning-soft)',
-        purple: 'var(--purple)',
-        'purple-soft': 'var(--purple-soft)',
+      },
+      // SR-DL-001 radius is 3px. Override the small/medium steps used across the
+      // console so components read as engineering-drawing, not rounded chips.
+      // rounded-full is untouched (pills, avatars stay circular).
+      borderRadius: {
+        sm: '2px',
+        DEFAULT: '3px',
+        md: '3px',
+        lg: '4px',
+        xl: '6px',
       },
       fontFamily: {
         heading: ['"Space Grotesk"', 'sans-serif'],

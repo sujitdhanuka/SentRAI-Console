@@ -1,4 +1,4 @@
-import { CheckCircle2, FileCode2, ShieldCheck, Sparkles } from 'lucide-react';
+import { CheckCircle2, FileCode2, ShieldCheck, PenLine } from 'lucide-react';
 import { useState } from 'react';
 
 import type { GateEvent } from '../../pages/CiLedger';
@@ -68,10 +68,10 @@ export function GateEventDetail({
         </div>
 
         {event.overridden && (
-          <div className="mb-3 rounded-md border border-purple bg-purple-soft px-2.5 py-2">
+          <div className="mb-3 rounded-md border border-accent bg-accent-soft px-2.5 py-2">
             <div className="mb-1 flex items-center gap-1.5">
-              <ShieldCheck size={12} className="text-purple" />
-              <span className="font-mono text-[9px] uppercase tracking-wider text-purple">Auditor override</span>
+              <ShieldCheck size={12} className="text-accent" />
+              <span className="font-mono text-[9px] uppercase tracking-wider text-accent">Auditor override</span>
             </div>
             <p className="text-[10.5px] text-text">{event.override_reason}</p>
             <p className="mt-1 font-mono text-[9px] text-text-tertiary">
@@ -126,7 +126,7 @@ export function GateEventDetail({
         {canOverride && event.verdict === 'fail' && !event.overridden && (
           <div className="mt-3 rounded-md border border-border p-2.5">
             <div className="mb-1.5 flex items-center gap-1.5">
-              <Sparkles size={12} className="text-purple" />
+              <PenLine size={12} className="text-accent" />
               <span className="font-heading text-[10px] font-medium uppercase tracking-wider text-text-secondary">
                 Sign off with justification
               </span>
@@ -141,7 +141,7 @@ export function GateEventDetail({
             <button
               onClick={submit}
               disabled={busy || reason.trim().length < 10}
-              className="mt-2 w-full rounded-md bg-purple py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+              className="mt-2 w-full rounded-md bg-accent py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
             >
               {busy ? 'Recording…' : 'Record override'}
             </button>
