@@ -211,7 +211,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
           <div>
             <h2 className="font-heading text-[15px] font-medium">Close Governance Gaps — {component.name}</h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-              <Badge tone={component.riskTier === 'High' ? 'negative' : component.riskTier === 'Limited' ? 'warning' : 'positive'}>
+              <Badge tone={component.riskTier === 'High' ? 'negative' : component.riskTier === 'Medium' ? 'warning' : 'positive'}>
                 {component.riskTier} risk
               </Badge>
               <span className="font-mono text-[9px] text-text-tertiary">{component.model} · {component.id.slice(0, 8)}</span>

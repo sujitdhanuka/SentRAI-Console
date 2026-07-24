@@ -117,12 +117,23 @@ export function ComplianceRollup() {
     <AppShell
       title="Compliance Rollup"
       actions={
-        <button
-          onClick={exportPdf}
-          className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-hover"
-        >
-          <FileDown size={13} /> Readiness PDF
-        </button>
+        <>
+          <a
+            href="/coverage"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-hover"
+            title="What each framework verdict actually covers"
+          >
+            Coverage disclosure
+          </a>
+          <button
+            onClick={exportPdf}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-hover"
+          >
+            <FileDown size={13} /> Readiness PDF
+          </button>
+        </>
       }
     >
       {loading ? (

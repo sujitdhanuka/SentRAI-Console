@@ -19,7 +19,7 @@ export interface AIComponent {
   name: string;
   description: string;
   env: Env;
-  riskTier: 'Minimal' | 'Limited' | 'High';
+  riskTier: 'Low' | 'Medium' | 'High';
   owner: string;
   model: string;
   version: string;
@@ -110,7 +110,7 @@ const ev = (n: string) => `https://evidence.sentrai.demo/${n}.pdf`;
 
 const seedComponents: AIComponent[] = [
   {
-    id: 'cmp-001', name: 'Customer Support Copilot', env: 'PROD', riskTier: 'Limited',
+    id: 'cmp-001', name: 'Customer Support Copilot', env: 'PROD', riskTier: 'Medium',
     description: 'LLM assistant drafting replies to customer tickets; agents approve before send.',
     owner: 'Support Platform', model: 'gpt-4o-mini', version: '2.4.1', humanOversight: true,
     autonomousScope: null, drift: 'warn', lastRedTeamDaysAgo: 38, sutrasDeclared: 6,
@@ -118,7 +118,7 @@ const seedComponents: AIComponent[] = [
     frameworks: { rbi: { status: 'ok', evidenceUrl: ev('rbi-cmp001') }, nist: { status: 'ok', evidenceUrl: null }, eu: { status: 'ok', evidenceUrl: ev('eu-cmp001') }, iso: { status: 'gap', evidenceUrl: null } },
   },
   {
-    id: 'cmp-002', name: 'Document Summarizer', env: 'PROD', riskTier: 'Minimal',
+    id: 'cmp-002', name: 'Document Summarizer', env: 'PROD', riskTier: 'Low',
     description: 'Summarizes uploaded documents into an internal knowledge base.',
     owner: 'Knowledge Systems', model: 'claude-haiku', version: '1.9.0', humanOversight: true,
     autonomousScope: null, drift: 'ok', lastRedTeamDaysAgo: 21, sutrasDeclared: 7,
@@ -134,7 +134,7 @@ const seedComponents: AIComponent[] = [
     frameworks: { rbi: { status: 'gap', evidenceUrl: null }, nist: { status: 'ok', evidenceUrl: ev('nist-cmp003') }, eu: { status: 'gap', evidenceUrl: null }, iso: { status: 'ok', evidenceUrl: null } },
   },
   {
-    id: 'cmp-004', name: 'Recommendation Engine', env: 'PROD', riskTier: 'Limited',
+    id: 'cmp-004', name: 'Recommendation Engine', env: 'PROD', riskTier: 'Medium',
     description: 'Ranks content and product suggestions per user session.',
     owner: 'Growth Eng', model: 'two-tower-rec', version: '3.1.4', humanOversight: false,
     autonomousScope: 'ranked content ordering only', drift: 'warn', lastRedTeamDaysAgo: 62,
@@ -142,7 +142,7 @@ const seedComponents: AIComponent[] = [
     frameworks: { rbi: { status: 'ok', evidenceUrl: null }, nist: { status: 'ok', evidenceUrl: ev('nist-cmp004') }, eu: { status: 'ok', evidenceUrl: ev('eu-cmp004') }, iso: { status: 'ok', evidenceUrl: ev('iso-cmp004') } },
   },
   {
-    id: 'cmp-005', name: 'Research Report Generator', env: 'STAGING', riskTier: 'Limited',
+    id: 'cmp-005', name: 'Research Report Generator', env: 'STAGING', riskTier: 'Medium',
     description: 'Drafts long-form research reports from curated sources; analyst reviews.',
     owner: 'Research Tools', model: 'claude-sonnet', version: '0.9.2', humanOversight: true,
     autonomousScope: null, drift: 'ok', lastRedTeamDaysAgo: 47, sutrasDeclared: 5,
@@ -150,7 +150,7 @@ const seedComponents: AIComponent[] = [
     frameworks: { rbi: { status: 'ok', evidenceUrl: ev('rbi-cmp005') }, nist: { status: 'ok', evidenceUrl: null }, eu: { status: 'na', evidenceUrl: null }, iso: { status: 'ok', evidenceUrl: ev('iso-cmp005') } },
   },
   {
-    id: 'cmp-006', name: 'Sentiment Scanner', env: 'STAGING', riskTier: 'Minimal',
+    id: 'cmp-006', name: 'Sentiment Scanner', env: 'STAGING', riskTier: 'Low',
     description: 'Classifies inbound feedback tone for routing and trend dashboards.',
     owner: 'Insights', model: 'distil-sent', version: '2.0.0', humanOversight: true,
     autonomousScope: null, drift: 'ok', lastRedTeamDaysAgo: 30, sutrasDeclared: 7,
@@ -166,7 +166,7 @@ const seedComponents: AIComponent[] = [
     frameworks: { rbi: { status: 'gap', evidenceUrl: null }, nist: { status: 'gap', evidenceUrl: null }, eu: { status: 'na', evidenceUrl: null }, iso: { status: 'na', evidenceUrl: null } },
   },
   {
-    id: 'cmp-008', name: 'Chat Assistant', env: 'DEV', riskTier: 'Minimal',
+    id: 'cmp-008', name: 'Chat Assistant', env: 'DEV', riskTier: 'Low',
     description: 'Internal chat helper answering policy and tooling questions.',
     owner: 'Employee Experience', model: 'llama3.1', version: '1.1.0', humanOversight: true,
     autonomousScope: null, drift: 'ok', lastRedTeamDaysAgo: 12, sutrasDeclared: 7,

@@ -45,7 +45,7 @@ export function ComponentDetail({
             <Kv label="Risk tier" value={component.riskTier} />
             <Kv label="Sutras declared" value={`${component.sutrasDeclared}/7`} />
             <Kv label="Incidents 30d" value={String(component.incidents30d)} />
-            <Kv label="Last red-team" value={`${component.lastRedTeamDaysAgo}d ago`} />
+            <Kv label="Last red-team" value={component.lastRedTeamDaysAgo >= 9000 ? 'never' : `${component.lastRedTeamDaysAgo}d ago`} />
             <Kv label="Oversight" value={component.humanOversight ? 'HUMAN' : 'AUTO'} />
           </div>
 
