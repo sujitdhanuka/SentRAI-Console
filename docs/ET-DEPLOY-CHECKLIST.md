@@ -57,9 +57,18 @@ npm ci --omit=dev
 
 # 4. Verify from OUTSIDE the server:
 curl -s https://sentraiconsole.com/health
-curl -s https://sentraiconsole.com/api/v1/auth/bootstrap-status   # build_tag must be >= 2026-07-24
+curl -s https://sentraiconsole.com/api/v1/auth/bootstrap-status   # build must be "2026-07-24.scan-column-widen"
 curl -s -o /dev/null -w "%{http_code}\n" https://sentraiconsole.com/coverage   # expect 200
 ```
+
+**5. Verify the big-repo scan fix** (the "GitHub import shows 0 models" bug):
+the new build widens `projects.lastScanResult` from TEXT (64 KB, silently
+truncated big scans) to MEDIUMTEXT at boot — the app log will show
+`Schema guard: widened projects.lastScanResult text → mediumtext`. Then in the
+console open **Dhancept-git-dev-v2 → Scan**: expect ~85 models. If it says
+"No codebase found", the workspace was wiped by the redeploy — just re-import
+the repo via the GitHub button (owner `sujitdhanuka`, repo `Dhancept`, branch
+`dev`, your token) and the count will stick this time.
 
 Then click through, hard-refreshed (Cmd-Shift-R): landing → Launch the console
 (should land on the React app) → all 12 tabs → /console classic still works.
@@ -71,6 +80,9 @@ Then click through, hard-refreshed (Cmd-Shift-R): landing → Launch the console
 ```bash
 # In the prod console as admin:
 #  - disable/delete qa@sentrai.test and any other test users (Users tab)
+#  - delete diag-gh@sentrai.test (org "Diag Org GH") — throwaway account used
+#    on 24 Jul to diagnose the GitHub-import scan bug; its test projects are
+#    already deleted
 #  - rotate the admin password (it has appeared in terminals during development)
 #  - create your demo-day accounts fresh
 ```
