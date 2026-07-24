@@ -20,7 +20,7 @@
       </div>
     </div>
     <div style="display: flex; align-items: center; gap: 12px;">
-      <a class="btn ghost small" href="/dashboard/" title="Open the fleet governance dashboard (new)" style="text-decoration:none;">⬡ Dashboard</a>
+      <a class="btn primary small" href="/dashboard/" title="Open the new console — now the default experience" style="text-decoration:none;">⬡ New Console</a>
       <button class="btn ghost small" id="btn-context-help" title="Help for the screen you're on (?)" style="cursor:pointer;">? Help</button>
       <button class="btn ghost small" id="btn-toggle-theme" style="cursor:pointer;">☀️ Light Mode</button>
       <div class="topbar-status" id="health-status">checking service…</div>
@@ -38,6 +38,13 @@
       </div>
     </div>
   </header>
+
+  <!-- This is the classic console, kept available at /console. The React console
+       is now the default experience. -->
+  <div style="background:rgba(99,102,241,0.10); border-bottom:1px solid rgba(99,102,241,0.28); padding:7px 20px; font-size:0.74rem; color:var(--muted); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <span>You're on the <b style="color:var(--fg);">classic console</b>. The redesigned console is now the default.</span>
+    <a href="/dashboard/" style="color:#a5b4fc; font-weight:600; text-decoration:none;">Open the new console →</a>
+  </div>
 
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="projects">Projects</button>

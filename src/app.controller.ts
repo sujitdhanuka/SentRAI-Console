@@ -27,7 +27,9 @@ export class AppController {
     res.sendFile(LANDING_HTML);
   }
 
-  /** Serves the compliance console UI — a single-page dashboard with no build step.
+  /** Serves the CLASSIC console UI — a single-page dashboard with no build step.
+   *  The React console (served at /dashboard) is now the default experience;
+   *  this classic UI is kept available at /console rather than retired.
    *  The HTML is served no-cache and its asset URLs are stamped with the build
    *  version, so a redeploy always loads the matching dashboard.js/.css instead
    *  of a stale cached copy. */
