@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, apiUpload } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
 import { GithubImportModal } from '../components/console/GithubImportModal';
+import { NewProjectWizard } from '../components/console/NewProjectWizard';
 import { ScanResultsModal, type ScanCandidate, type ScanReview } from '../components/console/ScanResultsModal';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -24,7 +25,6 @@ interface Project {
 }
 
 const CARD = 'rounded-md border border-border bg-surface p-3';
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
 
 export function Projects() {
   const toast = useConsoleUi((s) => s.toast);
@@ -32,8 +32,7 @@ export function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const zipRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
@@ -54,19 +53,6 @@ export function Projects() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const create = async () => {
-    if (!name.trim()) return;
-    try {
-      await api('/projects', { method: 'POST', body: JSON.stringify({ name: name.trim() }) });
-      toast('Project created', 'positive');
-      setName('');
-      setCreating(false);
-      void load();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Create failed', 'negative');
-    }
-  };
 
   const upload = async (projectId: string, files: FileList, mode: 'zip' | 'folder') => {
     setBusyId(projectId);
@@ -147,7 +133,7 @@ export function Projects() {
       title="Projects"
       actions={
         <button
-          onClick={() => setCreating((v) => !v)}
+          onClick={() => setWizardOpen(true)}
           className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90"
         >
           + New Project
@@ -161,17 +147,6 @@ export function Projects() {
           then scan to discover its AI components and choose which ones to govern in the inventory.
         </p>
 
-        {creating && (
-          <div className={`${CARD} mb-3 max-w-md`}>
-            <label className="mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Project name</label>
-            <input className={FIELD} value={name} autoFocus placeholder="e.g. Payments Service" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && create()} />
-            <div className="mt-2 flex justify-end gap-2">
-              <button onClick={() => setCreating(false)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-              <button onClick={create} className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90">Create</button>
-            </div>
-          </div>
-        )}
-
         {error && (
           <div className={`${CARD} flex items-center gap-3`}>
             <span className="text-[11px] text-text-secondary">{error}</span>
@@ -184,8 +159,11 @@ export function Projects() {
             {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[150px] w-full" />)}
           </div>
         ) : !projects.length && !error ? (
-          <div className="rounded-md border border-border bg-bg-elevated px-6 py-8 text-center text-[11px] text-text-secondary">
-            No projects yet — create one to start tracking an application's AI models.
+          <div className="flex flex-col items-center gap-3 rounded-md border border-border bg-bg-elevated px-6 py-10 text-center">
+            <p className="text-[11px] text-text-secondary">No projects yet — create one to start tracking an application's AI models.</p>
+            <button onClick={() => setWizardOpen(true)} className="rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90">
+              + New Project
+            </button>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -239,6 +217,17 @@ export function Projects() {
         <input ref={zipRef} type="file" accept=".zip" hidden onChange={(e) => { const f = e.target.files; if (f?.length && uploadTarget.current) void upload(uploadTarget.current, f, 'zip'); e.target.value = ''; }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={(e) => { const f = e.target.files; if (f?.length && uploadTarget.current) void upload(uploadTarget.current, f, 'folder'); e.target.value = ''; }} />
       </main>
+
+      <NewProjectWizard
+        open={wizardOpen}
+        onClose={() => { setWizardOpen(false); void load(); }}
+        onReady={(proj) => {
+          // Codebase loaded (and scanned server-side) — jump straight to the
+          // model-selection review, the final screen of the sequence.
+          void load();
+          void scan(proj.project_id, proj.name);
+        }}
+      />
 
       <GithubImportModal
         project={githubFor}
