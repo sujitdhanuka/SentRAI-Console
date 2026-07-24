@@ -85,7 +85,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
           {children}
 
           <footer className="shrink-0 border-t border-border py-1 text-center font-mono text-[8.5px] text-text-tertiary">
-            sentRAI Console · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
+            sentRAI Console · v1.0.0 · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
           </footer>
         </div>
       </div>
