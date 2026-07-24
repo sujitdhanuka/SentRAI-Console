@@ -80,12 +80,14 @@ export const COVERAGE: FrameworkCoverage[] = [
       { code: 'MANAGE-1.1', name: 'Human Oversight Controls' },
       { code: 'MANAGE-1.2', name: 'Fallback / Business-Continuity Plan' },
       { code: 'MANAGE-1.3', name: 'Incident Reporting Hygiene' },
+      { code: 'MANAGE-2.1', name: 'Risk Response Resourcing (Named Owner)' },
+      { code: 'MEASURE-3.1', name: 'Risk Tracking Mechanisms (Ledger History)' },
     ],
     universe: { total: 72, unit: 'playbook subcategories' },
     statement:
-      '12 of the playbook’s 72 subcategories are evaluated as per-model controls — three per ' +
-      'function (GOVERN, MAP, MEASURE, MANAGE), chosen for signal over ceremony. A verdict here means ' +
-      'those 12 controls pass; it is an indicative posture signal, not full-framework conformance. ' +
+      '14 of the playbook’s 72 subcategories are evaluated as per-model controls across all four ' +
+      'functions (GOVERN, MAP, MEASURE, MANAGE), chosen for signal over ceremony. A verdict here means ' +
+      'those 14 controls pass; it is an indicative posture signal, not full-framework conformance. ' +
       'Full subcategory coverage ships as a data-driven control pack on the current roadmap.',
   },
   {
@@ -98,16 +100,21 @@ export const COVERAGE: FrameworkCoverage[] = [
       { code: 'Art-10', name: 'Data & Data Governance' },
       { code: 'Art-11', name: 'Technical Documentation' },
       { code: 'Art-12', name: 'Record-Keeping (Automatic Logs)' },
+      { code: 'Art-13', name: 'Transparency & Information to Deployers' },
       { code: 'Art-14', name: 'Human Oversight Gate' },
       { code: 'Art-15', name: 'Accuracy, Robustness & Cybersecurity' },
+      { code: 'Art-25', name: 'Provider Responsibilities Along the Value Chain' },
+      { code: 'Art-27', name: 'Fundamental Rights Impact Assessment' },
       { code: 'Art-50', name: 'Transparency & Disclosure' },
+      { code: 'Art-72', name: 'Post-Market Monitoring' },
       { code: 'Art-Min', name: 'Minimal-risk general guidelines check' },
     ],
     universe: { total: 113, unit: 'articles in the Act' },
     statement:
-      'The core high-risk provider obligations (Articles 9–12, 14, 15) and the Article 50 ' +
-      'transparency duty are evaluated per model, with a risk-tier appropriate check for ' +
-      'minimal-risk systems. Annex III use-case classification, conformity assessment, FRIA and ' +
+      'Twelve articles are evaluated per model: the core high-risk provider obligations ' +
+      '(Articles 9–15), value-chain and deployer duties (Articles 25, 27), post-market ' +
+      'monitoring (Article 72), and the Article 50 transparency duty, plus a risk-tier check for ' +
+      'minimal-risk systems. Annex III use-case classification, conformity assessment and ' +
       'CE-marking workflows are not yet implemented and are on the pack roadmap.',
   },
   {
@@ -119,16 +126,18 @@ export const COVERAGE: FrameworkCoverage[] = [
       { code: 'AIMS-6.1.2', name: 'AI System Risk Assessment' },
       { code: 'AIMS-8.2', name: 'AI System Impact Assessment' },
       { code: 'AIMS-8.3', name: 'Data & Codebase Governance' },
+      { code: 'AIMS-7.2', name: 'Competence & Accountability' },
       { code: 'AIMS-9.1', name: 'Performance Monitoring & Measurement' },
       { code: 'AIMS-9.2', name: 'Internal Audit Cadence' },
       { code: 'AIMS-10.1', name: 'Nonconformity & Corrective Action' },
+      { code: 'AIMS-A.6.2', name: 'AI System Documentation (Model Card)' },
     ],
     universe: { total: 38, unit: 'Annex A controls' },
     statement:
-      'Six management-system checks spanning clauses 6, 8, 9 and 10 are evaluated per model. The 38 ' +
-      'Annex A controls are not yet individually mapped; SentRAI supports an ISO 42001 programme ' +
-      '— it does not by itself constitute certifiable conformance. Annex A mapping is on the ' +
-      'pack roadmap.',
+      'Eight management-system checks spanning clauses 6, 7, 8, 9 and 10 plus Annex A documentation ' +
+      'are evaluated per model. The full 38 Annex A controls are not yet individually mapped; SentRAI ' +
+      'supports an ISO 42001 programme — it does not by itself constitute certifiable conformance. ' +
+      'Complete Annex A mapping is on the pack roadmap.',
   },
 ];
 

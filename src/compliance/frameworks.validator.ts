@@ -93,6 +93,13 @@ function recentDrift(ctx: ValidationContext): { ok: boolean; evidence: string } 
   return { ok: false, evidence: 'No drift evaluations recorded for this model' };
 }
 
+/** A model has a real accountable owner when the field is set and isn't the
+ *  import placeholder ("UNASSIGNED — pending review"). */
+function ownerAssigned(entry: AIModelEntry): boolean {
+  const o = (entry.ownerTeam || '').trim();
+  return o.length > 0 && !/^unassigned/i.test(o);
+}
+
 /* ------------------------------- NIST AI RMF ------------------------------ */
 
 export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}): FrameworkComplianceReport {
@@ -231,6 +238,25 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
     'Report incidents within their severity SLA before deadlines lapse.',
   ));
 
+  // MANAGE-2.1 — risk response is resourced: a real team owns this model.
+  checks.push(check(
+    'MANAGE-2.1',
+    'Risk Response Resourcing',
+    ownerAssigned(entry),
+    ownerAssigned(entry) ? `Risk response owned by ${entry.ownerTeam}` : 'No team resourced to respond to this model’s risks',
+    'A named, resourced owner must be accountable for responding to the model’s risks.',
+  ));
+
+  // MEASURE-3.1 — identified risks are tracked over time via the append-only ledger.
+  const trackingOk = (ctx.ledgerEventCount ?? 0) > 0;
+  checks.push(check(
+    'MEASURE-3.1',
+    'Risk Tracking Mechanisms',
+    trackingOk,
+    trackingOk ? `${ctx.ledgerEventCount} ledger event(s) tracking this model over time` : 'No risk-tracking history recorded for this model',
+    'Identified risks must be tracked over time (an append-only ledger history for the model).',
+  ));
+
   return { frameworkName: 'NIST AI RMF', modelId: entry.modelId, modelName: entry.name, riskTier: isHigh ? 'High' : 'Standard', checks };
 }
 
@@ -318,6 +344,50 @@ export function validateEuAiAct(entry: AIModelEntry, ctx: ValidationContext = {}
       drift.evidence,
       'High-risk systems require continuous accuracy/robustness monitoring (recent drift evaluations).',
     ));
+
+    // Art-13 — the deployer must be told what the system does and who owns it.
+    const infoOk = (entry.useCaseDescription || '').trim().length >= 20 && ownerAssigned(entry);
+    checks.push(check(
+      'Art-13',
+      'Transparency & Information to Deployers',
+      infoOk,
+      infoOk
+        ? `Documented purpose with a named owner (${entry.ownerTeam})`
+        : 'Deployer information incomplete: needs a substantive purpose and a named accountable owner',
+      'High-risk systems must give deployers clear use instructions and an identified accountable owner.',
+    ));
+
+    // Art-25 — the provider along the value chain must be identified.
+    const providerOk = Boolean((entry.developedBy || '').trim());
+    checks.push(check(
+      'Art-25',
+      'Provider Responsibilities Along the Value Chain',
+      providerOk,
+      providerOk ? `Provider recorded: ${entry.developedBy}` : 'No provider / build origin recorded for this system',
+      'High-risk systems must identify the provider (internal or third party) responsible along the value chain.',
+    ));
+
+    // Art-27 — high-risk deployers must run a fundamental-rights impact assessment.
+    const friaOk = hasEvidence(entry, 'dpia');
+    checks.push(check(
+      'Art-27',
+      'Fundamental Rights Impact Assessment',
+      friaOk,
+      friaOk ? 'Fundamental-rights / data-protection impact assessment attached' : 'No FRIA/DPIA artifact attached',
+      'High-risk deployers must complete a fundamental-rights impact assessment (attach a dpia artifact).',
+    ));
+
+    // Art-72 — an active post-market monitoring plan, distinct from live accuracy checks.
+    const postMarketOk = Boolean(ctx.bcpConfigured) && drift.ok;
+    checks.push(check(
+      'Art-72',
+      'Post-Market Monitoring',
+      postMarketOk,
+      postMarketOk
+        ? 'Active post-market monitoring: business-continuity plan configured with recent drift evaluations'
+        : 'Post-market monitoring incomplete: needs a configured continuity plan and recent drift evaluations',
+      'High-risk providers must operate a documented post-market monitoring plan (continuity plan + ongoing drift evaluation).',
+    ));
   } else if (riskTier === 'Limited Risk') {
     const descStr = entry.useCaseDescription || '';
     const hasDesc = descStr.length > 10;
@@ -400,6 +470,26 @@ export function validateIso42001(entry: AIModelEntry, ctx: ValidationContext = {
     overdue === 0,
     overdue === 0 ? 'No overdue incident reports' : `${overdue} incident(s) past reporting deadline`,
     'Clause 10 requires timely handling of nonconformities: report overdue incidents.',
+    false,
+  ));
+
+  // AIMS-7.2 — competence & accountability: a named team owns the system.
+  checks.push(check(
+    'AIMS-7.2',
+    'Competence & Accountability',
+    ownerAssigned(entry),
+    ownerAssigned(entry) ? `Accountable team assigned: ${entry.ownerTeam}` : 'No accountable team assigned to this AI system',
+    'Clause 7.2 requires competent, accountable ownership: assign a named owner team.',
+  ));
+
+  // AIMS-A.6.2 — AI system documentation (a model card). Best-practice, not a hard gate.
+  const modelCardOk = hasEvidence(entry, 'model_card');
+  checks.push(check(
+    'AIMS-A.6.2',
+    'AI System Documentation',
+    modelCardOk,
+    modelCardOk ? 'Model card / system documentation artifact attached' : 'No model card attached',
+    'Annex A.6.2 recommends documented AI system information (attach a model_card artifact).',
     false,
   ));
 
