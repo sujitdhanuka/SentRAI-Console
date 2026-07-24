@@ -87,7 +87,7 @@ export function AiGenerations({ component, onChanged }: { component: AIComponent
         </button>
       </div>
       {body ? (
-        <p className="whitespace-pre-wrap text-[10.5px] leading-relaxed text-text-secondary">{body}</p>
+        <p className="whitespace-pre-wrap font-serif text-[12px] leading-relaxed text-text-secondary">{body}</p>
       ) : (
         <p className="text-[10.5px] italic text-text-tertiary">Not generated yet.</p>
       )}

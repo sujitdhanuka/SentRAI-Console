@@ -148,7 +148,7 @@ export function Projects() {
       }
     >
       <main className="min-h-0 flex-1 overflow-y-auto p-3">
-        <p className="mb-3 max-w-[80ch] text-[11px] leading-relaxed text-text-secondary">
+        <p className="mb-3 max-w-[80ch] font-serif text-[12.5px] leading-relaxed text-text-secondary">
           Each project tracks one application's codebase — its own scan history and its own scoped model
           inventory. Add a codebase by uploading a .zip, uploading a folder, or importing a GitHub repository,
           then scan to discover its AI components and choose which ones to govern in the inventory.

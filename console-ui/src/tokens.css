@@ -59,7 +59,8 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, sans-serif;
+  /* Archivo speaks for the system (SR-DL-001); prose opts into .font-serif. */
+  font-family: Archivo, 'Helvetica Neue', Arial, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
@@ -91,10 +92,11 @@ body {
   }
 }
 
-/* ── Docs (HELP.md) typography ────────────────────────────────────────────── */
-.docs-body { font-size: 12px; line-height: 1.65; color: var(--text-secondary); max-width: 78ch; }
+/* ── Docs (HELP.md) typography ──────────────────────────────────────────────
+   Docs are prose — the reading register (Source Serif 4); headings in Archivo. */
+.docs-body { font-family: 'Source Serif 4', Georgia, serif; font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); max-width: 72ch; }
 .docs-body h1, .docs-body h2, .docs-body h3 {
-  font-family: 'Space Grotesk', sans-serif; color: var(--text); font-weight: 600; line-height: 1.3;
+  font-family: Archivo, 'Helvetica Neue', sans-serif; color: var(--text); font-weight: 600; line-height: 1.3;
 }
 .docs-body h1 { font-size: 18px; margin: 0 0 12px; }
 .docs-body h2 { font-size: 14px; margin: 22px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); scroll-margin-top: 8px; }

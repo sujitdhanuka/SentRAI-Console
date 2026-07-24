@@ -37,7 +37,7 @@ export function ComponentDetail({
       <div className="flex h-full flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <h3 className="font-heading text-[13px] font-medium text-text">{component.name}</h3>
-          <p className="mb-3 mt-1 text-[10.5px] leading-relaxed text-text-secondary">{component.description}</p>
+          <p className="mb-3 mt-1 font-serif text-[12px] leading-relaxed text-text-secondary">{component.description}</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
             <Kv label="Owner" value={component.owner} />
             <Kv label="Model" value={component.model} />
