@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, apiUpload } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
+import { GithubImportModal } from '../components/console/GithubImportModal';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -85,20 +86,9 @@ export function Projects() {
     }
   };
 
-  const importGithub = async (projectId: string) => {
-    const url = window.prompt('GitHub repository URL (public, or with a token configured):');
-    if (!url) return;
-    setBusyId(projectId);
-    try {
-      await api(`/projects/${projectId}/codebase/github`, { method: 'POST', body: JSON.stringify({ repo_url: url }) });
-      toast('Repository imported', 'positive');
-      void load();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Import failed', 'negative');
-    } finally {
-      setBusyId(null);
-    }
-  };
+  // GitHub import runs through a dedicated popup (URL parsing, branch, token)
+  // instead of window.prompt — the API needs owner/repo, not a raw URL.
+  const [githubFor, setGithubFor] = useState<Project | null>(null);
 
   const scan = async (projectId: string) => {
     setBusyId(projectId);
@@ -214,7 +204,7 @@ export function Projects() {
                     <button disabled={busy} onClick={() => { uploadTarget.current = p.project_id; folderRef.current?.click(); }} title="Upload a folder" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
                       <FolderUp size={11} /> Folder
                     </button>
-                    <button disabled={busy} onClick={() => importGithub(p.project_id)} title="Import from GitHub" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
+                    <button disabled={busy} onClick={() => setGithubFor(p)} title="Import from GitHub" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
                       <Github size={11} /> GitHub
                     </button>
                     <button onClick={() => remove(p)} title="Delete project" aria-label={`Delete ${p.name}`} className="ml-auto rounded-md border border-border px-1.5 py-1 text-text-tertiary hover:bg-surface-hover hover:text-negative">
@@ -231,6 +221,12 @@ export function Projects() {
         <input ref={zipRef} type="file" accept=".zip" hidden onChange={(e) => { const f = e.target.files; if (f?.length && uploadTarget.current) void upload(uploadTarget.current, f, 'zip'); e.target.value = ''; }} />
         <input ref={folderRef} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={(e) => { const f = e.target.files; if (f?.length && uploadTarget.current) void upload(uploadTarget.current, f, 'folder'); e.target.value = ''; }} />
       </main>
+
+      <GithubImportModal
+        project={githubFor}
+        onClose={() => setGithubFor(null)}
+        onImported={() => void load()}
+      />
     </AppShell>
   );
 }
