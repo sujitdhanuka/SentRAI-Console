@@ -363,15 +363,18 @@ export class ProjectsService {
       throw new ForbiddenException('Cannot delete a project outside your organization');
     }
 
-    const modelCount = await this.models.count({ where: { projectId } });
-    if (modelCount > 0) {
-      if (!cascade) {
-        throw new ConflictException(
-          'Cannot delete a project with tracked models. Deactivate or reassign its models first.',
-        );
-      }
-      await this.models.delete({ projectId });
+    // Guard on ACTIVE models only — that's what the console shows as the model
+    // count, so a project whose models were all soft-deleted (UI shows 0) can be
+    // deleted without cascade instead of 409'ing on hidden inactive rows.
+    const activeCount = await this.models.count({ where: { projectId, isActive: true } });
+    if (activeCount > 0 && !cascade) {
+      throw new ConflictException(
+        'Cannot delete a project with tracked models. Deactivate or reassign its models first.',
+      );
     }
+    // Always remove every model for the project (active AND soft-deleted) so none
+    // is left orphaned with a dangling projectId once the project is gone.
+    await this.models.delete({ projectId });
     await this.projects.delete({ id: projectId });
   }
 }
