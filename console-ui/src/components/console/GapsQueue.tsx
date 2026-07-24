@@ -10,12 +10,15 @@ const SEV_RANK = { HIGH: 0, MED: 1, LOW: 2 } as const;
 export function GapsQueue({
   gaps,
   components,
+  scopeName,
   loading,
   error,
   onRetry,
 }: {
   gaps: GovernanceGap[];
   components: AIComponent[];
+  /** When set, the queue is scoped to a single selected component. */
+  scopeName?: string;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
@@ -30,7 +33,12 @@ export function GapsQueue({
   let body;
   if (error) body = <PanelError onRetry={onRetry} />;
   else if (loading) body = <SkeletonBlock />;
-  else if (!sorted.length) body = <div className="p-3 text-[11px] text-text-secondary">No open gaps in scope. 🎉</div>;
+  else if (!sorted.length)
+    body = (
+      <div className="p-3 text-[11px] text-text-secondary">
+        {scopeName ? `No open gaps for ${scopeName}. 🎉` : 'No open gaps in scope. 🎉'}
+      </div>
+    );
   else
     body = (
       <div className="space-y-1.5 p-2">
@@ -39,7 +47,7 @@ export function GapsQueue({
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5">
                 <Badge tone={SEV_TONE[g.severity]}>{g.severity}</Badge>
-                <span className="text-[10.5px] font-medium text-text">{name(g.componentId)}</span>
+                {!scopeName && <span className="text-[10.5px] font-medium text-text">{name(g.componentId)}</span>}
               </span>
               <span
                 className={`rounded border px-1 py-0.5 font-mono text-[9px] ${
@@ -58,7 +66,7 @@ export function GapsQueue({
 
   return (
     <Panel
-      title="Open Gaps · Prioritized"
+      title={scopeName ? `Open Gaps · ${scopeName}` : 'Open Gaps · Prioritized'}
       className="flex-[5]"
       right={!loading && !error ? <Badge tone={sorted.length ? 'negative' : 'positive'}>{sorted.length} OPEN</Badge> : undefined}
     >

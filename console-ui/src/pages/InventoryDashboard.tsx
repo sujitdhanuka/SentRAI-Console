@@ -33,6 +33,17 @@ export function InventoryDashboard() {
   // Detail always shows something: the selection when in scope, else first in scope.
   const selected = scoped.find((c) => c.id === selectedId) ?? scoped[0] ?? null;
 
+  // The gaps queue and calendar follow the selected component, like the detail
+  // panel above them — the KpiBand and Compliance Rollup carry the portfolio view.
+  const selectedGaps = useMemo(
+    () => (selected ? scopedGaps.filter((g) => g.componentId === selected.id) : scopedGaps),
+    [scopedGaps, selected],
+  );
+  const selectedCalendar = useMemo(
+    () => (selected ? calendar.filter((e) => e.componentId === selected.id || !e.componentId) : calendar),
+    [calendar, selected],
+  );
+
   return (
     <AppShell title="Model Inventory" actions={<InventoryActions />}>
       <KpiBand components={scoped} gaps={scopedGaps} grievances={grievances} loading={loading} />
@@ -48,8 +59,8 @@ export function InventoryDashboard() {
         />
         <div className="flex w-full shrink-0 flex-col gap-2 lg:w-[316px]">
           <ComponentDetail component={selected} loading={loading} error={error} onRetry={load} />
-          <GapsQueue gaps={scopedGaps} components={components} loading={loading} error={error} onRetry={load} />
-          <GovernanceCalendar events={calendar} loading={loading} error={error} onRetry={load} />
+          <GapsQueue gaps={selectedGaps} components={components} scopeName={selected?.name} loading={loading} error={error} onRetry={load} />
+          <GovernanceCalendar events={selectedCalendar} scopeName={selected?.name} loading={loading} error={error} onRetry={load} />
         </div>
       </main>
       <EditDrawer component={selected} />

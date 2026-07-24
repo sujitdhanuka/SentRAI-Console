@@ -150,14 +150,14 @@ export class HttpGovernanceProvider implements GovernanceProvider {
     for (const r of rows) {
       if (r.last_red_team_date) {
         const due = new Date(new Date(r.last_red_team_date).getTime() + 90 * 86_400_000);
-        events.push({ date: fmt(due), label: `${r.name} · red-team review`, type: 'redteam', overdue: due.getTime() < Date.now(), ts: due.getTime() });
+        events.push({ date: fmt(due), label: `${r.name} · red-team review`, type: 'redteam', overdue: due.getTime() < Date.now(), ts: due.getTime(), componentId: r.model_id });
       }
       if (r.next_audit_due) {
         const due = new Date(r.next_audit_due);
-        events.push({ date: fmt(due), label: `${r.name} · audit due`, type: 'audit', overdue: due.getTime() < Date.now(), ts: due.getTime() });
+        events.push({ date: fmt(due), label: `${r.name} · audit due`, type: 'audit', overdue: due.getTime() < Date.now(), ts: due.getTime(), componentId: r.model_id });
       }
       if (r.drift === 'alert') {
-        events.push({ date: 'now', label: `${r.name} · drift review`, type: 'drift', overdue: true, ts: 0 });
+        events.push({ date: 'now', label: `${r.name} · drift review`, type: 'drift', overdue: true, ts: 0, componentId: r.model_id });
       }
     }
     return events.sort((a, b) => a.ts - b.ts).slice(0, 10).map(({ ts: _ts, ...e }) => e);

@@ -4,11 +4,14 @@ import { SkeletonBlock } from '../ui/Skeleton';
 
 export function GovernanceCalendar({
   events,
+  scopeName,
   loading,
   error,
   onRetry,
 }: {
   events: CalendarEvent[];
+  /** When set, the calendar is scoped to a single selected component (plus org-wide dates). */
+  scopeName?: string;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
@@ -16,6 +19,12 @@ export function GovernanceCalendar({
   let body;
   if (error) body = <PanelError onRetry={onRetry} />;
   else if (loading) body = <SkeletonBlock />;
+  else if (!events.length)
+    body = (
+      <div className="p-3 text-[11px] text-text-secondary">
+        {scopeName ? `No upcoming governance dates for ${scopeName}.` : 'No upcoming governance dates.'}
+      </div>
+    );
   else
     body = (
       <ul className="p-2">
@@ -37,7 +46,7 @@ export function GovernanceCalendar({
     );
 
   return (
-    <Panel title="Governance Calendar" className="flex-[4]">
+    <Panel title={scopeName ? `Governance Calendar · ${scopeName}` : 'Governance Calendar'} className="flex-[4]">
       {body}
     </Panel>
   );
