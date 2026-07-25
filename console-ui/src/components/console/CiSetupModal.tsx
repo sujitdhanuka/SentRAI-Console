@@ -76,7 +76,7 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Set up CI scanning">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative max-h-[86vh] w-[540px] max-w-[94vw] overflow-y-auto rounded-lg border border-border-strong bg-surface p-4 shadow-2xl">
+      <div className="relative max-h-[86vh] w-[540px] max-w-[94vw] overflow-y-auto rounded-md border border-border-strong bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-heading text-[13px] font-medium">Set up CI scanning</h2>
           <button onClick={onClose} aria-label="Close" className="rounded p-1 text-text-tertiary hover:bg-surface-hover">

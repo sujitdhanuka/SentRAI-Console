@@ -119,7 +119,7 @@ export function ScanResultsModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Scan results for ${review.project.name}`}>
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Radar size={15} className="text-accent" />
           <div>

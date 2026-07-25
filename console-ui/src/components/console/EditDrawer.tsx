@@ -239,8 +239,8 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 md:p-8" role="dialog" aria-modal="true" aria-label={`Edit ${component.name}`}>
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setDrawer(false)} />
-      <div ref={ref} className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div className="absolute inset-0 bg-black/45" onClick={() => setDrawer(false)} />
+      <div ref={ref} className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
 
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
