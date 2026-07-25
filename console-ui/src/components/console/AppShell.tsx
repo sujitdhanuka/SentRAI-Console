@@ -34,10 +34,16 @@ export function AppShell({ title, actions, children }: { title: string; actions?
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border bg-bg-elevated px-3">
             <ShieldCheck size={16} className="text-accent" strokeWidth={2} />
-            <h1 className="font-heading text-[13px] font-medium tracking-wide">
-              sentRAI Console <span className="text-text-tertiary">·</span> {title}
+            <h1 className="flex items-baseline gap-1.5 font-heading text-[13px] tracking-wide">
+              <span className="font-mono text-[10.5px] font-normal text-text-tertiary">sentRAI Console</span>
+              <span className="text-text-tertiary">/</span>
+              <span className="font-semibold text-text">{title}</span>
             </h1>
-            <span className="hidden font-mono text-[10px] text-text-tertiary md:inline">{clock}</span>
+            <span className="hidden items-center gap-2 font-mono text-[10px] text-text-tertiary md:flex">
+              <span>{clock}</span>
+              <span className="opacity-40">·</span>
+              <span>REV 1.0.0</span>
+            </span>
 
             {activeProjectId && (
               <span className="flex items-center gap-1 rounded border border-border bg-surface px-2 py-0.5 font-mono text-[9.5px] text-text-secondary">
