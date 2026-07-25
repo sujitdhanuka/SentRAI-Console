@@ -58,6 +58,23 @@ export class EvidenceDto {
   @IsOptional() @IsString() actor: string = 'dashboard_user';
 }
 
+/**
+ * Behavioral-eval-harness output ingested as typed evidence (Pillar 1 —
+ * Alignment). Accepts the summary counts every harness produces (promptfoo,
+ * garak, custom suites) plus optional named failures and metrics; the service
+ * parses these into a pass-rate and stores a structured `behavioral_eval`
+ * artifact on the model.
+ */
+export class EvalEvidenceDto {
+  @IsString() suite!: string; // 'promptfoo' | 'garak' | 'pyrit' | custom name
+  @IsInt() passed!: number;
+  @IsInt() total!: number;
+  @IsOptional() @IsString() report_ref?: string; // URL / artifact path
+  @IsOptional() @IsArray() @IsString({ each: true }) failed_checks?: string[];
+  @IsOptional() metrics?: Record<string, number>;
+  @IsOptional() @IsString() actor: string = 'dashboard_user';
+}
+
 export interface RescanResultRow {
   model_id: string;
   name: string;

@@ -18,6 +18,7 @@ import {
   AIModelEntity,
   BcpStateEntity,
   DriftReportEntity,
+  ModelApprovalEntity,
   ModelLedgerEventEntity,
   OrganizationEntity,
   ProjectEntity,
@@ -101,6 +102,7 @@ export class InventoryService implements OnModuleInit {
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
     @InjectRepository(BcpStateEntity) private readonly bcpStates: Repository<BcpStateEntity>,
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
+    @InjectRepository(ModelApprovalEntity) private readonly approvals: Repository<ModelApprovalEntity>,
     private readonly treeSitter: TreeSitterService,
     private readonly notifier: NotifierService,
     private readonly config: ConfigService,
@@ -615,6 +617,19 @@ export class InventoryService implements OnModuleInit {
     const liveStages = [ModelLifecycleStage.DEPLOYED, ModelLifecycleStage.MONITORING];
     if (liveStages.includes(dto.stage)) {
       const missing = this.governanceGaps(orm);
+      // Pillar 1 — Alignment: a MEDIUM/HIGH-risk model needs a recorded
+      // review-board sign-off before it can go live. LOW-risk models keep the
+      // lighter, self-service path (risk-proportionate governance).
+      const isMedOrHigh = orm.riskLevel === RiskLevel.MEDIUM || orm.riskLevel === RiskLevel.HIGH;
+      if (isMedOrHigh) {
+        const approved = await this.approvals.count({ where: { modelId, status: 'APPROVED' } });
+        if (approved === 0) {
+          missing.push(
+            'board_approval — an approved review-board sign-off is required before a ' +
+              'MEDIUM/HIGH-risk model goes live (request one on the Alignment page)',
+          );
+        }
+      }
       if (missing.length > 0) {
         throw new UnprocessableEntityException({
           message: `Model cannot move to ${dto.stage} until governance is complete.`,
@@ -806,6 +821,69 @@ export class InventoryService implements OnModuleInit {
   async listEvidence(modelId: string) {
     const orm = await this.getOrThrow(modelId);
     return { model_id: modelId, evidence: orm.evidenceArtifacts ?? [] };
+  }
+
+  /**
+   * Ingest behavioral-eval-harness output as a typed evidence artifact (Pillar 1
+   * — Alignment). Every harness (promptfoo, garak, PyRIT, custom suites) reports
+   * pass/total counts; we normalise those into a pass-rate and a `behavioral_eval`
+   * artifact with the failed checks and metrics preserved, so a governance
+   * reviewer sees behavioral test *results*, not just a link. This is what turns
+   * "we ran evals" into evidence the compliance chain can point to.
+   */
+  async ingestEvalEvidence(
+    modelId: string,
+    dto: { suite: string; passed: number; total: number; report_ref?: string; failed_checks?: string[]; metrics?: Record<string, number>; actor: string },
+  ) {
+    const orm = await this.getOrThrow(modelId);
+    const total = Math.max(0, Math.trunc(dto.total));
+    const passed = Math.min(Math.max(0, Math.trunc(dto.passed)), total || dto.passed);
+    if (total <= 0) {
+      throw new UnprocessableEntityException('total must be a positive number of checks.');
+    }
+    const passRate = Math.round((passed / total) * 1000) / 10; // one decimal %
+    const passedAll = passed >= total;
+    const failed = dto.failed_checks?.filter((f) => f?.trim()).map((f) => f.trim()) ?? [];
+
+    const artifact: EvidenceArtifact = {
+      type: 'behavioral_eval',
+      ref: dto.report_ref?.trim() || `${dto.suite}:${passed}/${total}`,
+      description:
+        `${dto.suite} — ${passed}/${total} checks passed (${passRate}%)` +
+        (passedAll ? ' · all passed' : failed.length ? ` · failed: ${failed.slice(0, 8).join(', ')}` : ' · has failures'),
+      added_at: new Date().toISOString(),
+      data: {
+        suite: dto.suite,
+        passed,
+        total,
+        pass_rate: passRate,
+        passed_all: passedAll,
+        failed_checks: failed,
+        metrics: dto.metrics ?? {},
+      },
+    };
+    orm.evidenceArtifacts = [...(orm.evidenceArtifacts ?? []), artifact];
+    orm.updatedAt = new Date();
+    await this.models.save(orm);
+
+    await this.recordLedger(
+      modelId,
+      'EVAL_EVIDENCE_INGESTED',
+      { suite: dto.suite, passed, total, pass_rate: passRate, passed_all: passedAll },
+      dto.actor,
+    );
+
+    return {
+      model_id: modelId,
+      suite: dto.suite,
+      passed,
+      total,
+      pass_rate: passRate,
+      passed_all: passedAll,
+      failed_checks: failed,
+      evidence_count: orm.evidenceArtifacts.length,
+      artifact,
+    };
   }
 
   async getLedger(modelId: string): Promise<any[]> {

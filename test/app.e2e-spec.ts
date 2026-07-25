@@ -220,7 +220,7 @@ describe('SentrAI Console (e2e)', () => {
       .expect(400);
   });
 
-  it('gates lifecycle promotion on governance completeness', async () => {
+  it('gates lifecycle promotion on governance completeness AND board approval', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const model = await request(http)
       .post('/api/v1/inventory/models')
@@ -228,7 +228,7 @@ describe('SentrAI Console (e2e)', () => {
       .send({
         name: 'Ungoverned Draft',
         model_type: 'MACHINE_LEARNING',
-        functional_area: 'fraud_detection',
+        functional_area: 'fraud_detection', // triages MEDIUM → needs board sign-off
         use_case_description: 'Detects anomalous transactions in the payments stream',
         human_oversight_required: false,
       });
@@ -243,17 +243,119 @@ describe('SentrAI Console (e2e)', () => {
     expect(blocked.status).toBe(422);
     expect(blocked.body.missing_fields.join(' ')).toContain('owner_team');
 
-    // Complete governance, then promotion succeeds.
+    // Complete governance — but a MEDIUM model still cannot go live without an
+    // approved review-board sign-off (Pillar 1 — Alignment).
     await request(http)
       .patch(`/api/v1/inventory/models/${modelId}/governance`)
       .set('Authorization', `Bearer ${admin}`)
       .send({ owner_team: 'Fraud Ops', board_policy_ref: 'POLICY-9', human_oversight_required: true, actor: 'e2e' })
       .expect(200);
+    const noApproval = await request(http)
+      .patch(`/api/v1/inventory/models/${modelId}/lifecycle`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ stage: 'DEPLOYED', actor: 'e2e' });
+    expect(noApproval.status).toBe(422);
+    expect(noApproval.body.missing_fields.join(' ')).toContain('board_approval');
+
+    // An independent approver is needed. Create a CISO in a fresh org.
+    const gateOrg = await request(http)
+      .post('/api/v1/organizations')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Gate Org', description: 'approver org' });
+    expect(gateOrg.status).toBe(201);
+    await request(http)
+      .post('/api/v1/users')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'gate-ciso@x.test', full_name: 'Gate CISO', password: 'pw123456', role: 'CISO', organization_id: gateOrg.body.organization_id })
+      .expect(201);
+    const ciso = await login('gate-ciso@x.test', 'pw123456');
+
+    // Request sign-off (as admin), then admin cannot approve their own request.
+    const req = await request(http)
+      .post('/api/v1/alignment/approvals')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ model_id: modelId, target_stage: 'DEPLOYED', note: 'validated, ready for prod' });
+    expect(req.status).toBe(201);
+    expect(req.body.status).toBe('PENDING');
+    const approvalId = req.body.approval_id;
+
+    await request(http)
+      .post(`/api/v1/alignment/approvals/${approvalId}/decide`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ decision: 'APPROVE' })
+      .expect(403); // separation of duties: requester ≠ approver
+
+    const decided = await request(http)
+      .post(`/api/v1/alignment/approvals/${approvalId}/decide`)
+      .set('Authorization', `Bearer ${ciso}`)
+      .send({ decision: 'APPROVE', note: 'board approved' });
+    expect(decided.status).toBe(200);
+    expect(decided.body.status).toBe('APPROVED');
+
+    // With governance complete AND an approved sign-off, promotion succeeds.
     await request(http)
       .patch(`/api/v1/inventory/models/${modelId}/lifecycle`)
       .set('Authorization', `Bearer ${admin}`)
       .send({ stage: 'DEPLOYED', actor: 'e2e' })
       .expect(200);
+
+    // The approval and its decision are on the model ledger (append-only).
+    const ledger = await request(http)
+      .get(`/api/v1/inventory/models/${modelId}/ledger`)
+      .set('Authorization', `Bearer ${admin}`);
+    const types = ledger.body.map((e: any) => e.event_type);
+    expect(types).toContain('APPROVAL_REQUESTED');
+    expect(types).toContain('APPROVAL_GRANTED');
+  });
+
+  it('runs an attestation campaign and ingests behavioral-eval evidence', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Attestation Target',
+        model_type: 'NLP',
+        functional_area: 'internal_tooling',
+        use_case_description: 'Summarizes internal ops documents for the platform team',
+      });
+    expect(model.status).toBe(201);
+    const modelId = model.body.model_id;
+
+    // Open a campaign — it snapshots the active inventory into per-model items.
+    const camp = await request(http)
+      .post('/api/v1/alignment/attestations')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ title: 'e2e re-certification', cadence_days: 30 });
+    expect(camp.status).toBe(201);
+    expect(camp.body.total_items).toBeGreaterThanOrEqual(1);
+    const campaignId = camp.body.campaign_id;
+
+    const detail = await request(http)
+      .get(`/api/v1/alignment/attestations/${campaignId}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(detail.status).toBe(200);
+    const item = detail.body.items.find((i: any) => i.model_id === modelId) ?? detail.body.items[0];
+    const attested = await request(http)
+      .post(`/api/v1/alignment/attestations/items/${item.item_id}/attest`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ decision: 'ATTEST', note: 'still within scope' });
+    expect(attested.status).toBe(200);
+    expect(attested.body.status).toBe('ATTESTED');
+
+    // Ingest behavioral-eval-harness output as typed evidence with a pass-rate.
+    const evd = await request(http)
+      .post(`/api/v1/inventory/models/${modelId}/eval-evidence`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ suite: 'promptfoo', passed: 47, total: 50 });
+    expect(evd.status).toBe(201);
+    expect(evd.body.pass_rate).toBe(94);
+    expect(evd.body.passed_all).toBe(false);
+
+    const evidence = await request(http)
+      .get(`/api/v1/inventory/models/${modelId}/evidence`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(evidence.body.evidence.some((a: any) => a.type === 'behavioral_eval')).toBe(true);
   });
 
   it('keeps the full ledger after a permanent purge, and restricts purging to admins', async () => {
@@ -814,10 +916,10 @@ describe('SentrAI Console (e2e)', () => {
       const cisoA = await login('vault-a@x.test', 'pw123456');
       const cisoB = await login('vault-b@x.test', 'pw123456');
 
-      // Defaults: all four use cases listed, none customized.
+      // Defaults: all use cases listed, none customized.
       const defaults = await request(http).get('/api/v1/ai/prompts').set('Authorization', `Bearer ${cisoA}`).expect(200);
       expect(defaults.body.map((p: any) => p.use_case).sort())
-        .toEqual(['exec_narrative', 'gap_remediation', 'model_summary', 'risk_rationale']);
+        .toEqual(['autonomous_scope', 'exec_narrative', 'gap_remediation', 'model_summary', 'risk_rationale']);
       expect(defaults.body.every((p: any) => p.customized === false)).toBe(true);
 
       // Validation: dropping a required variable is a hard 400…

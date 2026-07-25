@@ -14,6 +14,7 @@ const HELP_SECTIONS: Record<Route, string> = {
   projects: 'Projects',
   inventory: 'Model Inventory',
   compliance: 'Compliance Rollup',
+  alignment: 'Alignment',
   'ci-ledger': 'CI Gate Ledger',
   monitoring: 'Drift Monitoring',
   audit: 'Audit Trail',

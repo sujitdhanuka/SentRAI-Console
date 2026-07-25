@@ -6,6 +6,7 @@ import {
   AIModelEntity,
   BcpStateEntity,
   DriftReportEntity,
+  ModelApprovalEntity,
   ModelLedgerEventEntity,
   OrganizationEntity,
   ProjectEntity,
@@ -28,6 +29,7 @@ import { SummarizerModule } from '../summarizer/summarizer.module';
       AIIncidentEntity,
       BcpStateEntity,
       OrganizationEntity,
+      ModelApprovalEntity,
     ]),
     DiscoveryModule, // provides the shared TreeSitterService
     SummarizerModule,

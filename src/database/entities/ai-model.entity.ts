@@ -76,9 +76,10 @@ export class AIModelEntity {
   @Column('varchar', { length: 500, nullable: true })
   sourceRef!: string | null;
 
-  /** Attached evidence artifacts: bias-test reports, red-team reports, etc. */
+  /** Attached evidence artifacts: bias-test reports, red-team reports, etc.
+   *  `data` carries a parsed structured summary (e.g. behavioral-eval results). */
   @Column('simple-json', { nullable: true })
-  evidenceArtifacts!: Array<{ type: string; ref: string; description?: string; added_at: string }> | null;
+  evidenceArtifacts!: Array<{ type: string; ref: string; description?: string; added_at: string; data?: Record<string, any> }> | null;
 
   /**
    * Hardcoded secrets / credentials found in the model's source at scan time
