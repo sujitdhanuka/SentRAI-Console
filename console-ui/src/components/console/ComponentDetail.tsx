@@ -3,6 +3,7 @@ import { PencilLine } from 'lucide-react';
 import { AIComponent } from '../../providers';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { AiGenerations } from './AiGenerations';
+import { Button } from '../ui/Button';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';
 
@@ -54,12 +55,9 @@ export function ComponentDetail({
           </div>
         </div>
         <div className="shrink-0 border-t border-border p-2.5">
-          <button
-            onClick={() => setDrawer(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md bg-accent px-2 py-1.5 text-[11px] font-medium text-white hover:opacity-90"
-          >
-            <PencilLine size={12} /> Edit Entry
-          </button>
+          <Button variant="primary" size="md" onClick={() => setDrawer(true)} className="w-full" icon={<PencilLine size={12} />}>
+            Edit Entry
+          </Button>
         </div>
       </div>
     );

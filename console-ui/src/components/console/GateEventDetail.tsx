@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import type { GateEvent } from '../../pages/CiLedger';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 
 function Kv({ label, value }: { label: string; value: string }) {
@@ -138,13 +139,9 @@ export function GateEventDetail({
               placeholder="Why is deploying acceptable despite the blocking violations? (recorded permanently, min 10 chars)"
               className="w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent"
             />
-            <button
-              onClick={submit}
-              disabled={busy || reason.trim().length < 10}
-              className="mt-2 w-full rounded-md bg-accent py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-40"
-            >
+            <Button variant="primary" size="md" onClick={submit} disabled={busy || reason.trim().length < 10} className="mt-2 w-full">
               {busy ? 'Recording…' : 'Record override'}
-            </button>
+            </Button>
           </div>
         )}
       </div>
