@@ -16,7 +16,7 @@ export function Toasts() {
         <button
           key={t.id}
           onClick={() => dismiss(t.id)}
-          className={`rounded-md border-l-2 ${TONE_BORDER[t.tone]} border border-border bg-bg-elevated px-3 py-2 text-left text-[11px] text-text shadow-lg`}
+          className={`rounded-md border-l-2 ${TONE_BORDER[t.tone]} border border-border bg-bg-elevated px-3 py-2 text-left text-[11px] text-text`}
         >
           {t.message}
         </button>

@@ -165,7 +165,7 @@ export function NewProjectWizard({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Create a project">
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div className="relative w-full max-w-md overflow-hidden rounded-md border border-border-strong bg-surface">
         <header className="flex items-center gap-3 border-b border-border px-4 py-3">
           <div className="flex-1">
             <h2 className="font-heading text-[13px] font-medium">New project</h2>
