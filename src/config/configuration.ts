@@ -8,6 +8,9 @@ export interface AppConfig {
   port: number;
   corsOrigins: string[];
   appName: string;
+  /** Canonical public origin (no trailing slash) used for absolute URLs in
+   *  sitemap.xml / robots.txt. Override per environment with PUBLIC_URL. */
+  publicUrl: string;
 
   db: {
     provider: 'sqlite' | 'mariadb';
@@ -181,6 +184,7 @@ export default (): AppConfig => {
     .map((s) => s.trim())
     .filter(Boolean),
   appName: 'RBI SentrAI Compliance Service',
+  publicUrl: (process.env.PUBLIC_URL ?? 'https://sentraiconsole.com').replace(/\/+$/, ''),
 
   db: {
     provider: dbProvider,
