@@ -5,8 +5,9 @@ import { api, apiUpload } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { parseGithubRepo } from './GithubImportModal';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { Button } from '../ui/Button';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 type Source = 'github' | 'zip' | 'folder';
 type Step = 1 | 2;
@@ -165,7 +166,7 @@ export function NewProjectWizard({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Create a project">
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-md overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div className="relative w-full max-w-md overflow-hidden rounded-md border border-border-strong bg-surface">
         <header className="flex items-center gap-3 border-b border-border px-4 py-3">
           <div className="flex-1">
             <h2 className="font-heading text-[13px] font-medium">New project</h2>
@@ -204,14 +205,10 @@ export function NewProjectWizard({
               </div>
               {error && <p className="rounded-md border border-negative bg-negative-soft px-2.5 py-1.5 text-[10.5px] text-negative">{error}</p>}
               <div className="flex justify-end gap-2 pt-1">
-                <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-                <button
-                  onClick={goToCodebase}
-                  disabled={busy || !name.trim()}
-                  className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {busy && <Loader2 size={12} className="animate-spin" />} Next: add codebase
-                </button>
+                <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+                <Button variant="primary" size="sm" onClick={goToCodebase} disabled={busy || !name.trim()} icon={busy ? <Loader2 size={12} className="animate-spin" /> : undefined}>
+                  Next: add codebase
+                </Button>
               </div>
             </div>
           )}
@@ -283,18 +280,11 @@ export function NewProjectWizard({
               {error && <p className="rounded-md border border-negative bg-negative-soft px-2.5 py-1.5 text-[10.5px] text-negative">{error}</p>}
 
               <div className="flex items-center justify-between gap-2 pt-1">
-                <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">
-                  I'll add it later
-                </button>
+                <Button variant="secondary" size="sm" onClick={onClose}>I'll add it later</Button>
                 {source === 'github' && (
-                  <button
-                    onClick={importGithub}
-                    disabled={busy || !parsed}
-                    title={!parsed ? 'Enter a valid GitHub repository first' : undefined}
-                    className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy ? <Loader2 size={12} className="animate-spin" /> : <Github size={12} />} Import & scan
-                  </button>
+                  <Button variant="primary" size="sm" onClick={importGithub} disabled={busy || !parsed} title={!parsed ? 'Enter a valid GitHub repository first' : undefined} icon={busy ? <Loader2 size={12} className="animate-spin" /> : <Github size={12} />}>
+                    Import &amp; scan
+                  </Button>
                 )}
               </div>
             </div>

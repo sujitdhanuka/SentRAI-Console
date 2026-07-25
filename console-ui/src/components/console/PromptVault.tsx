@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';
 
@@ -30,7 +31,7 @@ interface Version {
   created_at: string;
 }
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
+import { fieldClass as FIELD } from '../ui/form';
 
 /**
  * Versioned prompt templates. Saving never overwrites — it appends version N+1
@@ -157,16 +158,10 @@ export function PromptVault({ orgId }: { orgId: string }) {
                   <p className="mt-0.5 max-w-[70ch] text-[10.5px] text-text-secondary">{p.description}</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <button onClick={() => startEdit(p)} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover">
-                    <PencilLine size={11} /> Edit
-                  </button>
-                  <button disabled={!p.version_count} onClick={() => openHistory(p.use_case)} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-40">
-                    <History size={11} /> History ({p.version_count})
-                  </button>
+                  <Button variant="secondary" size="sm" onClick={() => startEdit(p)} icon={<PencilLine size={11} />}>Edit</Button>
+                  <Button variant="secondary" size="sm" disabled={!p.version_count} onClick={() => openHistory(p.use_case)} icon={<History size={11} />}>History ({p.version_count})</Button>
                   {p.customized && (
-                    <button onClick={() => reset(p.use_case)} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover">
-                      <RotateCcw size={11} /> Reset
-                    </button>
+                    <Button variant="secondary" size="sm" onClick={() => reset(p.use_case)} icon={<RotateCcw size={11} />}>Reset</Button>
                   )}
                 </div>
               </div>
@@ -184,10 +179,8 @@ export function PromptVault({ orgId }: { orgId: string }) {
                   <textarea rows={9} value={draft} onChange={(e) => setDraft(e.target.value)} className={`${FIELD} font-mono`} />
                   <input className={`${FIELD} mt-2`} maxLength={255} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Change note (optional) — e.g. added PII instruction" />
                   <div className="mt-2 flex justify-end gap-2">
-                    <button onClick={() => setEditing(null)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-                    <button disabled={busy} onClick={() => save(p.use_case)} className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50">
-                      {busy ? 'Saving…' : 'Save as new version'}
-                    </button>
+                    <Button variant="secondary" size="sm" onClick={() => setEditing(null)}>Cancel</Button>
+                    <Button variant="primary" size="sm" disabled={busy} onClick={() => save(p.use_case)}>{busy ? 'Saving…' : 'Save as new version'}</Button>
                   </div>
                 </div>
               )}
@@ -208,11 +201,9 @@ export function PromptVault({ orgId }: { orgId: string }) {
                               {v.change_note ? ` · “${v.change_note}”` : ''}
                             </span>
                             <span className="ml-auto flex gap-1.5">
-                              <button onClick={() => setPreview(preview === v.version ? null : v.version)} className="rounded-md border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-hover">
-                                {preview === v.version ? 'Hide' : 'View'}
-                              </button>
+                              <Button variant="secondary" size="xs" onClick={() => setPreview(preview === v.version ? null : v.version)}>{preview === v.version ? 'Hide' : 'View'}</Button>
                               {!v.active && (
-                                <button onClick={() => restore(p.use_case, v.version)} className="rounded-md border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-hover">Restore</button>
+                                <Button variant="secondary" size="xs" onClick={() => restore(p.use_case, v.version)}>Restore</Button>
                               )}
                             </span>
                           </div>
@@ -222,7 +213,7 @@ export function PromptVault({ orgId }: { orgId: string }) {
                         </div>
                       ))}
                       <div className="mt-1.5 text-right">
-                        <button onClick={() => setHistoryOf(null)} className="rounded-md border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-hover">Close</button>
+                        <Button variant="secondary" size="xs" onClick={() => setHistoryOf(null)}>Close</Button>
                       </div>
                     </>
                   )}

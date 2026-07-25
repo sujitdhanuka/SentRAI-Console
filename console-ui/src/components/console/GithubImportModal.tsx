@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { Button } from '../ui/Button';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 /**
  * Accepts every way people paste a GitHub repo and normalises it to owner/repo:
@@ -114,7 +115,7 @@ export function GithubImportModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Import GitHub repository into ${project.name}`}>
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
-      <div ref={ref} className="relative w-full max-w-md overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div ref={ref} className="relative w-full max-w-md overflow-hidden rounded-md border border-border-strong bg-surface">
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Github size={15} className="text-accent" />
           <div>
@@ -198,17 +199,10 @@ export function GithubImportModal({
           )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={busy || !parsed}
-              title={!parsed ? 'Enter a valid GitHub repository first' : undefined}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Github size={12} /> {busy ? 'Importing…' : 'Import repository'}
-            </button>
+            <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={busy || !parsed} title={!parsed ? 'Enter a valid GitHub repository first' : undefined} icon={<Github size={12} />}>
+              {busy ? 'Importing…' : 'Import repository'}
+            </Button>
           </div>
         </form>
       </div>

@@ -1,8 +1,8 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Req, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { readFile } from 'fs/promises';
 import { ConfigService } from '@nestjs/config';
 
@@ -17,8 +17,16 @@ import { BUILD_TAG } from './common/build';
  *  the browser/proxy cache (new HTML, stale JS → buttons that do nothing). */
 const ASSET_VERSION = encodeURIComponent(BUILD_TAG);
 
-/** Process start, for the /health uptime signal. */
+/** Process start, for the /health uptime signal (and the sitemap lastmod). */
 const STARTED_AT = Date.now();
+
+/** Public, crawlable pages the sitemap advertises. App/API surfaces (/console,
+ *  /dashboard, /api/*, auth) are deliberately excluded — they sit behind auth
+ *  and carry no indexable content. Add a row here when a new public page ships. */
+const PUBLIC_ROUTES: ReadonlyArray<{ path: string; changefreq: string; priority: string }> = [
+  { path: '/', changefreq: 'monthly', priority: '1.0' },
+  { path: '/coverage', changefreq: 'monthly', priority: '0.8' },
+];
 
 @ApiTags('Root')
 @Controller()
@@ -117,6 +125,66 @@ export class AppController {
 </div></body></html>`;
     res.set('Cache-Control', 'no-cache');
     res.type('html').send(html);
+  }
+
+  /** Canonical origin (no trailing slash) for absolute URLs. Prefers the
+   *  configured PUBLIC_URL; falls back to the proxy-aware request host so a
+   *  staging mirror advertises itself, not production. */
+  private siteBase(req: Request): string {
+    const configured = this.config.get<string>('publicUrl');
+    if (configured) return configured;
+    const proto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() || req.protocol;
+    const host = (req.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim() || req.get('host') || 'localhost';
+    return `${proto}://${host}`;
+  }
+
+  /**
+   * Dynamic sitemap for search engines. Generated at request time from
+   * PUBLIC_ROUTES against the canonical origin, so the URL set stays in sync
+   * with the code and never points at a stale host. lastmod tracks the current
+   * deploy (process start) — these pages only change on redeploy.
+   */
+  @Public()
+  @Get('/sitemap.xml')
+  @ApiExcludeEndpoint()
+  sitemap(@Req() req: Request, @Res() res: Response): void {
+    const base = this.siteBase(req);
+    const lastmod = new Date(STARTED_AT).toISOString().slice(0, 10);
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+    const urls = PUBLIC_ROUTES.map(
+      (r) => `  <url>
+    <loc>${esc(base + r.path)}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${r.changefreq}</changefreq>
+    <priority>${r.priority}</priority>
+  </url>`,
+    ).join('\n');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>
+`;
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('application/xml').send(xml);
+  }
+
+  /** robots.txt — keeps crawlers out of the app/API surfaces and points them at
+   *  the sitemap, using the same canonical origin. */
+  @Public()
+  @Get('/robots.txt')
+  @ApiExcludeEndpoint()
+  robots(@Req() req: Request, @Res() res: Response): void {
+    const body = `User-agent: *
+Disallow: /api/
+Disallow: /console
+Disallow: /dashboard
+Disallow: /auth
+
+Sitemap: ${this.siteBase(req)}/sitemap.xml
+`;
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('text/plain').send(body);
   }
 
   /**

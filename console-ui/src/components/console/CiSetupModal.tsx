@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
+import { Button } from '../ui/Button';
 
 interface Project {
   project_id: string;
@@ -76,7 +77,7 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Set up CI scanning">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative max-h-[86vh] w-[540px] max-w-[94vw] overflow-y-auto rounded-lg border border-border-strong bg-surface p-4 shadow-2xl">
+      <div className="relative max-h-[86vh] w-[540px] max-w-[94vw] overflow-y-auto rounded-md border border-border-strong bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-heading text-[13px] font-medium">Set up CI scanning</h2>
           <button onClick={onClose} aria-label="Close" className="rounded p-1 text-text-tertiary hover:bg-surface-hover">
@@ -101,13 +102,9 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
               <option key={p.project_id} value={p.project_id}>{p.name}</option>
             ))}
           </select>
-          <button
-            onClick={mint}
-            disabled={busy || !projectId}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
-            <KeyRound size={13} /> {busy ? 'Minting…' : 'Generate token'}
-          </button>
+          <Button variant="primary" size="sm" onClick={mint} disabled={busy || !projectId} icon={<KeyRound size={13} />}>
+            {busy ? 'Minting…' : 'Generate token'}
+          </Button>
         </div>
 
         {token && (
@@ -117,18 +114,14 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
             </div>
             <div className="flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded bg-bg-elevated px-2 py-1 font-mono text-[10px] text-text">{token}</code>
-              <button onClick={() => copy(token, 'Token')} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover">
-                <Copy size={11} /> Copy
-              </button>
+              <Button variant="secondary" size="sm" onClick={() => copy(token, 'Token')} icon={<Copy size={11} />}>Copy</Button>
             </div>
           </div>
         )}
 
         <div className="mb-1 flex items-center justify-between">
           <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Pipeline step</label>
-          <button onClick={() => copy(snippet, 'Snippet')} className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-hover">
-            <Copy size={11} /> Copy
-          </button>
+          <Button variant="secondary" size="xs" onClick={() => copy(snippet, 'Snippet')} icon={<Copy size={11} />}>Copy</Button>
         </div>
         <pre className="overflow-x-auto rounded-md border border-border bg-bg-elevated p-2.5 font-mono text-[9.5px] leading-relaxed text-text">
 {snippet}

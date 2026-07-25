@@ -48,7 +48,7 @@ function RailTooltip({ label }: { label: string }) {
   return (
     <span
       role="tooltip"
-      className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border-strong bg-bg-elevated px-2 py-1 text-[11px] text-text opacity-0 shadow-lg transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100"
+      className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border-strong bg-bg-elevated px-2 py-1 text-[11px] text-text opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100"
     >
       {label}
     </span>
@@ -85,7 +85,7 @@ export function IconRail() {
           onClick={() => navigate(route)}
           className={`group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
             active === route
-              ? 'bg-accent-soft text-accent'
+              ? "bg-accent-soft text-accent before:absolute before:left-[-6px] before:top-1/2 before:h-6 before:w-[2.5px] before:-translate-y-1/2 before:rounded-r-full before:bg-accent before:content-['']"
               : 'text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
           }`}
         >

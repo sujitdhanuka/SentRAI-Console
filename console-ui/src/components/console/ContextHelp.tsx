@@ -121,7 +121,7 @@ export function ContextHelp() {
           aria-modal="true"
           aria-label={`Help for ${title}`}
         >
-          <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+          <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
             <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
               <CircleHelp size={13} className="text-accent" />
               <h2 className="font-heading text-[12px] font-medium text-text">

@@ -2,6 +2,7 @@ import { LogIn } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
 import { useSession } from '../stores/session';
+import { Button } from '../components/ui/Button';
 
 const FIELD =
   'w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-[12px] text-text placeholder:text-text-tertiary focus:border-accent';
@@ -55,13 +56,9 @@ export function Login() {
               {error}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={busy}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md bg-accent py-2 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
-            <LogIn size={14} /> {busy ? 'Signing in…' : 'Sign in'}
-          </button>
+          <Button type="submit" variant="primary" size="md" disabled={busy} className="w-full" icon={<LogIn size={14} />}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </Button>
         </form>
 
         <p className="mt-3 text-center text-[10px] text-text-tertiary">

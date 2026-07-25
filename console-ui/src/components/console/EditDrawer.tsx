@@ -1,4 +1,4 @@
-import { FileStack, Paperclip, PenLine, X } from 'lucide-react';
+import { FileStack, Info, Paperclip, PenLine, X } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client';
@@ -6,12 +6,13 @@ import { AIComponent, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 const daysAgoToISO = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
 const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 /* Per-framework compliance as returned by /inventory/models/:id/compliance-check. */
 interface FrameworkReport {
@@ -37,6 +38,28 @@ function frameworkOf(check: ComplianceCheck | null, key: string): FrameworkRepor
   if (key === 'nist') return check.nist_rmf ?? null;
   if (key === 'eu') return check.eu_ai_act ?? null;
   return check.iso_42001 ?? null;
+}
+
+/** Plain-language help for each governance field — shown as a hover tooltip so
+ *  the form explains itself to a first-time user (or a judge) during the demo. */
+const HINTS = {
+  owner: "The named, accountable team that owns this model's risks. RBI FREE-AI accountability and ISO 42001 Clause 7.2 require a designated owner — 'unassigned' is a gap.",
+  policy: 'The board-approved AI policy this model operates under. RBI FREE-AI Recommendation 14 mandates a board-approved AI policy reference.',
+  redteam: 'When this model was last adversarially / bias tested. Policy target: within 90 days; NIST MEASURE expects a red-team or bias review within the last 12 months.',
+  oversight: 'Whether a human must review outputs before they are acted on. Uncheck only for genuinely autonomous systems — which then require a declared autonomous scope.',
+  scope: "The boundary of what this model may do without per-action human sign-off — e.g. 'may draft tier-1 replies; escalate disputes to a human'. Empty means fully supervised. RBI FREE-AI Recommendation 16 requires clear autonomous action limits for any model without human oversight.",
+  useCase: 'What this system does, in plain language. Auto-drafted from the code scan — review and confirm before governance sign-off.',
+  rationale: 'Why this model carries its assigned risk tier. Drafted on demand from the detected code signals; edit and save as your confirmed rationale.',
+  sutras: "Alignment with RBI FREE-AI's seven guiding principles (sutras). Declare the principles this model's governance satisfies.",
+} as const;
+
+/** A small info affordance: hover (or focus) to read the field's governance meaning. */
+function Hint({ text }: { text: string }) {
+  return (
+    <span title={text} aria-label={text} tabIndex={0} className="ml-1 inline-flex cursor-help align-middle text-text-tertiary hover:text-accent focus-visible:text-accent">
+      <Info size={11} />
+    </span>
+  );
 }
 
 /**
@@ -139,6 +162,18 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     } finally { setBusy(null); }
   };
 
+  const draftScope = async () => {
+    setBusy('scope');
+    try {
+      const r = await api<{ autonomous_scope: string; ai_enabled: boolean; provider?: string }>(
+        `/inventory/models/${component.id}/autonomous-scope`, { method: 'POST' });
+      setForm((f) => ({ ...f, autonomousScope: r.autonomous_scope }));
+      toast(r.ai_enabled ? `Scope drafted by ${r.provider ?? 'AI'} — review before saving` : 'Scope drafted locally — review before saving', 'positive');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Draft failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
   const draftRemediation = async () => {
     setBusy('remediation');
     try {
@@ -204,8 +239,8 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 md:p-8" role="dialog" aria-modal="true" aria-label={`Edit ${component.name}`}>
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={() => setDrawer(false)} />
-      <div ref={ref} className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div className="absolute inset-0 bg-black/45" onClick={() => setDrawer(false)} />
+      <div ref={ref} className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
 
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
@@ -304,19 +339,30 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
           <form onSubmit={submit} className="flex min-h-0 flex-col lg:col-span-3">
             <div className="min-h-0 flex-1 space-y-3 p-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div><label className={LABEL}>Owner team<input className={FIELD} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label></div>
-                <div><label className={LABEL}>Board policy reference<input className={FIELD} placeholder="e.g. AI-POL-2026-014" value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} /></label></div>
-                <div><label className={LABEL}>Last red-team date<input type="date" className={`${FIELD} font-mono`} value={form.redTeamDate} onChange={(e) => setForm({ ...form, redTeamDate: e.target.value })} /></label></div>
+                <div><label className={LABEL}>Owner team<Hint text={HINTS.owner} /><input className={FIELD} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label></div>
+                <div><label className={LABEL}>Board policy reference<Hint text={HINTS.policy} /><input className={FIELD} placeholder="e.g. AI-POL-2026-014" value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} /></label></div>
+                <div><label className={LABEL}>Last red-team date<Hint text={HINTS.redteam} /><input type="date" className={`${FIELD} font-mono`} value={form.redTeamDate} onChange={(e) => setForm({ ...form, redTeamDate: e.target.value })} /></label></div>
                 <label className="flex items-center gap-2 self-end pb-1.5 text-[11px] text-text">
                   <input type="checkbox" checked={form.humanOversight} onChange={(e) => setForm({ ...form, humanOversight: e.target.checked })} className="accent-accent" />
                   Human oversight required
+                  <Hint text={HINTS.oversight} />
                 </label>
               </div>
-              <div><label className={LABEL}>Autonomous scope<input className={FIELD} placeholder="empty = fully supervised" value={form.autonomousScope} onChange={(e) => setForm({ ...form, autonomousScope: e.target.value })} /></label></div>
+              <div>
+                <span className="flex items-center justify-between gap-2">
+                  <label className={LABEL}>Autonomous scope<Hint text={HINTS.scope} /></label>
+                  <button type="button" onClick={draftScope} disabled={busy !== null}
+                    className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
+                    <PenLine size={9} /> {busy === 'scope' ? 'Drafting…' : 'Draft scope'}
+                  </button>
+                </span>
+                <input className={FIELD} placeholder={'e.g. "may draft tier-1 replies; escalate disputes to a human" — empty = fully supervised'}
+                  value={form.autonomousScope} onChange={(e) => setForm({ ...form, autonomousScope: e.target.value })} />
+              </div>
 
               <div>
                 <span className="flex items-center justify-between gap-2">
-                  <label className={LABEL}>Use case description</label>
+                  <label className={LABEL}>Use case description<Hint text={HINTS.useCase} /></label>
                   <button type="button" onClick={draftSummary} disabled={busy !== null}
                     className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
                     <PenLine size={9} /> {busy === 'summary' ? 'Drafting…' : 'Summarize'}
@@ -327,7 +373,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
 
               <div>
                 <span className="flex items-center justify-between gap-2">
-                  <label className={LABEL}>Risk rationale</label>
+                  <label className={LABEL}>Risk rationale<Hint text={HINTS.rationale} /></label>
                   <button type="button" onClick={draftRationale} disabled={busy !== null}
                     className="mb-1 flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
                     <PenLine size={9} /> {busy === 'rationale' ? 'Drafting…' : 'Draft rationale'}
@@ -338,7 +384,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               </div>
 
               <fieldset className="rounded-md border border-border p-2.5">
-                <legend className="px-1 text-[9px] font-medium uppercase tracking-widest text-text-tertiary">7 Sutras declared</legend>
+                <legend className="px-1 text-[9px] font-medium uppercase tracking-widest text-text-tertiary">7 Sutras declared<Hint text={HINTS.sutras} /></legend>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {SUTRAS.map((s, i) => (
                     <label key={s} className="flex items-center gap-2 text-[10.5px] text-text-secondary">
@@ -363,12 +409,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               <span className="mr-auto text-[9.5px] text-text-tertiary">
                 Saving appends a ledger entry and re-checks the verdicts on the left.
               </span>
-              <button type="button" onClick={() => setDrawer(false)} className="rounded-md border border-border px-3 py-2 text-[11px] text-text-secondary hover:bg-surface-hover">
-                Close
-              </button>
-              <button type="submit" disabled={saving} className="rounded-md bg-accent px-4 py-2 text-[11.5px] font-medium text-white hover:opacity-90 disabled:opacity-50">
+              <Button variant="secondary" size="md" onClick={() => setDrawer(false)}>Close</Button>
+              <Button type="submit" variant="primary" size="md" disabled={saving}>
                 {saving ? 'Saving…' : 'Save & Re-check Compliance'}
-              </button>
+              </Button>
             </footer>
           </form>
         </div>

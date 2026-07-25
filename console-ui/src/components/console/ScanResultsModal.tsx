@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 export interface ScanCandidate {
   suggested_name: string;
@@ -26,8 +27,8 @@ const RISK_TONE = (r: string): 'negative' | 'warning' | 'neutral' =>
 const CONF_TONE = (c: string): 'positive' | 'warning' | 'neutral' =>
   c === 'HIGH' ? 'positive' : c === 'MEDIUM' ? 'warning' : 'neutral';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 /**
  * The review step between a scan and the inventory (parity with the classic
@@ -119,7 +120,7 @@ export function ScanResultsModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Scan results for ${review.project.name}`}>
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border-strong bg-surface shadow-2xl">
+      <div className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Radar size={15} className="text-accent" />
           <div>
@@ -220,18 +221,10 @@ export function ScanResultsModal({
             Already-governed files merge into their existing model — importing never duplicates.
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">
-              Skip for now
-            </button>
-            <button
-              onClick={importSelected}
-              disabled={busy || checked.size === 0}
-              title={checked.size === 0 ? 'Select at least one component' : undefined}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy && <Loader2 size={12} className="animate-spin" />}
+            <Button variant="secondary" size="sm" onClick={onClose}>Skip for now</Button>
+            <Button variant="primary" size="sm" onClick={importSelected} disabled={busy || checked.size === 0} title={checked.size === 0 ? 'Select at least one component' : undefined} icon={busy ? <Loader2 size={12} className="animate-spin" /> : undefined}>
               Import {checked.size} into inventory
-            </button>
+            </Button>
           </div>
         </footer>
       </div>

@@ -79,7 +79,7 @@ export function KpiBand({
     <div className="grid shrink-0 grid-cols-3 gap-px border-b border-border bg-border lg:grid-cols-6">
       {kpis.map((k) => (
         <div key={k.label} className="bg-surface px-3 py-2">
-          <div className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">{k.label}</div>
+          <div className="font-mono text-[9px] font-medium uppercase tracking-wider text-text-tertiary">{k.label}</div>
           <div className={`font-mono text-base leading-tight ${k.valueClass ?? 'text-text'}`}>{k.value}</div>
           <div className="font-mono text-[8.5px] text-text-tertiary">{k.sub}</div>
         </div>

@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useModels } from '../api/models';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -13,8 +14,8 @@ import { useConsoleUi } from '../stores/consoleUi';
 
 const TH = 'sticky top-0 z-10 border-b border-border bg-surface px-2 py-1.5 text-left text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
 const TD = 'px-2 py-1.5 align-top';
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../components/ui/form';
+import { labelClass as LABEL } from '../components/ui/form';
 
 const VERDICT_TONE: Record<string, BadgeTone> = {
   COMPLIANT: 'positive', CONDITIONAL: 'warning', NON_COMPLIANT: 'negative',
@@ -231,13 +232,9 @@ function ModelAudits() {
             <span className="mr-auto text-[10px] text-text-tertiary">
               The verdict is computed from the checklist — unchecked items become the audit's gaps.
             </span>
-            <button
-              type="submit"
-              disabled={busy || !modelId}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              <ClipboardCheck size={13} /> {busy ? 'Running…' : 'Run audit'}
-            </button>
+            <Button type="submit" variant="primary" size="sm" disabled={busy || !modelId} icon={<ClipboardCheck size={13} />}>
+              {busy ? 'Running…' : 'Run audit'}
+            </Button>
           </div>
         </form>
       </Panel>
@@ -315,25 +312,16 @@ function ModelAudits() {
                               <label className={LABEL}>Description</label>
                               <input className={FIELD} value={finding.description} onChange={(e) => setFinding({ ...finding, description: e.target.value })} placeholder="What the auditor found" />
                             </div>
-                            <button
-                              onClick={() => void addFinding(a.audit_id)}
-                              disabled={!finding.description.trim()}
-                              className="rounded-md bg-accent px-2.5 py-1.5 text-[10.5px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-                            >
+                            <Button variant="primary" size="sm" onClick={() => void addFinding(a.audit_id)} disabled={!finding.description.trim()}>
                               Record finding
-                            </button>
-                            <button onClick={() => setFindingFor(null)} className="rounded-md border border-border px-2 py-1.5 text-[10.5px] text-text-secondary hover:bg-surface-hover">
-                              Cancel
-                            </button>
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={() => setFindingFor(null)}>Cancel</Button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setFindingFor(a.audit_id)}
-                            className="mt-1 flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover"
-                          >
-                            <Plus size={10} /> Add finding
-                            <span className="text-text-tertiary">— a critical or major finding flips the verdict</span>
-                          </button>
+                          <Button variant="secondary" size="sm" onClick={() => setFindingFor(a.audit_id)} className="mt-1" icon={<Plus size={10} />}>
+                            Add finding
+                            <span className="ml-1 font-normal text-text-tertiary">— a critical or major finding flips the verdict</span>
+                          </Button>
                         )}
                       </td>
                     </tr>
@@ -474,14 +462,7 @@ export function AuditTrail() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const TabBtn = ({ v, label }: { v: View; label: string }) => (
-    <button
-      onClick={() => setView(v)}
-      className={`rounded-md px-2.5 py-1 text-[11px] ${
-        view === v ? 'bg-accent font-medium text-white' : 'border border-border text-text-secondary hover:bg-surface-hover'
-      }`}
-    >
-      {label}
-    </button>
+    <Button variant={view === v ? 'primary' : 'secondary'} size="sm" onClick={() => setView(v)}>{label}</Button>
   );
 
   return (
@@ -492,10 +473,7 @@ export function AuditTrail() {
           <TabBtn v="audits" label="Model audits" />
           <TabBtn v="log" label="API action log" />
           {view === 'log' && (
-            <button onClick={() => setReloadKey((k) => k + 1)} title="Refresh" aria-label="Refresh"
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface-hover">
-              <RefreshCw size={13} />
-            </button>
+            <Button variant="secondary" size="sm" onClick={() => setReloadKey((k) => k + 1)} title="Refresh" aria-label="Refresh" className="px-1.5" icon={<RefreshCw size={13} />} />
           )}
         </>
       }

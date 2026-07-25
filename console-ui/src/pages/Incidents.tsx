@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useModels } from '../api/models';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -54,8 +55,8 @@ const FLAGS = [
 ] as const;
 type FlagKey = (typeof FLAGS)[number][0];
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../components/ui/form';
+import { labelClass as LABEL } from '../components/ui/form';
 const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 export function Incidents() {
@@ -170,9 +171,7 @@ export function Incidents() {
             <option value="">All statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90">
-            <Plus size={13} /> Report
-          </button>
+          <Button variant="primary" size="sm" onClick={() => setOpen((v) => !v)} icon={<Plus size={13} />}>Report</Button>
         </>
       }
     >
@@ -266,15 +265,16 @@ export function Incidents() {
                   Regulators require a substantive account — add {blockers} to submit.
                 </p>
               )}
-              <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-              <button
+              <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button
                 type="submit"
+                variant="primary"
+                size="sm"
                 disabled={busy || descShort || actionShort}
                 title={blockers ? `Add ${blockers} to submit` : undefined}
-                className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy ? 'Reporting…' : 'Report incident'}
-              </button>
+              </Button>
             </div>
           </form>
         )}

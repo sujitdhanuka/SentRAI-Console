@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { Panel, PanelError } from '../ui/Panel';
 import { SkeletonBlock } from '../ui/Skeleton';
 
@@ -39,8 +40,8 @@ const PRESETS: Record<string, { label: string; adapter: string; base_url: string
 };
 
 const LOCAL_RE = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|host\.docker\.internal|\[?::1)/i;
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 const emptyForm = { id: '', label: '', adapter: 'openai-compat', base_url: '', model: '', api_key: '' };
 
@@ -144,9 +145,7 @@ export function AiProviders({ orgId, onChanged }: { orgId: string; onChanged: ()
     <Panel
       title="AI Providers"
       right={
-        <button onClick={() => openForm()} className="flex items-center gap-1 rounded-md bg-accent px-2 py-0.5 text-[10.5px] font-medium text-white hover:opacity-90">
-          <Plus size={11} /> Add
-        </button>
+        <Button variant="primary" size="sm" onClick={() => openForm()} icon={<Plus size={11} />}>Add</Button>
       }
     >
       {error ? (
@@ -207,10 +206,8 @@ export function AiProviders({ orgId, onChanged }: { orgId: string; onChanged: ()
                 </p>
               )}
               <div className="mt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-                <button type="submit" disabled={busy === 'form'} className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50">
-                  {busy === 'form' ? 'Saving…' : 'Save provider'}
-                </button>
+                <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="submit" variant="primary" size="sm" disabled={busy === 'form'}>{busy === 'form' ? 'Saving…' : 'Save provider'}</Button>
               </div>
             </form>
           )}
@@ -250,15 +247,11 @@ export function AiProviders({ orgId, onChanged }: { orgId: string; onChanged: ()
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button disabled={busy === p.provider_id} onClick={() => test(p)} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                        <Activity size={11} /> {busy === p.provider_id ? 'Testing…' : 'Test'}
-                      </button>
-                      <button onClick={() => openForm(p)} className="rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover">Edit</button>
-                      <button onClick={() => toggle(p)} className="rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover">{p.enabled ? 'Disable' : 'Enable'}</button>
-                      <button onClick={() => remove(p)} aria-label={`Remove ${p.label}`} className="rounded-md border border-border px-1.5 py-1 text-text-tertiary hover:bg-surface-hover hover:text-negative">
-                        <Trash2 size={11} />
-                      </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button variant="secondary" size="sm" disabled={busy === p.provider_id} onClick={() => test(p)} icon={<Activity size={11} />}>{busy === p.provider_id ? 'Testing…' : 'Test'}</Button>
+                      <Button variant="secondary" size="sm" onClick={() => openForm(p)}>Edit</Button>
+                      <Button variant="secondary" size="sm" onClick={() => toggle(p)}>{p.enabled ? 'Disable' : 'Enable'}</Button>
+                      <Button variant="ghost" size="sm" onClick={() => remove(p)} aria-label={`Remove ${p.label}`} className="px-2 hover:text-negative" icon={<Trash2 size={11} />} />
                     </div>
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -20,7 +21,7 @@ interface Org {
 const PLANS = ['COMMUNITY', 'GROWTH', 'ENTERPRISE'];
 const PLAN_TONE: Record<string, BadgeTone> = { COMMUNITY: 'neutral', GROWTH: 'accent', ENTERPRISE: 'positive' };
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
+import { fieldClass as FIELD } from '../components/ui/form';
 
 export function Organizations() {
   const toast = useConsoleUi((s) => s.toast);
@@ -74,9 +75,7 @@ export function Organizations() {
     <AppShell
       title="Organizations"
       actions={
-        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90">
-          <Plus size={13} /> New organization
-        </button>
+        <Button variant="primary" size="sm" onClick={() => setOpen((v) => !v)} icon={<Plus size={13} />}>New organization</Button>
       }
     >
       <main className="flex min-h-0 flex-1 flex-col p-2">
@@ -90,8 +89,8 @@ export function Organizations() {
             <input className={`${FIELD} mb-2`} required placeholder="Organization name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input className={FIELD} placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <div className="mt-2 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-              <button type="submit" className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90">Create</button>
+              <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary" size="sm">Create</Button>
             </div>
           </form>
         )}
