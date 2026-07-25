@@ -7,6 +7,7 @@ import { GithubImportModal } from '../components/console/GithubImportModal';
 import { NewProjectWizard } from '../components/console/NewProjectWizard';
 import { ScanResultsModal, type ScanCandidate, type ScanReview } from '../components/console/ScanResultsModal';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
 import { navigate } from '../stores/route';
@@ -139,12 +140,9 @@ export function Projects() {
     <AppShell
       title="Projects"
       actions={
-        <button
-          onClick={() => setWizardOpen(true)}
-          className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90"
-        >
+        <Button variant="primary" size="sm" onClick={() => setWizardOpen(true)}>
           + New Project
-        </button>
+        </Button>
       }
     >
       <main className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -157,7 +155,7 @@ export function Projects() {
         {error && (
           <div className={`${CARD} flex items-center gap-3`}>
             <span className="text-[11px] text-text-secondary">{error}</span>
-            <button onClick={() => void load()} className="rounded border border-border-strong px-2 py-0.5 font-mono text-[10px]">RETRY</button>
+            <Button variant="secondary" size="xs" onClick={() => void load()}>RETRY</Button>
           </div>
         )}
 
@@ -168,9 +166,7 @@ export function Projects() {
         ) : !projects.length && !error ? (
           <div className="flex flex-col items-center gap-3 rounded-md border border-border bg-bg-elevated px-6 py-10 text-center">
             <p className="text-[11px] text-text-secondary">No projects yet — create one to start tracking an application's AI models.</p>
-            <button onClick={() => setWizardOpen(true)} className="rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90">
-              + New Project
-            </button>
+            <Button variant="primary" size="sm" onClick={() => setWizardOpen(true)}>+ New Project</Button>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -194,25 +190,13 @@ export function Projects() {
                     <Badge tone={scanned ? 'positive' : 'warning'}>{scanned ? 'scanned' : 'not scanned'}</Badge>
                   </div>
 
-                  <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-                    <button onClick={() => activate(p)} className="flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[10.5px] font-medium text-white hover:opacity-90">
-                      <Check size={11} /> Select
-                    </button>
-                    <button disabled={busy} onClick={() => scan(p.project_id, p.name)} title="Scan the uploaded codebase for AI components" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                      {busy ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />} Scan
-                    </button>
-                    <button disabled={busy} onClick={() => { uploadTarget.current = p.project_id; zipRef.current?.click(); }} title="Upload a .zip of the codebase" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                      <FileArchive size={11} /> Zip
-                    </button>
-                    <button disabled={busy} onClick={() => { uploadTarget.current = p.project_id; folderRef.current?.click(); }} title="Upload a folder" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                      <FolderUp size={11} /> Folder
-                    </button>
-                    <button disabled={busy} onClick={() => setGithubFor(p)} title="Import from GitHub" className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10.5px] text-text-secondary hover:bg-surface-hover disabled:opacity-50">
-                      <Github size={11} /> GitHub
-                    </button>
-                    <button onClick={() => remove(p)} title="Delete project" aria-label={`Delete ${p.name}`} className="ml-auto rounded-md border border-border px-1.5 py-1 text-text-tertiary hover:bg-surface-hover hover:text-negative">
-                      <Trash2 size={11} />
-                    </button>
+                  <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+                    <Button variant="primary" size="sm" onClick={() => activate(p)} icon={<Check size={11} />}>Select</Button>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => scan(p.project_id, p.name)} title="Scan the uploaded codebase for AI components" icon={busy ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}>Scan</Button>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => { uploadTarget.current = p.project_id; zipRef.current?.click(); }} title="Upload a .zip of the codebase" icon={<FileArchive size={11} />}>Zip</Button>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => { uploadTarget.current = p.project_id; folderRef.current?.click(); }} title="Upload a folder" icon={<FolderUp size={11} />}>Folder</Button>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => setGithubFor(p)} title="Import from GitHub" icon={<Github size={11} />}>GitHub</Button>
+                    <Button variant="ghost" size="sm" onClick={() => remove(p)} title="Delete project" aria-label={`Delete ${p.name}`} className="ml-auto px-2 hover:text-negative" icon={<Trash2 size={11} />} />
                   </div>
                 </div>
               );

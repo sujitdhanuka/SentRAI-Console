@@ -6,6 +6,7 @@ import { AIComponent, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 const daysAgoToISO = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
 const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -408,12 +409,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               <span className="mr-auto text-[9.5px] text-text-tertiary">
                 Saving appends a ledger entry and re-checks the verdicts on the left.
               </span>
-              <button type="button" onClick={() => setDrawer(false)} className="rounded-md border border-border px-3 py-2 text-[11px] text-text-secondary hover:bg-surface-hover">
-                Close
-              </button>
-              <button type="submit" disabled={saving} className="rounded-md bg-accent px-4 py-2 text-[11.5px] font-medium text-white hover:opacity-90 disabled:opacity-50">
+              <Button variant="secondary" size="md" onClick={() => setDrawer(false)}>Close</Button>
+              <Button type="submit" variant="primary" size="md" disabled={saving}>
                 {saving ? 'Saving…' : 'Save & Re-check Compliance'}
-              </button>
+              </Button>
             </footer>
           </form>
         </div>

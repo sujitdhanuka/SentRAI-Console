@@ -1,5 +1,7 @@
 import { ReactNode } from 'react';
 
+import { Button } from './Button';
+
 /** Bordered surface with a slim header and an internally-scrolling body —
  *  the only places the dashboard is allowed to scroll. */
 export function Panel({
@@ -30,12 +32,7 @@ export function PanelError({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
       <p className="text-[11px] text-text-secondary">Couldn't load data.</p>
-      <button
-        onClick={onRetry}
-        className="rounded border border-border-strong px-2.5 py-1 font-mono text-[10px] text-text hover:bg-surface-hover"
-      >
-        RETRY
-      </button>
+      <Button variant="secondary" size="xs" onClick={onRetry}>RETRY</Button>
     </div>
   );
 }
