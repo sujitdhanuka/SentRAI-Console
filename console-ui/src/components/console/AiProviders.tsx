@@ -39,8 +39,8 @@ const PRESETS: Record<string, { label: string; adapter: string; base_url: string
 };
 
 const LOCAL_RE = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|host\.docker\.internal|\[?::1)/i;
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 const emptyForm = { id: '', label: '', adapter: 'openai-compat', base_url: '', model: '', api_key: '' };
 

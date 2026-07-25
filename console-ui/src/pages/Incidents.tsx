@@ -55,8 +55,8 @@ const FLAGS = [
 ] as const;
 type FlagKey = (typeof FLAGS)[number][0];
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../components/ui/form';
+import { labelClass as LABEL } from '../components/ui/form';
 const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 export function Incidents() {

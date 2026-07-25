@@ -4,8 +4,8 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 /**
  * Accepts every way people paste a GitHub repo and normalises it to owner/repo:
