@@ -85,7 +85,7 @@ export function IconRail() {
           onClick={() => navigate(route)}
           className={`group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
             active === route
-              ? 'bg-accent-soft text-accent'
+              ? "bg-accent-soft text-accent before:absolute before:left-[-6px] before:top-1/2 before:h-6 before:w-[2.5px] before:-translate-y-1/2 before:rounded-r-full before:bg-accent before:content-['']"
               : 'text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
           }`}
         >
