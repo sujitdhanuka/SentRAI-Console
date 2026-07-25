@@ -8,6 +8,7 @@ import { NewProjectWizard } from '../components/console/NewProjectWizard';
 import { ScanResultsModal, type ScanCandidate, type ScanReview } from '../components/console/ScanResultsModal';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Spec } from '../components/ui/Spec';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
 import { navigate } from '../stores/route';
@@ -175,19 +176,29 @@ export function Projects() {
               const isActive = p.project_id === activeProjectId;
               const busy = busyId === p.project_id;
               return (
-                <div key={p.project_id} className={`${CARD} ${isActive ? 'border-accent' : ''} flex flex-col gap-2`}>
+                <div key={p.project_id} className={`${CARD} ${isActive ? 'border-accent' : ''} flex flex-col gap-2.5`}>
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-[12.5px] font-medium">{p.name}</h3>
+                    <div className="min-w-0">
+                      <div className="font-mono text-[8px] font-medium uppercase tracking-wider text-text-tertiary">Project</div>
+                      <h3 className="truncate text-[13px] font-semibold leading-tight text-text">{p.name}</h3>
+                    </div>
                     {isActive && <Badge tone="accent">active</Badge>}
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge tone="neutral">{p.model_count} model(s)</Badge>
-                    {p.compliant_count !== undefined && (
-                      <Badge tone={p.compliant_count === p.model_count && p.model_count > 0 ? 'positive' : 'negative'}>
-                        {p.compliant_count}/{p.model_count} compliant
-                      </Badge>
-                    )}
-                    <Badge tone={scanned ? 'positive' : 'warning'}>{scanned ? 'scanned' : 'not scanned'}</Badge>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-2">
+                    <Spec label="Project ID" value={p.project_id.slice(0, 8)} />
+                    <Spec label="Models" value={String(p.model_count)} />
+                    <Spec label="Status" value={scanned ? 'Scanned' : 'Not scanned'} valueClass={scanned ? 'text-positive' : 'text-warning'} />
+                    <Spec
+                      label="Compliance"
+                      value={p.compliant_count !== undefined ? `${p.compliant_count}/${p.model_count}` : '—'}
+                      valueClass={
+                        p.compliant_count !== undefined && p.compliant_count === p.model_count && p.model_count > 0
+                          ? 'text-positive'
+                          : p.model_count > 0
+                            ? 'text-negative'
+                            : 'text-text-tertiary'
+                      }
+                    />
                   </div>
 
                   <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
