@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -111,9 +112,7 @@ export function Users() {
     <AppShell
       title="Users"
       actions={
-        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90">
-          <Plus size={13} /> Add user
-        </button>
+        <Button variant="primary" size="sm" onClick={() => setOpen((v) => !v)} icon={<Plus size={13} />}>Add user</Button>
       }
     >
       <main className="flex min-h-0 flex-1 flex-col p-2">
@@ -137,10 +136,8 @@ export function Users() {
               </div>
             )}
             <div className="mt-2 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-              <button type="submit" className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90">
-                <UserPlus size={12} /> Create user
-              </button>
+              <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary" size="sm" icon={<UserPlus size={12} />}>Create user</Button>
             </div>
           </form>
         )}
