@@ -92,6 +92,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Measured values sit on a fixed grid (SR-DL-001): every table and every
+   mono run uses tabular figures, so digits align in columns and never jitter
+   as they change. */
+table,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Slim scrollbars for the internal scroll regions */
 *::-webkit-scrollbar {
   width: 6px;

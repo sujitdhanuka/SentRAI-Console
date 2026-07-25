@@ -21,7 +21,7 @@ const fwTitle = (label: string, check: FrameworkCheck) =>
       ? `${label}: Gap — control not satisfied`
       : `${label}: Not applicable`;
 
-const TH = 'sticky top-0 z-10 bg-surface px-2 py-1.5 text-left text-[9px] font-medium uppercase tracking-widest text-text-tertiary border-b border-border';
+const TH = 'sticky top-0 z-10 bg-surface px-2 py-1.5 text-left font-mono text-[9px] font-medium uppercase tracking-wider text-text-tertiary border-b border-border';
 const TD = 'px-2 py-1.5 align-middle';
 
 export function ComplianceMatrix({
