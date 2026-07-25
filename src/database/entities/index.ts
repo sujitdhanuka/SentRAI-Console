@@ -18,6 +18,7 @@ import { AiUsageEventEntity } from './ai-usage-event.entity';
 import { ModelApprovalEntity } from './model-approval.entity';
 import { AttestationCampaignEntity } from './attestation-campaign.entity';
 import { AttestationItemEntity } from './attestation-item.entity';
+import { AgentActionEventEntity } from './agent-action-event.entity';
 
 export {
   OrganizationEntity,
@@ -40,6 +41,7 @@ export {
   ModelApprovalEntity,
   AttestationCampaignEntity,
   AttestationItemEntity,
+  AgentActionEventEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -63,4 +65,5 @@ export const ALL_ENTITIES = [
   ModelApprovalEntity,
   AttestationCampaignEntity,
   AttestationItemEntity,
+  AgentActionEventEntity,
 ];

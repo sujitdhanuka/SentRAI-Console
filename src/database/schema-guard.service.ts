@@ -197,6 +197,27 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'agent_action_events', // agent-action-event.entity.ts (Pillar 3 — Visibility)
+    createSql: `CREATE TABLE IF NOT EXISTS \`agent_action_events\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`tenantId\` VARCHAR(36) NULL,
+      \`sessionId\` VARCHAR(64) NULL,
+      \`eventType\` VARCHAR(30) NOT NULL,
+      \`tool\` VARCHAR(160) NULL,
+      \`outcome\` VARCHAR(30) NOT NULL,
+      \`flagged\` TINYINT NOT NULL DEFAULT 0,
+      \`detail\` TEXT NULL,
+      \`actor\` VARCHAR(255) NOT NULL,
+      \`occurredAt\` DATETIME NOT NULL,
+      INDEX \`IDX_agent_action_events_model\` (\`modelId\`),
+      INDEX \`IDX_agent_action_events_tenant\` (\`tenantId\`),
+      INDEX \`IDX_agent_action_events_session\` (\`sessionId\`),
+      INDEX \`IDX_agent_action_events_flagged\` (\`flagged\`),
+      INDEX \`IDX_agent_action_events_time\` (\`occurredAt\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'attestation_items', // attestation-item.entity.ts
     createSql: `CREATE TABLE IF NOT EXISTS \`attestation_items\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

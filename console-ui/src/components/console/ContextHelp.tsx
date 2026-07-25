@@ -17,6 +17,7 @@ const HELP_SECTIONS: Record<Route, string> = {
   alignment: 'Alignment',
   'ci-ledger': 'CI Gate Ledger',
   monitoring: 'Drift Monitoring',
+  visibility: 'Runtime Visibility',
   audit: 'Audit Trail',
   incidents: 'Incidents',
   lineage: 'Lineage Graph',

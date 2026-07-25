@@ -12,6 +12,7 @@ export const ROUTES = [
   'alignment',
   'ci-ledger',
   'monitoring',
+  'visibility',
   'audit',
   'incidents',
   'lineage',

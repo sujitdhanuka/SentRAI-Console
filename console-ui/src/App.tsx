@@ -15,6 +15,7 @@ import { Monitoring } from './pages/Monitoring';
 import { Organizations } from './pages/Organizations';
 import { Projects } from './pages/Projects';
 import { Users } from './pages/Users';
+import { Visibility } from './pages/Visibility';
 import { isDemoMode } from './providers';
 import { useConsoleUi } from './stores/consoleUi';
 import { Route, useRoute } from './stores/route';
@@ -28,6 +29,7 @@ const PAGES: Record<Route, () => JSX.Element> = {
   alignment: Alignment,
   'ci-ledger': CiLedger,
   monitoring: Monitoring,
+  visibility: Visibility,
   audit: AuditTrail,
   incidents: Incidents,
   lineage: Lineage,

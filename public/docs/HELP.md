@@ -193,6 +193,16 @@ Two governance workflows, switchable with the **Approvals / Attestations** toggl
 
 *Visible to: everyone can view; deciding approvals is limited to APPROVER / CISO / ADMIN, and opening campaigns to OWNER / APPROVER / CISO / ADMIN.*
 
+### 16. Runtime Visibility
+*What your AI systems are actually doing once deployed — action telemetry and a cross-ledger timeline.*
+
+Governance so far covers *code* (the CI gate) and *state* (the model ledger). Runtime Visibility covers *behaviour* — the actions deployed agents take.
+
+- **Agent identity propagation** — each CI scan returns a `SENTRAI_MODEL_ID` for every governed asset it detects. Stamp that into the deployed build (an env var); the agent then tags the telemetry it emits with it, so runtime events join back to the exact registry entry. The id is shown at the top of each model's timeline.
+- **Action telemetry** — deployed agents `POST /api/v1/telemetry/events` with typed events (`tool_call`, `decision`, `handoff`, `output`, `error`) tagged with their model id. The KPI band shows total events, active sessions, and models reporting. A **`tool_call` whose tool is outside the model's permitted set is flagged the moment it arrives** — static tool authorization (§5), observed at runtime.
+- **Cross-ledger timeline** — pick a model to see one time-sorted view that stitches together its governance-ledger events, CI gate decisions, incidents, drift reports, and runtime actions. This is the single pane an investigator needs when something goes wrong.
+- **Emit sample (demo)** — with no deployed agent wired up, ADMIN/CISO/OWNER can inject a few sample events (including one unauthorized tool call) to see the flow end to end.
+
 ---
 
 ## Roles & permissions

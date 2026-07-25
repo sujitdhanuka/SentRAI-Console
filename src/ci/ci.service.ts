@@ -113,6 +113,24 @@ export class CiEvaluationService {
     };
   }
 
+  /**
+   * Agent identity propagation (Pillar 3 — Visibility): for every discovered
+   * asset backed by a governed model, return its registry id so the pipeline
+   * can stamp `SENTRAI_MODEL_ID` into the build. That id then tags the runtime
+   * telemetry the deployed agent emits — closing the loop from code to registry
+   * to runtime.
+   */
+  private collectIdentities(candidates: DiscoveredCandidate[], registered: AIModelEntity[]) {
+    const out: Array<{ file: string; name: string; sentrai_model_id: string }> = [];
+    for (const c of candidates) {
+      const matched =
+        registered.find((m) => m.sourceRef && m.sourceRef === c.filePath) ??
+        registered.find((m) => m.name.toLowerCase() === c.suggestedName.toLowerCase());
+      if (matched) out.push({ file: c.filePath, name: matched.name, sentrai_model_id: matched.id });
+    }
+    return out;
+  }
+
   private evaluate(candidates: DiscoveredCandidate[], registered: AIModelEntity[], policy: PolicyContract): BlockingGap[] {
     const gaps: BlockingGap[] = [];
     for (const candidate of candidates) {
@@ -268,6 +286,9 @@ export class CiEvaluationService {
         frameworks: policy.gates.frameworks,
       },
       blocking_violations: blockingGaps,
+      // Stamp these into the deployed build (SENTRAI_MODEL_ID) so runtime
+      // telemetry can be correlated back to the registry (Pillar 3).
+      model_identities: this.collectIdentities(candidates, registered),
       sarif: this.buildSarif(blockingGaps, dto.commit_sha),
     };
   }

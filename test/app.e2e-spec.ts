@@ -1404,6 +1404,12 @@ describe('SentrAI Console (e2e)', () => {
     expect(pass.status).toBe(200);
     expect(pass.body.verdict).toBe('pass');
 
+    // Agent identity propagation (Pillar 3): the scan returns the registry id to
+    // stamp into the build as SENTRAI_MODEL_ID.
+    expect(pass.body.model_identities).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sentrai_model_id: modelId, file: 'app/agent.py' })]),
+    );
+
     // The model response reflects a compliant tool authorization.
     const record = await request(http)
       .get(`/api/v1/inventory/models/${modelId}`)
@@ -1467,6 +1473,69 @@ describe('SentrAI Console (e2e)', () => {
     const types = ledger.body.map((e: any) => e.event_type);
     expect(types).toContain('OPERATIONAL_SUSPENDED');
     expect(types).toContain('OPERATIONAL_RESUMED');
+  });
+
+  it('VISIBILITY: ingests runtime telemetry, flags unauthorized tool use, and builds a cross-ledger timeline (Pillar 3)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Telemetry Agent',
+        model_type: 'AGENT',
+        functional_area: 'internal_tooling',
+        use_case_description: 'An agent whose runtime actions are reported to the telemetry endpoint.',
+      });
+    const modelId = model.body.model_id;
+
+    // Declare the agent may only use the network capability.
+    await request(http)
+      .patch(`/api/v1/inventory/models/${modelId}/governance`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ permitted_tools: ['capability:network'], actor: 'e2e' })
+      .expect(200);
+
+    // Ingest three runtime events — the shell tool call is outside the permitted
+    // set, so it is flagged on arrival (Pillar 2 authorization, observed at runtime).
+    const ingest = await request(http)
+      .post('/api/v1/telemetry/events')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        events: [
+          { sentrai_model_id: modelId, type: 'tool_call', tool: 'capability:network', session_id: 's1', outcome: 'success' },
+          { sentrai_model_id: modelId, type: 'tool_call', tool: 'capability:shell', session_id: 's1' },
+          { sentrai_model_id: modelId, type: 'decision', session_id: 's1', detail: { summary: 'approved within policy' } },
+        ],
+      });
+    expect(ingest.status).toBe(201);
+    expect(ingest.body.ingested).toBe(3);
+    expect(ingest.body.flagged).toBe(1);
+
+    // An event for an unknown model is not ingested.
+    const unknown = await request(http)
+      .post('/api/v1/telemetry/events')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ events: [{ sentrai_model_id: 'no-such-model', type: 'decision' }] });
+    expect(unknown.body.ingested).toBe(0);
+    expect(unknown.body.unknown_models).toContain('no-such-model');
+
+    // Org summary reflects the ingested events + the flagged tool call.
+    const summary = await request(http).get('/api/v1/telemetry/summary').set('Authorization', `Bearer ${admin}`);
+    expect(summary.body.total_events).toBeGreaterThanOrEqual(3);
+    expect(summary.body.flagged_tool_calls).toBeGreaterThanOrEqual(1);
+    expect(summary.body.by_type.tool_call).toBeGreaterThanOrEqual(2);
+
+    // Per-model events: the shell call is recorded as an authorization breach.
+    const events = await request(http).get(`/api/v1/telemetry/models/${modelId}/events`).set('Authorization', `Bearer ${admin}`);
+    expect(events.body).toHaveLength(3);
+    expect(events.body.some((e: any) => e.flagged && e.outcome === 'unauthorized_tool' && e.tool === 'capability:shell')).toBe(true);
+
+    // Cross-ledger timeline stitches governance-ledger + runtime action records.
+    const timeline = await request(http).get(`/api/v1/telemetry/models/${modelId}/timeline`).set('Authorization', `Bearer ${admin}`);
+    expect(timeline.body.sentrai_model_id).toBe(modelId);
+    const sources = new Set(timeline.body.timeline.map((r: any) => r.source));
+    expect(sources.has('action')).toBe(true);
+    expect(sources.has('ledger')).toBe(true);
   });
 
   it('CI LEDGER: org-wide events carry line-level evidence; override is additive (verdict preserved)', async () => {

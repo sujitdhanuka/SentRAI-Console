@@ -28,6 +28,7 @@ import { ComplianceModule } from './compliance/compliance.module';
 import { AiModule } from './ai/ai.module';
 import { AlignmentModule } from './alignment/alignment.module';
 import { ControlModule } from './control/control.module';
+import { TelemetryModule } from './telemetry/telemetry.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { ControlModule } from './control/control.module';
     AiModule,
     AlignmentModule,
     ControlModule,
+    TelemetryModule,
     // Mirrors FastAPI's StaticFiles mounts: /static -> web/static, /images -> docs/images
     ServeStaticModule.forRoot(
       { rootPath: STATIC_DIR, serveRoot: '/static' },
