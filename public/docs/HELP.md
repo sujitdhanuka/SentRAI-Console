@@ -206,6 +206,15 @@ Governance so far covers *code* (the CI gate) and *state* (the model ledger). Ru
 - **Scope-deviation alerts** — when a model accumulates flagged runtime tool calls (tools outside its permitted set), it surfaces as a **scope deviation** in the red strip at the top, graded by severity (HIGH for high-risk or autonomous models). A daily job also escalates these to the governance webhook and writes an alert onto the model ledger.
 - **Emit sample (demo)** — with no deployed agent wired up, ADMIN/CISO/OWNER can inject a few sample events (including one unauthorized tool call) to see the flow end to end.
 
+### 17. Consumer Grievances
+*The redress mechanism — a tracked, SLA-bound path for the people an AI system affects.*
+
+Where the model inventory only tallied a grievance count, this is a first-class workflow.
+
+- **File** — staff log a consumer complaint against a model with a category and severity. Severity sets the **SLA deadline** (HIGH 7 days, MEDIUM 15, LOW 30). The SLA clock starts immediately.
+- **State machine** — a grievance moves `RECEIVED → ACKNOWLEDGED → INVESTIGATING → RESOLVED` (or `REJECTED`) `→ CLOSED`; illegal jumps are refused. The KPI band shows total, open, **SLA-overdue**, and resolved; overdue rows are highlighted, and a daily job escalates breaches to the governance webhook. Every transition is written to the model ledger, so redress shows up in the cross-ledger timeline.
+- **Public redress** — every model has a **public transparency card** (the "↗ Public transparency card" link on its *Close Governance Gaps* screen, at `/card/<id>`): a consumer-facing page describing what the system does, its risk tier, whether a human is in the loop, which regulatory frameworks govern it, and a **File a grievance** button that submits with no account required. The frameworks and their disclosure timelines are driven by a declarative regime registry (`/api/v1/regimes`) — adding a jurisdiction is a config entry, not a code change.
+
 ---
 
 ## Roles & permissions

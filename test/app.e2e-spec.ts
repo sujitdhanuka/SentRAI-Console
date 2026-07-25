@@ -1615,6 +1615,104 @@ describe('SentrAI Console (e2e)', () => {
     expect(mine.tools).toEqual(expect.arrayContaining(['capability:shell', 'capability:filesystem']));
   });
 
+  it('SOCIETAL: the grievance workflow enforces its state machine and SLA (Pillar 5)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Grievance Target',
+        model_type: 'GENERATIVE_AI',
+        functional_area: 'credit_underwriting',
+        use_case_description: 'A credit model that a consumer files a grievance against.',
+        owner_team: 'Risk Ops',
+      });
+    const modelId = model.body.model_id;
+
+    const filed = await request(http)
+      .post('/api/v1/grievances')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ model_id: modelId, subject: 'Loan declined without explanation', description: 'The system rejected my application and gave no reason at all.', category: 'no_explanation', severity: 'HIGH' });
+    expect(filed.status).toBe(201);
+    expect(filed.body.status).toBe('RECEIVED');
+    expect(filed.body.sla_due_at).toBeTruthy();
+    expect(filed.body.is_overdue).toBe(false);
+    const gid = filed.body.grievance_id;
+
+    // An illegal jump (RECEIVED → CLOSED) is rejected by the state machine.
+    await request(http)
+      .patch(`/api/v1/grievances/${gid}/status`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ status: 'CLOSED' })
+      .expect(400);
+
+    // The legal path: acknowledge → investigate → resolve.
+    await request(http).patch(`/api/v1/grievances/${gid}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 'ACKNOWLEDGED' }).expect(200);
+    await request(http).patch(`/api/v1/grievances/${gid}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 'INVESTIGATING' }).expect(200);
+    const resolved = await request(http)
+      .patch(`/api/v1/grievances/${gid}/status`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ status: 'RESOLVED', notes: 'Explanation provided; decision re-reviewed by a human.' });
+    expect(resolved.status).toBe(200);
+    expect(resolved.body.status).toBe('RESOLVED');
+    expect(resolved.body.resolved_at).toBeTruthy();
+
+    const summary = await request(http).get('/api/v1/grievances/summary').set('Authorization', `Bearer ${admin}`);
+    expect(summary.body.total).toBeGreaterThanOrEqual(1);
+    expect(summary.body.resolved).toBeGreaterThanOrEqual(1);
+
+    // The redress trail is on the model ledger.
+    const ledger = await request(http).get(`/api/v1/inventory/models/${modelId}/ledger`).set('Authorization', `Bearer ${admin}`);
+    const types = ledger.body.map((e: any) => e.event_type);
+    expect(types).toContain('GRIEVANCE_FILED');
+    expect(types).toContain('GRIEVANCE_RESOLVED');
+  });
+
+  it('SOCIETAL: public transparency card, public grievance filing, and framework-as-data (Pillar 5)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Public Card Model',
+        model_type: 'GENERATIVE_AI',
+        functional_area: 'customer_chatbot',
+        use_case_description: 'A customer chatbot with a public transparency card.',
+        owner_team: 'Customer Experience',
+      });
+    const modelId = model.body.model_id;
+
+    // Framework-as-data: the regime registry is public.
+    const regimes = await request(http).get('/api/v1/regimes');
+    expect(regimes.status).toBe(200);
+    expect(regimes.body.regimes.some((r: any) => r.name === 'RBI FREE-AI')).toBe(true);
+
+    // Public transparency card (no auth) — governed regimes + a redress channel.
+    const card = await request(http).get(`/api/v1/cards/${modelId}`);
+    expect(card.status).toBe(200);
+    expect(card.body.name).toBe('Public Card Model');
+    expect(card.body.governed_under.length).toBeGreaterThanOrEqual(4);
+    expect(card.body.redress.available).toBe(true);
+    expect(card.body.redress.file_url).toContain(modelId);
+
+    // The human-readable card page renders (no auth).
+    const page = await request(http).get(`/card/${modelId}`);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain('AI Transparency Card');
+    expect(page.text).toContain('File a grievance');
+
+    // A consumer files a grievance publicly, by model UUID, with no account.
+    const pub = await request(http)
+      .post(`/api/v1/grievances/public/${modelId}`)
+      .send({ subject: 'Chatbot gave wrong account info', description: 'The assistant told me incorrect details about my account balance.' });
+    expect(pub.status).toBe(201);
+    expect(pub.body.status).toBe('RECEIVED');
+
+    // The card now reflects the received grievance.
+    const card2 = await request(http).get(`/api/v1/cards/${modelId}`);
+    expect(card2.body.redress.grievances.total).toBeGreaterThanOrEqual(1);
+  });
+
   it('CI LEDGER: org-wide events carry line-level evidence; override is additive (verdict preserved)', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
 

@@ -15,6 +15,7 @@ export const ROUTES = [
   'visibility',
   'audit',
   'incidents',
+  'grievances',
   'lineage',
   'ai-settings',
   'ai-usage',

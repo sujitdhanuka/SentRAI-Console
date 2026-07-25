@@ -15,6 +15,7 @@ import { MonitoringService } from '../monitoring/monitoring.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { AttestationsService } from '../alignment/attestations.service';
 import { TelemetryService } from '../telemetry/telemetry.service';
+import { GrievancesService } from '../grievances/grievances.service';
 
 /** Synthetic principal used for actions taken by scheduled jobs. */
 const SYSTEM_USER: CurrentUser = {
@@ -47,6 +48,7 @@ export class ScheduledTasksService {
     private readonly notifier: NotifierService,
     private readonly attestations: AttestationsService,
     private readonly telemetry: TelemetryService,
+    private readonly grievances: GrievancesService,
   ) {}
 
   /** REC 16: evaluate drift on all pending score windows (hourly). */
@@ -111,6 +113,13 @@ export class ScheduledTasksService {
   async checkScopeDeviations(): Promise<void> {
     const deviating = await this.telemetry.escalateScopeDeviations();
     this.logger.log(`scope_deviation_check deviating_models=${deviating}`);
+  }
+
+  /** Pillar 5 — Societal: escalate consumer grievances past their SLA (daily). */
+  @Cron('0 3 * * *')
+  async checkOverdueGrievances(): Promise<void> {
+    const overdue = await this.grievances.escalateOverdue();
+    this.logger.log(`grievance_sla_check overdue=${overdue}`);
   }
 
   /**

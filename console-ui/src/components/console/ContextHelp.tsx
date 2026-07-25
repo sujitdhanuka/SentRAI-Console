@@ -20,6 +20,7 @@ const HELP_SECTIONS: Record<Route, string> = {
   visibility: 'Runtime Visibility',
   audit: 'Audit Trail',
   incidents: 'Incidents',
+  grievances: 'Consumer Grievances',
   lineage: 'Lineage Graph',
   'ai-settings': 'AI Settings',
   'ai-usage': 'LLM Usage',

@@ -381,6 +381,15 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   {sourceRefs.length > 1 ? `merged from ${sourceRefs.length} files` : sourceRefs[0]}
                 </span>
               )}
+              <a
+                href={`/card/${component.id}`}
+                target="_blank"
+                rel="noreferrer"
+                title="Open the public consumer transparency card"
+                className="font-mono text-[9px] text-accent hover:underline"
+              >
+                ↗ Public transparency card
+              </a>
             </div>
           </div>
           <button onClick={() => setDrawer(false)} aria-label="Close" className="rounded p-1 text-text-tertiary hover:bg-surface-hover">

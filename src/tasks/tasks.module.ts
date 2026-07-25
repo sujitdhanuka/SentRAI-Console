@@ -8,6 +8,7 @@ import { DiscoveryModule } from '../discovery/discovery.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { MonitoringModule } from '../monitoring/monitoring.module';
 import { TelemetryModule } from '../telemetry/telemetry.module';
+import { GrievancesModule } from '../grievances/grievances.module';
 import { ScheduledTasksService } from './scheduled-tasks.service';
 
 @Module({
@@ -18,6 +19,7 @@ import { ScheduledTasksService } from './scheduled-tasks.service';
     MonitoringModule,
     AlignmentModule, // provides AttestationsService for the overdue-escalation cron
     TelemetryModule, // provides TelemetryService for scope-deviation escalation
+    GrievancesModule, // provides GrievancesService for the SLA-breach escalation
   ],
   providers: [ScheduledTasksService, NotifierService],
 })

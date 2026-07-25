@@ -178,6 +178,31 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'grievances', // grievance.entity.ts (Pillar 5 — Societal)
+    createSql: `CREATE TABLE IF NOT EXISTS \`grievances\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`tenantId\` VARCHAR(36) NULL,
+      \`subject\` VARCHAR(200) NOT NULL,
+      \`description\` TEXT NOT NULL,
+      \`complainant\` VARCHAR(255) NULL,
+      \`channel\` VARCHAR(20) NOT NULL,
+      \`category\` VARCHAR(30) NOT NULL,
+      \`severity\` VARCHAR(20) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`resolutionNotes\` VARCHAR(2000) NULL,
+      \`slaDueAt\` DATETIME NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      \`acknowledgedAt\` DATETIME NULL,
+      \`resolvedAt\` DATETIME NULL,
+      INDEX \`IDX_grievances_model\` (\`modelId\`),
+      INDEX \`IDX_grievances_tenant\` (\`tenantId\`),
+      INDEX \`IDX_grievances_status\` (\`status\`),
+      INDEX \`IDX_grievances_sla\` (\`slaDueAt\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'attestation_campaigns', // attestation-campaign.entity.ts
     createSql: `CREATE TABLE IF NOT EXISTS \`attestation_campaigns\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

@@ -19,6 +19,7 @@ import { ModelApprovalEntity } from './model-approval.entity';
 import { AttestationCampaignEntity } from './attestation-campaign.entity';
 import { AttestationItemEntity } from './attestation-item.entity';
 import { AgentActionEventEntity } from './agent-action-event.entity';
+import { GrievanceEntity } from './grievance.entity';
 
 export {
   OrganizationEntity,
@@ -42,6 +43,7 @@ export {
   AttestationCampaignEntity,
   AttestationItemEntity,
   AgentActionEventEntity,
+  GrievanceEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -66,4 +68,5 @@ export const ALL_ENTITIES = [
   AttestationCampaignEntity,
   AttestationItemEntity,
   AgentActionEventEntity,
+  GrievanceEntity,
 ];

@@ -7,6 +7,7 @@ import { AuditTrail } from './pages/AuditTrail';
 import { CiLedger } from './pages/CiLedger';
 import { ComplianceRollup } from './pages/ComplianceRollup';
 import { Docs } from './pages/Docs';
+import { Grievances } from './pages/Grievances';
 import { Incidents } from './pages/Incidents';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { Lineage } from './pages/Lineage';
@@ -32,6 +33,7 @@ const PAGES: Record<Route, () => JSX.Element> = {
   visibility: Visibility,
   audit: AuditTrail,
   incidents: Incidents,
+  grievances: Grievances,
   lineage: Lineage,
   'ai-settings': AiSettings,
   'ai-usage': AiUsage,
