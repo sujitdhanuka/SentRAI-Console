@@ -1,12 +1,25 @@
-import { FileStack, Info, Paperclip, PenLine, X } from 'lucide-react';
+import { CheckCircle2, FileStack, Info, Paperclip, PenLine, Power, ShieldAlert, Wrench, X } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client';
 import { AIComponent, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
+import { useSession } from '../../stores/session';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+
+/** Model tool-authorization + operational-control facts (Pillar 2 — Control). */
+interface ControlInfo {
+  detected_tools: string[];
+  permitted_tools: string[];
+  tool_authorization: { unauthorized: string[]; authorized: string[]; undeclared: boolean; compliant: boolean };
+  operational_state: string;
+  operational_state_reason: string | null;
+}
+
+const toolLabel = (id: string) =>
+  id.startsWith('tool:') ? id.slice(5) : id.replace(/^capability:/, '').replace(/[._]/g, ' ');
 
 const daysAgoToISO = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
 const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -82,6 +95,11 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const [checking, setChecking] = useState(false);
   const [remediation, setRemediation] = useState('');
   const [evalForm, setEvalForm] = useState({ suite: 'promptfoo', passed: '', total: '' });
+  const [ctrl, setCtrl] = useState<ControlInfo | null>(null);
+  const [permitted, setPermitted] = useState<string[]>([]);
+  const [suspendReason, setSuspendReason] = useState('');
+  const role = useSession((s) => s.user?.role ?? 'VIEWER');
+  const canControl = role === 'ADMIN' || role === 'CISO';
   const [form, setForm] = useState({
     owner: '', boardPolicyRef: '', humanOversight: true, redTeamDate: '',
     autonomousScope: '', useCase: '', riskRationale: '', sutras: [] as boolean[],
@@ -95,6 +113,16 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       setCheck(null);
     } finally {
       setChecking(false);
+    }
+  }, []);
+
+  const fetchControl = useCallback(async (id: string) => {
+    try {
+      const m = await api<ControlInfo>(`/inventory/models/${id}`);
+      setCtrl(m);
+      setPermitted(m.permitted_tools ?? []);
+    } catch {
+      setCtrl(null);
     }
   }, []);
 
@@ -114,9 +142,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       });
       setRemediation(component.gapRemediation ?? '');
       void refreshCheck(component.id);
+      void fetchControl(component.id);
       setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
     }
-  }, [open, component, refreshCheck]);
+  }, [open, component, refreshCheck, fetchControl]);
 
   useEffect(() => {
     if (!open) return;
@@ -230,6 +259,52 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     } finally { setBusy(null); }
   };
 
+  const toggleTool = (id: string) =>
+    setPermitted((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  const authorizeAllDetected = () =>
+    setPermitted((p) => [...new Set([...p, ...(ctrl?.detected_tools ?? [])])]);
+
+  const saveTools = async () => {
+    setBusy('tools');
+    try {
+      await api(`/inventory/models/${component.id}/governance`, {
+        method: 'PATCH',
+        body: JSON.stringify({ permitted_tools: permitted, actor: 'dashboard_user' }),
+      });
+      toast('Tool authorization saved', 'positive');
+      await fetchControl(component.id);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Save failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const suspend = async () => {
+    if (suspendReason.trim().length < 4) return;
+    setBusy('suspend');
+    try {
+      await api(`/control/models/${component.id}/suspend`, {
+        method: 'POST', body: JSON.stringify({ reason: suspendReason.trim() }),
+      });
+      toast('Model suspended — kill switch engaged', 'negative');
+      setSuspendReason('');
+      await fetchControl(component.id);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Suspend failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const resume = async () => {
+    setBusy('resume');
+    try {
+      await api(`/control/models/${component.id}/resume`, { method: 'POST' });
+      toast('Model resumed — kill switch released', 'positive');
+      await fetchControl(component.id);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Resume failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -259,6 +334,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   };
 
   const sourceRefs = component.sourceRefs ?? [];
+  const detectedTools = ctrl?.detected_tools ?? [];
+  const toolChips = [...new Set([...detectedTools, ...permitted])];
+  const liveUnauthorized = detectedTools.filter((t) => !permitted.includes(t));
+  const suspended = (ctrl?.operational_state ?? 'ACTIVE') === 'SUSPENDED';
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 md:p-8" role="dialog" aria-modal="true" aria-label={`Edit ${component.name}`}>
@@ -386,6 +465,102 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               </div>
               <p className="mt-1.5 text-[9.5px] italic text-text-tertiary">
                 Records the eval-harness result as a typed <code className="font-mono not-italic text-accent">behavioral_eval</code> evidence artifact with its pass-rate — so a reviewer sees test <em>results</em>, not just a link.
+              </p>
+            </section>
+
+            {/* Static tool authorization (Pillar 2 — Control). */}
+            <section className="rounded-md border border-border p-2.5">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <Wrench size={11} className="text-accent" />
+                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Tool authorization</span>
+                {liveUnauthorized.length > 0
+                  ? <Badge tone="negative">{liveUnauthorized.length} unauthorized</Badge>
+                  : detectedTools.length > 0 ? <Badge tone="positive">authorized</Badge> : null}
+              </div>
+              {toolChips.length === 0 ? (
+                <p className="text-[10px] italic text-text-tertiary">
+                  No tools or capabilities detected in this model's source. Tool authorization applies to agents/tools that call the outside world.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-1.5 text-[9.5px] text-text-secondary">
+                    Check the tools this model is <b>permitted</b> to use. A detected tool left unchecked is an authorization
+                    violation the CI gate will block.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {toolChips.map((id) => {
+                      const isDetected = detectedTools.includes(id);
+                      const isPermitted = permitted.includes(id);
+                      const unauthorized = isDetected && !isPermitted;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => toggleTool(id)}
+                          title={isDetected ? 'Detected in source' : 'Declared, not detected'}
+                          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[9.5px] transition-colors ${
+                            unauthorized
+                              ? 'border-negative bg-negative-soft text-negative'
+                              : isPermitted
+                                ? 'border-positive bg-positive-soft text-positive'
+                                : 'border-border text-text-tertiary hover:bg-surface-hover'
+                          }`}
+                        >
+                          {isPermitted ? <CheckCircle2 size={10} /> : unauthorized ? <ShieldAlert size={10} /> : null}
+                          {toolLabel(id)}
+                          {!isDetected && <span className="opacity-60">(declared)</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button variant="secondary" size="xs" onClick={authorizeAllDetected} disabled={busy !== null || detectedTools.every((t) => permitted.includes(t))}>
+                      Authorize all detected
+                    </Button>
+                    <Button variant="primary" size="xs" onClick={saveTools} disabled={busy !== null}>
+                      {busy === 'tools' ? 'Saving…' : 'Save authorization'}
+                    </Button>
+                    {liveUnauthorized.length > 0 && (
+                      <span className="font-mono text-[9px] text-negative">
+                        {liveUnauthorized.map(toolLabel).join(', ')} not authorized
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* Operational control — the kill switch (Pillar 2 — Control). */}
+            <section className={`rounded-md border p-2.5 ${suspended ? 'border-negative' : 'border-border'}`}>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <Power size={11} className={suspended ? 'text-negative' : 'text-positive'} />
+                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Operational control</span>
+                <Badge tone={suspended ? 'negative' : 'positive'}>{suspended ? 'SUSPENDED' : 'ACTIVE'}</Badge>
+              </div>
+              {suspended && ctrl?.operational_state_reason && (
+                <p className="mb-1.5 text-[10px] text-negative">Suspended: “{ctrl.operational_state_reason}”</p>
+              )}
+              {!canControl ? (
+                <p className="text-[9.5px] italic text-text-tertiary">Only ADMIN or CISO can engage the kill switch.</p>
+              ) : suspended ? (
+                <Button variant="primary" size="sm" onClick={resume} disabled={busy !== null} icon={<Power size={12} />}>
+                  {busy === 'resume' ? 'Resuming…' : 'Resume model'}
+                </Button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className={`${FIELD} max-w-[38ch] text-[10px]`}
+                    placeholder="Reason (required) — e.g. anomalous outputs observed"
+                    value={suspendReason}
+                    onChange={(e) => setSuspendReason(e.target.value)}
+                  />
+                  <Button variant="danger" size="sm" onClick={suspend} disabled={busy !== null || suspendReason.trim().length < 4} icon={<Power size={12} />}>
+                    {busy === 'suspend' ? 'Suspending…' : 'Suspend (kill switch)'}
+                  </Button>
+                </div>
+              )}
+              <p className="mt-1.5 text-[9.5px] italic text-text-tertiary">
+                A deployed agent polls <code className="font-mono not-italic text-accent">/api/v1/control/models/{component.id.slice(0, 8)}…/poll</code> each loop and halts when suspended — the kill switch takes effect without a redeploy.
               </p>
             </section>
           </div>

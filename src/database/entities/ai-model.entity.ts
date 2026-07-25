@@ -104,6 +104,27 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   detectionSignals!: string[] | null;
 
+  /** Tools/capabilities the model is DETECTED using in source (Pillar 2 —
+   *  Control): `capability:shell`, `tool:transfer_funds`, … Refreshed on scan. */
+  @Column('simple-json', { nullable: true })
+  detectedTools!: string[] | null;
+
+  /** Tools/capabilities the model is AUTHORIZED to use (declared governance).
+   *  A detected tool outside this set is an authorization violation. */
+  @Column('simple-json', { nullable: true })
+  permittedTools!: string[] | null;
+
+  /** Deliberate operational control state (kill switch): ACTIVE | SUSPENDED.
+   *  Distinct from the drift-driven BCP fallback — this is an operator action. */
+  @Column('varchar', { length: 20, default: 'ACTIVE' })
+  operationalState!: string;
+
+  @Column('varchar', { length: 500, nullable: true })
+  operationalStateReason!: string | null;
+
+  @Column('datetime', { nullable: true })
+  operationalStateSince!: Date | null;
+
   /** Auditor-facing justification of the assigned risk level, with the same
    *  provenance scheme as the description ('heuristic' | 'ai' | 'human'). */
   @Column('text', { nullable: true })

@@ -99,6 +99,10 @@ Each model shows its type, **risk level**, **lifecycle stage**, and a **complian
 
 **🔄 Re-scan Models** re-evaluates every model against the current SentRAI logic and re-reads the codebase for models linked to a source file — updating risk levels where they changed. **Your governance edits (owner, policy, sutras, lifecycle) are preserved.**
 
+**Tool authorization (Control).** For agents and tools, the scan extracts the **tools and capabilities the code actually invokes** — named tools (`@tool`, `server.tool("…")`) and capability primitives (shell exec, network egress, filesystem writes, database, cloud, email, payments). In *Close Governance Gaps → Tool Authorization*, check the tools the model is **permitted** to use; any *detected* tool left unchecked is an authorization violation. The **CI gate blocks a build when an agent calls a tool outside its permitted set** — declare an agent's tool boundary once, and the pipeline enforces it.
+
+**Operational kill switch (Control).** ADMIN/CISO can **Suspend** a model from *Close Governance Gaps → Operational Control* — a deliberate stop, separate from the drift-driven fallback. A deployed agent polls `GET /api/v1/control/models/:id/poll` each loop and halts when it sees the kill switch, so a misbehaving system can be stopped in seconds without a redeploy. Every suspend/resume is on the model ledger and pushed to the governance webhook.
+
 ### 6. Drift Monitoring
 *Visible to: everyone, once a project is active.*
 

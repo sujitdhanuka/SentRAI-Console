@@ -12,6 +12,16 @@ export interface PolicyContract {
       missing: string[];
     }>;
     frameworks: string[];
+    /**
+     * Static tool authorization (Pillar 2 — Control). When enabled, an agent
+     * that invokes a tool/capability outside its declared permitted set — or
+     * uses tools with none declared — fails the gate. Reuses the same scanner.
+     */
+    tool_authorization?: {
+      enforce: boolean;
+      /** Fail when tools are detected but the model declares no permitted set. */
+      require_declaration: boolean;
+    };
   };
 }
 
@@ -33,8 +43,23 @@ export function defaultPolicy(): PolicyContract {
         { severity: 'HIGH', missing: ['registered', 'owner_team', 'board_policy_ref'] },
       ],
       frameworks: ['eu_ai_act', 'nist_ai_rmf'],
+      // On by default: unauthorized tool use is a hard blocker; not declaring a
+      // permitted set is surfaced but doesn't fail the build on its own.
+      tool_authorization: { enforce: true, require_declaration: false },
     },
   };
+}
+
+/** Read the tool-authorization policy block, tolerating partial/absent config. */
+function parseToolAuthorization(gates: any): PolicyContract['gates']['tool_authorization'] {
+  const ta = gates?.tool_authorization;
+  if (ta && typeof ta === 'object') {
+    return {
+      enforce: ta.enforce !== false, // default on
+      require_declaration: ta.require_declaration === true,
+    };
+  }
+  return { enforce: true, require_declaration: false };
 }
 
 /**
@@ -59,7 +84,13 @@ export function parsePolicy(raw: string | undefined): { policy: PolicyContract; 
       }));
     if (block_on.length === 0) return { policy: defaultPolicy(), usedDefault: true };
     return {
-      policy: { gates: { block_on, frameworks: Array.isArray(parsed.gates.frameworks) ? parsed.gates.frameworks.map(String) : [] } },
+      policy: {
+        gates: {
+          block_on,
+          frameworks: Array.isArray(parsed.gates.frameworks) ? parsed.gates.frameworks.map(String) : [],
+          tool_authorization: parseToolAuthorization(parsed.gates),
+        },
+      },
       usedDefault: false,
     };
   } catch {

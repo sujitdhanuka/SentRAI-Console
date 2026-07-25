@@ -147,6 +147,12 @@ export class InventoryController {
     return this.inventory.complianceCheck(modelId);
   }
 
+  /** Full record for one model (tool authorization, operational state, …). */
+  @Get('models/:modelId')
+  getModel(@Param('modelId') modelId: string): Promise<ModelResponse> {
+    return this.inventory.getModel(modelId);
+  }
+
   /** Attach an evidence artifact — bias-test report, red-team report, model card. */
   @Post('models/:modelId/evidence')
   @HttpCode(HttpStatus.CREATED)

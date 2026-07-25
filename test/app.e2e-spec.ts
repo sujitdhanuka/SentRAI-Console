@@ -1329,6 +1329,146 @@ describe('SentrAI Console (e2e)', () => {
     expect(history.body[1].verdict).toBe('fail');
   });
 
+  it('TOOL AUTHORIZATION: CI gate blocks a tool used outside the permitted set (Pillar 2)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    const proj = await request(http)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Tool Authz App', description: 'pillar 2 test' });
+    const projectId = proj.body.project_id;
+
+    const tok = await request(http)
+      .post('/api/v1/ci/tokens')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: projectId, label: 'tool-authz' });
+    const ciToken = tok.body.token;
+
+    // An LLM agent that shells out AND makes a network call — two capabilities.
+    const agentCode =
+      'import openai\n' +
+      'import subprocess, requests\n\n' +
+      'def agent(task):\n' +
+      '    """LLM planning agent."""\n' +
+      '    openai.chat.completions.create(model="gpt-4", messages=[])\n' +
+      '    subprocess.run(task, shell=True)\n' +
+      '    return requests.get("https://api.example.com/data")\n';
+    const files = [{ path: 'app/agent.py', content: agentCode }];
+
+    // Govern the model and declare it may ONLY use the network capability.
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Planning Agent',
+        model_type: 'AGENT',
+        functional_area: 'internal_tooling',
+        use_case_description: 'Internal LLM planning agent that calls tools to complete ops tasks.',
+        owner_team: 'Platform Eng',
+        board_policy_ref: 'BOARD-AI-POLICY-2026',
+        source_ref: 'app/agent.py',
+        project_id: projectId,
+      });
+    expect(model.status).toBe(201);
+    const modelId = model.body.model_id;
+
+    await request(http)
+      .patch(`/api/v1/inventory/models/${modelId}/governance`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ permitted_tools: ['capability:network'], actor: 'e2e' })
+      .expect(200);
+
+    // Scan: shell is used but not permitted → gate FAILS on tool authorization.
+    const fail = await request(http)
+      .post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${ciToken}`)
+      .send({ commit_sha: 'tool1', files });
+    expect(fail.status).toBe(200);
+    expect(fail.body.verdict).toBe('fail');
+    expect(fail.body.summary.tool_authorization_violations).toBeGreaterThan(0);
+    const taGap = fail.body.blocking_violations.find((g: any) => g.kind === 'tool_authorization');
+    expect(taGap).toBeTruthy();
+    expect(taGap.unauthorized_tools).toContain('capability:shell');
+
+    // Authorize the shell capability too → the same commit now PASSES.
+    await request(http)
+      .patch(`/api/v1/inventory/models/${modelId}/governance`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ permitted_tools: ['capability:network', 'capability:shell'], actor: 'e2e' })
+      .expect(200);
+
+    const pass = await request(http)
+      .post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${ciToken}`)
+      .send({ commit_sha: 'tool1', files });
+    expect(pass.status).toBe(200);
+    expect(pass.body.verdict).toBe('pass');
+
+    // The model response reflects a compliant tool authorization.
+    const record = await request(http)
+      .get(`/api/v1/inventory/models/${modelId}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(record.body.tool_authorization.compliant).toBe(true);
+    expect(record.body.tool_authorization.unauthorized).toHaveLength(0);
+  });
+
+  it('CONTROL: the kill switch suspends a model and the polled state reflects it (Pillar 2)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Kill Switch Target',
+        model_type: 'AGENT',
+        functional_area: 'internal_tooling',
+        use_case_description: 'An agent used to demonstrate the operational kill switch.',
+      });
+    const modelId = model.body.model_id;
+    expect(model.body.operational_state).toBe('ACTIVE');
+
+    // The public polled contract (no auth) starts ACTIVE.
+    const p0 = await request(http).get(`/api/v1/control/models/${modelId}/poll`);
+    expect(p0.status).toBe(200);
+    expect(p0.body.state).toBe('ACTIVE');
+    expect(p0.body.kill_switch).toBe(false);
+
+    // Suspend — the kill switch.
+    const susp = await request(http)
+      .post(`/api/v1/control/models/${modelId}/suspend`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ reason: 'anomalous autonomous actions observed in production' });
+    expect(susp.status).toBe(200);
+    expect(susp.body.state).toBe('SUSPENDED');
+    expect(susp.body.kill_switch).toBe(true);
+
+    // The polled contract an integrated agent checks now says: halt.
+    const p1 = await request(http).get(`/api/v1/control/models/${modelId}/poll`);
+    expect(p1.body.state).toBe('SUSPENDED');
+    expect(p1.body.kill_switch).toBe(true);
+
+    // Suspended models are listed org-wide.
+    const suspended = await request(http)
+      .get('/api/v1/control/suspended')
+      .set('Authorization', `Bearer ${admin}`);
+    expect(suspended.body.some((m: any) => m.model_id === modelId)).toBe(true);
+
+    // Resume clears the kill switch.
+    const res = await request(http)
+      .post(`/api/v1/control/models/${modelId}/resume`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(res.body.state).toBe('ACTIVE');
+    const p2 = await request(http).get(`/api/v1/control/models/${modelId}/poll`);
+    expect(p2.body.kill_switch).toBe(false);
+
+    // Both control actions are on the immutable model ledger.
+    const ledger = await request(http)
+      .get(`/api/v1/inventory/models/${modelId}/ledger`)
+      .set('Authorization', `Bearer ${admin}`);
+    const types = ledger.body.map((e: any) => e.event_type);
+    expect(types).toContain('OPERATIONAL_SUSPENDED');
+    expect(types).toContain('OPERATIONAL_RESUMED');
+  });
+
   it('CI LEDGER: org-wide events carry line-level evidence; override is additive (verdict preserved)', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
 

@@ -43,6 +43,8 @@ export class GovernanceUpdateDto {
   @IsOptional() @IsString() use_case_description?: string | null;
   /** A human-edited risk rationale (flips its provenance to 'human'). */
   @IsOptional() @IsString() risk_rationale?: string | null;
+  /** The tools/capabilities this model is authorized to use (Pillar 2). */
+  @IsOptional() @IsArray() @IsString({ each: true }) permitted_tools?: string[] | null;
   @IsOptional() @IsString() actor: string = 'dashboard_user';
 }
 
@@ -128,6 +130,21 @@ export interface ModelResponse {
   gap_remediation_model: string | null;
   source_refs: string[];
   merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
+  /** Static tool authorization (Pillar 2 — Control). */
+  detected_tools: string[];
+  permitted_tools: string[];
+  tool_authorization: {
+    permitted: string[];
+    detected: string[];
+    unauthorized: string[];
+    authorized: string[];
+    undeclared: boolean;
+    compliant: boolean;
+  };
+  /** Deliberate operational control state (kill switch). */
+  operational_state: string;
+  operational_state_reason: string | null;
+  operational_state_since: string | null;
   /** Set when the org crossed its plan's soft model limit (registration never blocks). */
   plan_warning?: string | null;
 }

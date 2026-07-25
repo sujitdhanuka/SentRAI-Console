@@ -45,6 +45,12 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   // ai-model.entity.ts — duplicate scan hits merge into one record instead of being dropped.
   { table: 'ai_models', column: 'sourceRefs', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'mergeHistory', definition: 'TEXT NULL' },
+  // ai-model.entity.ts — static tool authorization + operational control (Pillar 2).
+  { table: 'ai_models', column: 'detectedTools', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'permittedTools', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'operationalState', definition: "VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'" },
+  { table: 'ai_models', column: 'operationalStateReason', definition: 'VARCHAR(500) NULL' },
+  { table: 'ai_models', column: 'operationalStateSince', definition: 'DATETIME NULL' },
   // project.entity.ts — codebase origin ('zip'/'folder'/'github:owner/repo@branch').
   { table: 'projects', column: 'codebaseSource', definition: 'VARCHAR(300) NULL' },
   // project.entity.ts — board-facing executive narrative (Phase 5).

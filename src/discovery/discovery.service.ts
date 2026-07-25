@@ -260,6 +260,9 @@ export class DiscoveryService {
         ...new Set([...(orm.detectionSignals ?? []), ...cand.signals.map((s) => s.category)]),
       ];
 
+      // Union detected tools/capabilities across the merged files (Pillar 2).
+      orm.detectedTools = [...new Set([...(orm.detectedTools ?? []), ...cand.tools])];
+
       // Union security findings, keyed by type+line so re-scans don't duplicate.
       const findings = [...(orm.securityFindings ?? [])];
       const seen = new Set(findings.map((f) => `${f.type}:${f.line}`));
@@ -435,6 +438,8 @@ export class DiscoveryService {
         securityFindings: cand.secrets.length ? cand.secrets : null,
         // Unique signal categories — evidence for AI summaries / risk rationale.
         detectionSignals: [...new Set(cand.signals.map((s) => s.category))],
+        // Tools/capabilities the code invokes — the input to tool authorization.
+        detectedTools: cand.tools.length ? cand.tools : null,
         isActive: true,
         registeredAt: entry.registeredAt,
         updatedAt: entry.updatedAt,

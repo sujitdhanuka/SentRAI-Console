@@ -29,6 +29,7 @@ import { IncidentStatus, ModelLifecycleStage, RiskLevel, Role, SutraAlignment } 
 import { maskDict } from '../common/dpdp';
 import { NotifierService } from '../common/notifier.service';
 import { AIModelEntry, EvidenceArtifact, triageAiModel, floorRiskForSecurityFindings, explainTriageFactors } from '../domain/model-inventory';
+import { authorizeTools } from '../domain/tool-authorization';
 import { ValidationContext } from '../compliance/frameworks.validator';
 import { modelEntityToEntry } from './model.mapper';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
@@ -195,6 +196,13 @@ export class InventoryService implements OnModuleInit {
       // Every file this record covers, plus how the extra ones got here.
       source_refs: orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []),
       merge_history: orm.mergeHistory ?? [],
+      // Static tool authorization (Pillar 2 — Control).
+      detected_tools: orm.detectedTools ?? [],
+      permitted_tools: orm.permittedTools ?? [],
+      tool_authorization: authorizeTools(orm.permittedTools, orm.detectedTools),
+      operational_state: orm.operationalState ?? 'ACTIVE',
+      operational_state_reason: orm.operationalStateReason ?? null,
+      operational_state_since: orm.operationalStateSince ? orm.operationalStateSince.toISOString() : null,
     };
   }
 
@@ -368,6 +376,12 @@ export class InventoryService implements OnModuleInit {
     const orm = await this.models.findOne({ where: { id: modelId } });
     if (!orm) throw new NotFoundException('Model not found');
     return orm;
+  }
+
+  /** Full response for a single model — used by the governance workspace to
+   *  read tool authorization and operational state. */
+  async getModel(modelId: string): Promise<ModelResponse> {
+    return this.buildResponse(await this.getOrThrow(modelId));
   }
 
   /**
@@ -748,6 +762,14 @@ export class InventoryService implements OnModuleInit {
       }
       orm.riskRationale = dto.risk_rationale;
     }
+    if (dto.permitted_tools !== undefined && dto.permitted_tools !== null) {
+      const next = [...new Set(dto.permitted_tools.map((t) => t.trim()).filter(Boolean))];
+      const prev = orm.permittedTools ?? [];
+      if (prev.join(',') !== next.join(',')) {
+        changes.permitted_tools = [prev, next];
+        orm.permittedTools = next;
+      }
+    }
 
     orm.updatedAt = new Date();
 
@@ -941,6 +963,7 @@ export class InventoryService implements OnModuleInit {
       const retriaged = triageAiModel(modelEntityToEntry(m));
       let finalRisk = retriaged;
       let sourceFound: boolean | null = null;
+      let toolsChanged = false;
 
       if (m.sourceRef && m.projectId) {
         const candidates = await scanProject(m.projectId);
@@ -949,6 +972,10 @@ export class InventoryService implements OnModuleInit {
           if (cand) {
             sourceFound = true;
             finalRisk = RISK_ORDER[retriaged] >= RISK_ORDER[cand.riskHint] ? retriaged : cand.riskHint;
+            // Refresh detected tools/capabilities (Pillar 2 — Control).
+            const beforeTools = (m.detectedTools ?? []).join(',');
+            m.detectedTools = [...new Set([...(m.detectedTools ?? []), ...cand.tools])];
+            toolsChanged = beforeTools !== (m.detectedTools ?? []).join(',');
             // Refresh code-derived prompts.
             await this.prompts.delete({ modelId: m.id });
             for (const p of cand.prompts) {
@@ -969,11 +996,11 @@ export class InventoryService implements OnModuleInit {
       }
 
       const riskChanged = finalRisk !== oldRisk;
-      if (riskChanged) {
-        m.riskLevel = finalRisk;
+      if (riskChanged) m.riskLevel = finalRisk;
+      if (riskChanged || toolsChanged) {
         m.updatedAt = new Date();
         await this.models.save(m);
-        summary.risk_changed += 1;
+        if (riskChanged) summary.risk_changed += 1;
       }
       // Record a ledger event only for material changes — a risk update, or a
       // source file that no longer flags as AI — to keep the audit trail clean.

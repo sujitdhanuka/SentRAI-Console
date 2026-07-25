@@ -17,8 +17,10 @@ import { Role } from '../common/enums';
 import { NotifierService } from '../common/notifier.service';
 import { DiscoveredCandidate, scanDirectory } from '../discovery/codebase-scanner';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
+import { toolLabel } from '../discovery/tool-detector';
 import { modelEntityToEntry } from '../inventory/model.mapper';
 import { hasEvidence } from '../domain/model-inventory';
+import { authorizeTools } from '../domain/tool-authorization';
 import { CiScanDto, CiFileDto } from './ci.dto';
 import { parsePolicy, PolicyContract } from './policy';
 
@@ -40,6 +42,10 @@ export interface BlockingGap {
   missing: string[];
   reason: string;
   shadow: boolean;
+  /** What kind of violation — governance completeness or tool authorization. */
+  kind?: 'governance' | 'tool_authorization';
+  /** Detected tools used outside the permitted set (Pillar 2 — Control). */
+  unauthorized_tools?: string[];
   /** Exact flagged lines (for the auditor's inline code viewer). */
   evidence?: GapEvidence[];
 }
@@ -121,6 +127,7 @@ export class CiEvaluationService {
             severity,
             file_location: candidate.filePath,
             missing,
+            kind: 'governance',
             shadow: matched === null,
             reason:
               (matched === null ? 'Ungoverned "shadow" AI asset. ' : '') +
@@ -135,35 +142,73 @@ export class CiEvaluationService {
           });
         }
       }
+
+      // Static tool authorization (Pillar 2 — Control): an agent that invokes a
+      // tool/capability outside its declared permitted set fails the gate. Only
+      // meaningful once a governed model backs the asset (shadow AI is already
+      // flagged above). Undeclared scope blocks only when the policy requires it.
+      const ta = policy.gates.tool_authorization;
+      if (ta?.enforce && matched && (candidate.tools?.length ?? 0) > 0) {
+        const auth = authorizeTools(matched.permittedTools, candidate.tools);
+        const blockUndeclared = ta.require_declaration && auth.undeclared;
+        if (auth.unauthorized.length > 0 && (!auth.undeclared || blockUndeclared)) {
+          gaps.push({
+            model_name: candidate.suggestedName,
+            severity,
+            file_location: candidate.filePath,
+            missing: auth.unauthorized,
+            kind: 'tool_authorization',
+            unauthorized_tools: auth.unauthorized,
+            shadow: false,
+            reason: auth.undeclared
+              ? `Tool authorization: uses ${auth.unauthorized.map(toolLabel).join(', ')} but no permitted tools are declared. Declare the agent's tool scope.`
+              : `Tool authorization violation: uses ${auth.unauthorized.map(toolLabel).join(', ')} outside its permitted set (${auth.permitted.map(toolLabel).join(', ') || 'none'}).`,
+          });
+        }
+      }
     }
     return gaps;
   }
 
+  private sarifRuleId(g: BlockingGap): string {
+    return g.kind === 'tool_authorization' ? 'SENTRAI-TOOL-AUTHZ' : `SENTRAI-GATE-${g.severity}`;
+  }
+
   private buildSarif(gaps: BlockingGap[], commitSha: string) {
-    const rules = [...new Set(gaps.map((g) => g.severity))].map((sev) => ({
-      id: `SENTRAI-GATE-${sev}`,
-      name: `Ungoverned${sev}RiskModel`,
-      shortDescription: { text: `${sev}-risk AI model missing required governance` },
-      defaultConfiguration: { level: 'error' },
-      helpUri: 'https://sentraiconsole.com',
-    }));
+    const ids = new Map<string, { id: string; name: string; shortDescription: { text: string }; defaultConfiguration: { level: string }; helpUri: string }>();
+    for (const g of gaps) {
+      const id = this.sarifRuleId(g);
+      if (!ids.has(id)) {
+        ids.set(id, {
+          id,
+          name: g.kind === 'tool_authorization' ? 'UnauthorizedToolUse' : `Ungoverned${g.severity}RiskModel`,
+          shortDescription: {
+            text: g.kind === 'tool_authorization'
+              ? 'AI agent invokes a tool outside its authorized set'
+              : `${g.severity}-risk AI model missing required governance`,
+          },
+          defaultConfiguration: { level: 'error' },
+          helpUri: 'https://sentraiconsole.com',
+        });
+      }
+    }
     return {
       $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
       version: '2.1.0',
       runs: [
         {
           tool: {
-            driver: { name: 'Sentrai-Console', informationUri: 'https://sentraiconsole.com', version: '1.0.0-ci', rules },
+            driver: { name: 'Sentrai-Console', informationUri: 'https://sentraiconsole.com', version: '1.0.0-ci', rules: [...ids.values()] },
           },
           properties: { commitSha },
           results: gaps.map((g) => ({
-            ruleId: `SENTRAI-GATE-${g.severity}`,
+            ruleId: this.sarifRuleId(g),
             level: 'error',
             message: { text: g.reason },
             locations: [
               { physicalLocation: { artifactLocation: { uri: g.file_location }, region: { startLine: 1 } } },
             ],
-            properties: { shadow: g.shadow, missing: g.missing },
+            properties: { shadow: g.shadow, missing: g.missing, kind: g.kind ?? 'governance', unauthorized_tools: g.unauthorized_tools ?? [] },
           })),
         },
       ],
@@ -219,6 +264,7 @@ export class CiEvaluationService {
         models_detected: candidates.length,
         blocking_violations: blockingGaps.length,
         shadow_assets: blockingGaps.filter((g) => g.shadow).length,
+        tool_authorization_violations: blockingGaps.filter((g) => g.kind === 'tool_authorization').length,
         frameworks: policy.gates.frameworks,
       },
       blocking_violations: blockingGaps,
