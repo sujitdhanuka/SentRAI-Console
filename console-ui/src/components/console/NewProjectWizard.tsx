@@ -5,6 +5,7 @@ import { api, apiUpload } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { parseGithubRepo } from './GithubImportModal';
 
+import { Button } from '../ui/Button';
 import { fieldClass as FIELD } from '../ui/form';
 import { labelClass as LABEL } from '../ui/form';
 
@@ -204,14 +205,10 @@ export function NewProjectWizard({
               </div>
               {error && <p className="rounded-md border border-negative bg-negative-soft px-2.5 py-1.5 text-[10.5px] text-negative">{error}</p>}
               <div className="flex justify-end gap-2 pt-1">
-                <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">Cancel</button>
-                <button
-                  onClick={goToCodebase}
-                  disabled={busy || !name.trim()}
-                  className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {busy && <Loader2 size={12} className="animate-spin" />} Next: add codebase
-                </button>
+                <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+                <Button variant="primary" size="sm" onClick={goToCodebase} disabled={busy || !name.trim()} icon={busy ? <Loader2 size={12} className="animate-spin" /> : undefined}>
+                  Next: add codebase
+                </Button>
               </div>
             </div>
           )}
@@ -283,18 +280,11 @@ export function NewProjectWizard({
               {error && <p className="rounded-md border border-negative bg-negative-soft px-2.5 py-1.5 text-[10.5px] text-negative">{error}</p>}
 
               <div className="flex items-center justify-between gap-2 pt-1">
-                <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">
-                  I'll add it later
-                </button>
+                <Button variant="secondary" size="sm" onClick={onClose}>I'll add it later</Button>
                 {source === 'github' && (
-                  <button
-                    onClick={importGithub}
-                    disabled={busy || !parsed}
-                    title={!parsed ? 'Enter a valid GitHub repository first' : undefined}
-                    className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {busy ? <Loader2 size={12} className="animate-spin" /> : <Github size={12} />} Import & scan
-                  </button>
+                  <Button variant="primary" size="sm" onClick={importGithub} disabled={busy || !parsed} title={!parsed ? 'Enter a valid GitHub repository first' : undefined} icon={busy ? <Loader2 size={12} className="animate-spin" /> : <Github size={12} />}>
+                    Import &amp; scan
+                  </Button>
                 )}
               </div>
             </div>

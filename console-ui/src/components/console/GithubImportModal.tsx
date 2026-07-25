@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 
+import { Button } from '../ui/Button';
 import { fieldClass as FIELD } from '../ui/form';
 import { labelClass as LABEL } from '../ui/form';
 
@@ -198,17 +199,10 @@ export function GithubImportModal({
           )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={busy || !parsed}
-              title={!parsed ? 'Enter a valid GitHub repository first' : undefined}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Github size={12} /> {busy ? 'Importing…' : 'Import repository'}
-            </button>
+            <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={busy || !parsed} title={!parsed ? 'Enter a valid GitHub repository first' : undefined} icon={<Github size={12} />}>
+              {busy ? 'Importing…' : 'Import repository'}
+            </Button>
           </div>
         </form>
       </div>

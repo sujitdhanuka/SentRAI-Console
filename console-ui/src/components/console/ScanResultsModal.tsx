@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 export interface ScanCandidate {
   suggested_name: string;
@@ -220,18 +221,10 @@ export function ScanResultsModal({
             Already-governed files merge into their existing model — importing never duplicates.
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary hover:bg-surface-hover">
-              Skip for now
-            </button>
-            <button
-              onClick={importSelected}
-              disabled={busy || checked.size === 0}
-              title={checked.size === 0 ? 'Select at least one component' : undefined}
-              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy && <Loader2 size={12} className="animate-spin" />}
+            <Button variant="secondary" size="sm" onClick={onClose}>Skip for now</Button>
+            <Button variant="primary" size="sm" onClick={importSelected} disabled={busy || checked.size === 0} title={checked.size === 0 ? 'Select at least one component' : undefined} icon={busy ? <Loader2 size={12} className="animate-spin" /> : undefined}>
               Import {checked.size} into inventory
-            </button>
+            </Button>
           </div>
         </footer>
       </div>
