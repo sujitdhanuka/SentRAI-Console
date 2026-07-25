@@ -11,8 +11,8 @@ import { Button } from '../ui/Button';
 const daysAgoToISO = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
 const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 /* Per-framework compliance as returned by /inventory/models/:id/compliance-check. */
 interface FrameworkReport {

@@ -6,7 +6,7 @@ import { useConsoleUi } from '../../stores/consoleUi';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
+import { fieldClass as FIELD } from '../ui/form';
 
 /** Minimal consumer-grievance intake — files through the provider, which
  *  appends to the audit ledger, then toasts the generated grievance id. */

@@ -30,7 +30,7 @@ interface Version {
   created_at: string;
 }
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
+import { fieldClass as FIELD } from '../ui/form';
 
 /**
  * Versioned prompt templates. Saving never overwrites — it appends version N+1

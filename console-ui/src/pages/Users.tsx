@@ -28,8 +28,8 @@ const ROLE_TONE: Record<string, BadgeTone> = {
  *  ceiling is enforced server-side; the UI simply doesn't offer it. */
 const ALL_ROLES = ['ADMIN', 'OWNER', 'CISO', 'APPROVER', 'REVIEWER', 'AUDITOR', 'VIEWER'];
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../components/ui/form';
+import { labelClass as LABEL } from '../components/ui/form';
 
 export function Users() {
   const toast = useConsoleUi((s) => s.toast);

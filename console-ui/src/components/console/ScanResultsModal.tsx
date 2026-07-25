@@ -26,8 +26,8 @@ const RISK_TONE = (r: string): 'negative' | 'warning' | 'neutral' =>
 const CONF_TONE = (c: string): 'positive' | 'warning' | 'neutral' =>
   c === 'HIGH' ? 'positive' : c === 'MEDIUM' ? 'warning' : 'neutral';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 /**
  * The review step between a scan and the inventory (parity with the classic

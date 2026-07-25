@@ -5,8 +5,8 @@ import { api, apiUpload } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { parseGithubRepo } from './GithubImportModal';
 
-const FIELD = 'w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text placeholder:text-text-tertiary focus:border-accent';
-const LABEL = 'mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
+import { fieldClass as FIELD } from '../ui/form';
+import { labelClass as LABEL } from '../ui/form';
 
 type Source = 'github' | 'zip' | 'folder';
 type Step = 1 | 2;
