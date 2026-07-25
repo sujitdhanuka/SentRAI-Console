@@ -21,6 +21,7 @@ import { RiskLevel } from '../common/enums';
 import { InventoryService } from './inventory.service';
 import { GenerationQueueService } from './generation-queue.service';
 import {
+  EvalEvidenceDto,
   EvidenceDto,
   GovernanceUpdateDto,
   GrievanceUpdateDto,
@@ -156,6 +157,13 @@ export class InventoryController {
   @Get('models/:modelId/evidence')
   listEvidence(@Param('modelId') modelId: string) {
     return this.inventory.listEvidence(modelId);
+  }
+
+  /** Ingest behavioral-eval-harness output as typed evidence (parsed pass-rate). */
+  @Post('models/:modelId/eval-evidence')
+  @HttpCode(HttpStatus.CREATED)
+  ingestEvalEvidence(@Param('modelId') modelId: string, @Body() dto: EvalEvidenceDto) {
+    return this.inventory.ingestEvalEvidence(modelId, dto);
   }
 
   /** Model usage vs. the organization's plan limit (soft limits only). */

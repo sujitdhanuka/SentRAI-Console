@@ -13,6 +13,7 @@ import { scanDirectory } from '../discovery/codebase-scanner';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { MonitoringService } from '../monitoring/monitoring.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { AttestationsService } from '../alignment/attestations.service';
 
 /** Synthetic principal used for actions taken by scheduled jobs. */
 const SYSTEM_USER: CurrentUser = {
@@ -43,6 +44,7 @@ export class ScheduledTasksService {
     private readonly monitoring: MonitoringService,
     private readonly inventory: InventoryService,
     private readonly notifier: NotifierService,
+    private readonly attestations: AttestationsService,
   ) {}
 
   /** REC 16: evaluate drift on all pending score windows (hourly). */
@@ -91,6 +93,14 @@ export class ScheduledTasksService {
         models: stale.map((m) => ({ model_id: m.id, name: m.name, last_updated: m.updatedAt.toISOString() })),
       });
     }
+  }
+
+  /** Pillar 1 — Alignment: escalate attestation items still PENDING past their
+   *  due date (daily), the same overdue-escalation pattern as incidents. */
+  @Cron('0 1 * * *')
+  async checkOverdueAttestations(): Promise<void> {
+    const overdue = await this.attestations.escalateOverdue();
+    this.logger.log(`attestation_overdue_check overdue=${overdue}`);
   }
 
   /**

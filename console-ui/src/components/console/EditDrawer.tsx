@@ -81,6 +81,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const [check, setCheck] = useState<ComplianceCheck | null>(null);
   const [checking, setChecking] = useState(false);
   const [remediation, setRemediation] = useState('');
+  const [evalForm, setEvalForm] = useState({ suite: 'promptfoo', passed: '', total: '' });
   const [form, setForm] = useState({
     owner: '', boardPolicyRef: '', humanOversight: true, redTeamDate: '',
     autonomousScope: '', useCase: '', riskRationale: '', sutras: [] as boolean[],
@@ -184,6 +185,28 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       toast(`Remediation drafted for ${r.open_gaps} open gap(s) — review before attaching`, 'positive');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Draft failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const ingestEval = async () => {
+    const passed = Number(evalForm.passed);
+    const total = Number(evalForm.total);
+    if (!evalForm.suite.trim() || !Number.isFinite(total) || total <= 0 || !Number.isFinite(passed) || passed < 0) {
+      toast('Enter a suite name, passed count, and a positive total.', 'negative');
+      return;
+    }
+    setBusy('eval');
+    try {
+      const r = await api<{ pass_rate: number; passed: number; total: number }>(
+        `/inventory/models/${component.id}/eval-evidence`,
+        { method: 'POST', body: JSON.stringify({ suite: evalForm.suite.trim(), passed, total, actor: 'dashboard_user' }) },
+      );
+      toast(`Behavioral eval ingested — ${r.passed}/${r.total} passed (${r.pass_rate}%)`, 'positive');
+      setEvalForm((f) => ({ ...f, passed: '', total: '' }));
+      await refreshCheck(component.id);
+      await load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Ingest failed', 'negative');
     } finally { setBusy(null); }
   };
 
@@ -332,6 +355,38 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   enters the compliance record.
                 </p>
               )}
+            </section>
+
+            {/* Behavioral eval evidence — ingest eval-harness output as typed evidence. */}
+            <section className="rounded-md border border-border p-2.5">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Behavioral eval evidence</span>
+              </div>
+              <div className="flex flex-wrap items-end gap-1.5">
+                <label className="flex-1">
+                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Suite</span>
+                  <input className={`${FIELD} text-[10px]`} value={evalForm.suite} onChange={(e) => setEvalForm({ ...evalForm, suite: e.target.value })} placeholder="promptfoo / garak / pyrit" />
+                </label>
+                <label className="w-16">
+                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Passed</span>
+                  <input inputMode="numeric" className={`${FIELD} font-mono text-[10px]`} value={evalForm.passed} onChange={(e) => setEvalForm({ ...evalForm, passed: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" />
+                </label>
+                <label className="w-16">
+                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Total</span>
+                  <input inputMode="numeric" className={`${FIELD} font-mono text-[10px]`} value={evalForm.total} onChange={(e) => setEvalForm({ ...evalForm, total: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" />
+                </label>
+                <button
+                  type="button"
+                  onClick={ingestEval}
+                  disabled={busy !== null}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[10px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+                >
+                  <Paperclip size={10} /> {busy === 'eval' ? 'Ingesting…' : 'Ingest'}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[9.5px] italic text-text-tertiary">
+                Records the eval-harness result as a typed <code className="font-mono not-italic text-accent">behavioral_eval</code> evidence artifact with its pass-rate — so a reviewer sees test <em>results</em>, not just a link.
+              </p>
             </section>
           </div>
 

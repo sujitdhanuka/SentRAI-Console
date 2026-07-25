@@ -10,6 +10,7 @@ import {
   ScrollText,
   Settings,
   Siren,
+  Stamp,
   Cpu,
   Users,
 } from 'lucide-react';
@@ -30,6 +31,7 @@ const NAV: NavItem[] = [
   { route: 'projects', icon: FolderGit2, label: 'Projects' },
   { route: 'inventory', icon: Boxes, label: 'Model Inventory' },
   { route: 'compliance', icon: Scale, label: 'Compliance Rollup' },
+  { route: 'alignment', icon: Stamp, label: 'Alignment · Board Sign-off' },
   { route: 'ci-ledger', icon: ScrollText, label: 'CI Gate Ledger', roles: ['ADMIN', 'CISO', 'APPROVER', 'AUDITOR', 'OWNER'] },
   { route: 'monitoring', icon: LayoutDashboard, label: 'Drift Monitoring' },
   { route: 'audit', icon: FileText, label: 'Audit Trail' },

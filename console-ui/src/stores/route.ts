@@ -9,6 +9,7 @@ export const ROUTES = [
   'projects',
   'inventory',
   'compliance',
+  'alignment',
   'ci-ledger',
   'monitoring',
   'audit',

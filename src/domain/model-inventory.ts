@@ -38,10 +38,12 @@ export interface AIModelEntry {
 }
 
 export interface EvidenceArtifact {
-  type: string; // e.g. 'bias_test' | 'red_team' | 'model_card' | 'dpia'
+  type: string; // e.g. 'bias_test' | 'red_team' | 'model_card' | 'dpia' | 'behavioral_eval'
   ref: string; // URL or document reference
   description?: string;
   added_at: string;
+  /** Parsed structured summary — e.g. behavioral-eval pass rate + failed checks. */
+  data?: Record<string, any>;
 }
 
 /** True when the entry carries an attached evidence artifact of the given type. */

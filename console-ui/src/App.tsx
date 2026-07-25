@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import { AiSettings } from './pages/AiSettings';
 import { AiUsage } from './pages/AiUsage';
+import { Alignment } from './pages/Alignment';
 import { AuditTrail } from './pages/AuditTrail';
 import { CiLedger } from './pages/CiLedger';
 import { ComplianceRollup } from './pages/ComplianceRollup';
@@ -24,6 +25,7 @@ const PAGES: Record<Route, () => JSX.Element> = {
   projects: Projects,
   inventory: InventoryDashboard,
   compliance: ComplianceRollup,
+  alignment: Alignment,
   'ci-ledger': CiLedger,
   monitoring: Monitoring,
   audit: AuditTrail,

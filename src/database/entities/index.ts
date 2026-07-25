@@ -15,6 +15,9 @@ import { DeploymentGateEventEntity } from './deployment-gate-event.entity';
 import { AiProviderConfigEntity } from './ai-provider-config.entity';
 import { PromptTemplateEntity } from './prompt-template.entity';
 import { AiUsageEventEntity } from './ai-usage-event.entity';
+import { ModelApprovalEntity } from './model-approval.entity';
+import { AttestationCampaignEntity } from './attestation-campaign.entity';
+import { AttestationItemEntity } from './attestation-item.entity';
 
 export {
   OrganizationEntity,
@@ -34,6 +37,9 @@ export {
   AiProviderConfigEntity,
   PromptTemplateEntity,
   AiUsageEventEntity,
+  ModelApprovalEntity,
+  AttestationCampaignEntity,
+  AttestationItemEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -54,4 +60,7 @@ export const ALL_ENTITIES = [
   AiProviderConfigEntity,
   PromptTemplateEntity,
   AiUsageEventEntity,
+  ModelApprovalEntity,
+  AttestationCampaignEntity,
+  AttestationItemEntity,
 ];

@@ -149,6 +149,69 @@ const REQUIRED_TABLES: TableSpec[] = [
       INDEX \`IDX_ai_usage_events_tenant\` (\`tenantId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
+  {
+    table: 'model_approvals', // model-approval.entity.ts (Pillar 1 — Alignment)
+    createSql: `CREATE TABLE IF NOT EXISTS \`model_approvals\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`tenantId\` VARCHAR(36) NULL,
+      \`modelName\` VARCHAR(200) NOT NULL,
+      \`riskLevel\` VARCHAR(20) NOT NULL,
+      \`targetStage\` VARCHAR(30) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`requiredApprovals\` INT NOT NULL DEFAULT 1,
+      \`requestedBy\` VARCHAR(255) NOT NULL,
+      \`requestedByRole\` VARCHAR(30) NOT NULL,
+      \`requestNote\` VARCHAR(1000) NULL,
+      \`decisions\` TEXT NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`resolvedAt\` DATETIME NULL,
+      INDEX \`IDX_model_approvals_model\` (\`modelId\`),
+      INDEX \`IDX_model_approvals_tenant\` (\`tenantId\`),
+      INDEX \`IDX_model_approvals_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'attestation_campaigns', // attestation-campaign.entity.ts
+    createSql: `CREATE TABLE IF NOT EXISTS \`attestation_campaigns\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`tenantId\` VARCHAR(36) NULL,
+      \`title\` VARCHAR(200) NOT NULL,
+      \`riskFilter\` VARCHAR(20) NULL,
+      \`cadenceDays\` INT NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`itemCount\` INT NOT NULL DEFAULT 0,
+      \`openedBy\` VARCHAR(255) NOT NULL,
+      \`note\` VARCHAR(1000) NULL,
+      \`dueAt\` DATETIME NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`closedAt\` DATETIME NULL,
+      INDEX \`IDX_attestation_campaigns_tenant\` (\`tenantId\`),
+      INDEX \`IDX_attestation_campaigns_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'attestation_items', // attestation-item.entity.ts
+    createSql: `CREATE TABLE IF NOT EXISTS \`attestation_items\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`campaignId\` VARCHAR(36) NOT NULL,
+      \`tenantId\` VARCHAR(36) NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`modelName\` VARCHAR(200) NOT NULL,
+      \`riskLevel\` VARCHAR(20) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`attestedBy\` VARCHAR(255) NULL,
+      \`attestedByRole\` VARCHAR(30) NULL,
+      \`note\` VARCHAR(1000) NULL,
+      \`dueAt\` DATETIME NOT NULL,
+      \`attestedAt\` DATETIME NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_attestation_items_campaign\` (\`campaignId\`),
+      INDEX \`IDX_attestation_items_tenant\` (\`tenantId\`),
+      INDEX \`IDX_attestation_items_model\` (\`modelId\`),
+      INDEX \`IDX_attestation_items_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 @Injectable()
