@@ -491,6 +491,49 @@ export class InventoryService implements OnModuleInit {
   }
 
   /**
+   * Proposes the model's autonomous scope from its code signals + masked
+   * snippet — the boundary of independent action RBI FREE-AI Recommendation 16
+   * requires for any model without human oversight. NOT persisted: it is a
+   * proposal returned for the owner to review, edit, and confirm by saving
+   * (which records the human-owned scope in the ledger). Without a configured
+   * LLM it falls back to a structured prompt for the human to complete.
+   */
+  async draftAutonomousScope(user: CurrentUser, modelId: string) {
+    const orm = await this.getOrThrow(modelId);
+    const aiEnabled = await this.summarizer.aiEnabledForOrg(user?.tenantId ?? null);
+
+    const result = await this.summarizer.draftForOrg(
+      user?.tenantId ?? null,
+      'autonomous_scope',
+      {
+        name: orm.name,
+        model_type: orm.modelType,
+        functional_area: orm.functionalArea,
+        signals: (orm.detectionSignals ?? []).join(', ') || 'none',
+        human_oversight: String(orm.humanOversightRequired),
+        existing_description: orm.useCaseDescription ?? '',
+        snippet_block: (await this.readMaskedSnippet(orm, aiEnabled)) ?? '',
+      },
+      () =>
+        orm.humanOversightRequired
+          ? 'Fully supervised — a human reviews and approves outputs before they are acted on; no autonomous action.'
+          : 'Operates without per-action human sign-off. Define the permitted actions, any step/tool limits, and the conditions under which it must escalate to a human. (Heuristic draft — no LLM configured; edit before saving.)',
+      user?.email ?? 'dashboard_user',
+    );
+
+    await this.recordLedger(modelId, 'AUTONOMOUS_SCOPE_DRAFTED',
+      { source: result.source, model: result.model ?? 'n/a' },
+      user?.email ?? 'dashboard_user');
+
+    return {
+      model_id: modelId,
+      autonomous_scope: result.text,
+      ai_enabled: result.source === 'ai',
+      provider: result.provider,
+    };
+  }
+
+  /**
    * Drafts one actionable remediation step per open compliance gap, across all
    * four frameworks. NOT persisted on the model — the draft is returned for
    * human review; the UI can attach it as a 'remediation_plan' evidence

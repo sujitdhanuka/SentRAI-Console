@@ -107,6 +107,13 @@ export class InventoryController {
     return this.inventory.draftRiskRationale(user, modelId);
   }
 
+  /** Propose the model's autonomous-action boundary from its code signals (for human review). */
+  @Post('models/:modelId/autonomous-scope')
+  @HttpCode(HttpStatus.OK)
+  draftAutonomousScope(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.inventory.draftAutonomousScope(user, modelId);
+  }
+
   /** Draft one remediation step per open compliance gap; persisted with provenance. */
   @Post('models/:modelId/draft-remediation')
   @HttpCode(HttpStatus.OK)
