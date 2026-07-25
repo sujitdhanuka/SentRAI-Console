@@ -10,6 +10,7 @@ import {
   ModelLedgerEventEntity,
   ProjectEntity,
 } from '../database/entities';
+import { NotifierService } from '../common/notifier.service';
 import { TelemetryController } from './telemetry.controller';
 import { TelemetryService } from './telemetry.service';
 
@@ -31,6 +32,7 @@ import { TelemetryService } from './telemetry.service';
     ]),
   ],
   controllers: [TelemetryController],
-  providers: [TelemetryService],
+  providers: [TelemetryService, NotifierService],
+  exports: [TelemetryService], // for the scheduled scope-deviation escalation
 })
 export class TelemetryModule {}

@@ -103,6 +103,8 @@ Each model shows its type, **risk level**, **lifecycle stage**, and a **complian
 
 **Operational kill switch (Control).** ADMIN/CISO can **Suspend** a model from *Close Governance Gaps → Operational Control* — a deliberate stop, separate from the drift-driven fallback. A deployed agent polls `GET /api/v1/control/models/:id/poll` each loop and halts when it sees the kill switch, so a misbehaving system can be stopped in seconds without a redeploy. Every suspend/resume is on the model ledger and pushed to the governance webhook.
 
+**Adversarial evidence & secret hygiene (Security).** In *Close Governance Gaps → Adversarial / red-team evidence*, ingest a garak / PyRIT / promptfoo run (probes and breaches); it stores a typed `red_team` artifact **and** stamps the model's last-red-team date, satisfying that control in one step. Separately, one unified secret-pattern library backs both the codebase scanner's hardcoded-secret findings and the redactor that masks credentials before any snippet reaches an LLM — AWS/GitHub/Google/Slack/Stripe/provider keys, JWTs and PEM private keys included.
+
 ### 6. Drift Monitoring
 *Visible to: everyone, once a project is active.*
 
@@ -201,6 +203,7 @@ Governance so far covers *code* (the CI gate) and *state* (the model ledger). Ru
 - **Agent identity propagation** — each CI scan returns a `SENTRAI_MODEL_ID` for every governed asset it detects. Stamp that into the deployed build (an env var); the agent then tags the telemetry it emits with it, so runtime events join back to the exact registry entry. The id is shown at the top of each model's timeline.
 - **Action telemetry** — deployed agents `POST /api/v1/telemetry/events` with typed events (`tool_call`, `decision`, `handoff`, `output`, `error`) tagged with their model id. The KPI band shows total events, active sessions, and models reporting. A **`tool_call` whose tool is outside the model's permitted set is flagged the moment it arrives** — static tool authorization (§5), observed at runtime.
 - **Cross-ledger timeline** — pick a model to see one time-sorted view that stitches together its governance-ledger events, CI gate decisions, incidents, drift reports, and runtime actions. This is the single pane an investigator needs when something goes wrong.
+- **Scope-deviation alerts** — when a model accumulates flagged runtime tool calls (tools outside its permitted set), it surfaces as a **scope deviation** in the red strip at the top, graded by severity (HIGH for high-risk or autonomous models). A daily job also escalates these to the governance webhook and writes an alert onto the model ledger.
 - **Emit sample (demo)** — with no deployed agent wired up, ADMIN/CISO/OWNER can inject a few sample events (including one unauthorized tool call) to see the flow end to end.
 
 ---

@@ -25,6 +25,12 @@ export class TelemetryController {
     return this.telemetry.summary(user);
   }
 
+  /** Models whose runtime tool calls have breached their sanctioned scope. */
+  @Get('scope-deviations')
+  scopeDeviations(@CurrentUser() user: CurrentUserType, @Query('window_days') windowDays?: string) {
+    return this.telemetry.scopeDeviations(user, windowDays ? parseInt(windowDays, 10) : 7);
+  }
+
   @Get('models/:modelId/events')
   events(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Query('limit') limit?: string) {
     return this.telemetry.listForModel(user, modelId, limit ? parseInt(limit, 10) : 100);

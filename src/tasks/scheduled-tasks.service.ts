@@ -14,6 +14,7 @@ import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { MonitoringService } from '../monitoring/monitoring.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { AttestationsService } from '../alignment/attestations.service';
+import { TelemetryService } from '../telemetry/telemetry.service';
 
 /** Synthetic principal used for actions taken by scheduled jobs. */
 const SYSTEM_USER: CurrentUser = {
@@ -45,6 +46,7 @@ export class ScheduledTasksService {
     private readonly inventory: InventoryService,
     private readonly notifier: NotifierService,
     private readonly attestations: AttestationsService,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   /** REC 16: evaluate drift on all pending score windows (hourly). */
@@ -101,6 +103,14 @@ export class ScheduledTasksService {
   async checkOverdueAttestations(): Promise<void> {
     const overdue = await this.attestations.escalateOverdue();
     this.logger.log(`attestation_overdue_check overdue=${overdue}`);
+  }
+
+  /** Pillar 4 — Security: raise scope-deviation alerts for models with flagged
+   *  runtime tool calls in the last day (daily). */
+  @Cron('0 2 * * *')
+  async checkScopeDeviations(): Promise<void> {
+    const deviating = await this.telemetry.escalateScopeDeviations();
+    this.logger.log(`scope_deviation_check deviating_models=${deviating}`);
   }
 
   /**

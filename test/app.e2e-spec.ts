@@ -1538,6 +1538,83 @@ describe('SentrAI Console (e2e)', () => {
     expect(sources.has('ledger')).toBe(true);
   });
 
+  it('SECURITY: an adversarial report records red-team evidence and satisfies the control (Pillar 4)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Adversarial Target',
+        model_type: 'GENERATIVE_AI',
+        functional_area: 'customer_chatbot',
+        use_case_description: 'A customer-facing chatbot subjected to adversarial red-teaming.',
+      });
+    const modelId = model.body.model_id;
+    // Before: no red-team date on record.
+    expect(model.body.last_red_team_date).toBeFalsy();
+
+    const adv = await request(http)
+      .post(`/api/v1/inventory/models/${modelId}/adversarial-evidence`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ suite: 'garak', total_probes: 120, failures: 3, categories: ['jailbreak', 'prompt_injection'] });
+    expect(adv.status).toBe(201);
+    expect(adv.body.resist_rate).toBe(97.5);
+    expect(adv.body.breached).toBe(true);
+    expect(adv.body.last_red_team_date).toBeTruthy();
+
+    // A typed red_team artifact is on the model, and the red-team control is now satisfied.
+    const evidence = await request(http)
+      .get(`/api/v1/inventory/models/${modelId}/evidence`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(evidence.body.evidence.some((a: any) => a.type === 'red_team')).toBe(true);
+
+    const record = await request(http)
+      .get(`/api/v1/inventory/models/${modelId}`)
+      .set('Authorization', `Bearer ${admin}`);
+    expect(record.body.last_red_team_date).toBeTruthy();
+  });
+
+  it('SECURITY: runtime unauthorized tool use surfaces as a scope-deviation alert (Pillar 4)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const model = await request(http)
+      .post('/api/v1/inventory/models')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        name: 'Deviating Agent',
+        model_type: 'AGENT',
+        functional_area: 'internal_tooling',
+        use_case_description: 'An agent that will breach its declared tool scope at runtime.',
+      });
+    const modelId = model.body.model_id;
+
+    await request(http)
+      .patch(`/api/v1/inventory/models/${modelId}/governance`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ permitted_tools: ['capability:network'], actor: 'e2e' })
+      .expect(200);
+
+    // Two runtime tool calls outside the permitted set — both flagged.
+    const ingest = await request(http)
+      .post('/api/v1/telemetry/events')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        events: [
+          { sentrai_model_id: modelId, type: 'tool_call', tool: 'capability:shell', session_id: 'dev1' },
+          { sentrai_model_id: modelId, type: 'tool_call', tool: 'capability:filesystem', session_id: 'dev1' },
+        ],
+      });
+    expect(ingest.body.flagged).toBe(2);
+
+    // The scope-deviation view aggregates them into an alert for this model.
+    const dev = await request(http).get('/api/v1/telemetry/scope-deviations').set('Authorization', `Bearer ${admin}`);
+    expect(dev.status).toBe(200);
+    const mine = dev.body.deviations.find((d: any) => d.model_id === modelId);
+    expect(mine).toBeTruthy();
+    expect(mine.unauthorized_calls).toBeGreaterThanOrEqual(2);
+    expect(['HIGH', 'MEDIUM']).toContain(mine.severity);
+    expect(mine.tools).toEqual(expect.arrayContaining(['capability:shell', 'capability:filesystem']));
+  });
+
   it('CI LEDGER: org-wide events carry line-level evidence; override is additive (verdict preserved)', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
 

@@ -21,6 +21,7 @@ import { RiskLevel } from '../common/enums';
 import { InventoryService } from './inventory.service';
 import { GenerationQueueService } from './generation-queue.service';
 import {
+  AdversarialEvidenceDto,
   EvalEvidenceDto,
   EvidenceDto,
   GovernanceUpdateDto,
@@ -170,6 +171,13 @@ export class InventoryController {
   @HttpCode(HttpStatus.CREATED)
   ingestEvalEvidence(@Param('modelId') modelId: string, @Body() dto: EvalEvidenceDto) {
     return this.inventory.ingestEvalEvidence(modelId, dto);
+  }
+
+  /** Ingest an adversarial/red-team report; sets the model's last-red-team date. */
+  @Post('models/:modelId/adversarial-evidence')
+  @HttpCode(HttpStatus.CREATED)
+  ingestAdversarialEvidence(@Param('modelId') modelId: string, @Body() dto: AdversarialEvidenceDto) {
+    return this.inventory.ingestAdversarialEvidence(modelId, dto);
   }
 
   /** Model usage vs. the organization's plan limit (soft limits only). */

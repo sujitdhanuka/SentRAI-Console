@@ -908,6 +908,66 @@ export class InventoryService implements OnModuleInit {
     };
   }
 
+  /**
+   * Ingest an adversarial / red-team report (Pillar 4 — Security). `failures`
+   * are probes that breached the model. Stores a typed `red_team` evidence
+   * artifact with the parsed result AND stamps the model's last-red-team date,
+   * so a single ingest both records the adversarial evidence and satisfies the
+   * red-team governance control (which the CI gate and validators check). A
+   * report that shows breaches is notified as a security signal.
+   */
+  async ingestAdversarialEvidence(
+    modelId: string,
+    dto: { suite: string; total_probes: number; failures: number; categories?: string[]; report_ref?: string; actor: string },
+  ) {
+    const orm = await this.getOrThrow(modelId);
+    const total = Math.max(0, Math.trunc(dto.total_probes));
+    if (total <= 0) throw new UnprocessableEntityException('total_probes must be a positive number.');
+    const failures = Math.min(Math.max(0, Math.trunc(dto.failures)), total);
+    const resistRate = Math.round(((total - failures) / total) * 1000) / 10; // % probes resisted
+    const breached = failures > 0;
+    const categories = dto.categories?.filter((c) => c?.trim()).map((c) => c.trim()) ?? [];
+
+    const artifact: EvidenceArtifact = {
+      type: 'red_team',
+      ref: dto.report_ref?.trim() || `${dto.suite}:${failures}/${total} breached`,
+      description:
+        `${dto.suite} adversarial — ${total} probes, ${failures} breach(es) (${resistRate}% resisted)` +
+        (categories.length ? ` · ${categories.join(', ')}` : ''),
+      added_at: new Date().toISOString(),
+      data: { suite: dto.suite, total_probes: total, failures, resist_rate: resistRate, breached, categories },
+    };
+    orm.evidenceArtifacts = [...(orm.evidenceArtifacts ?? []), artifact];
+    orm.lastRedTeamDate = new Date(); // ingesting adversarial evidence satisfies the red-team control
+    orm.updatedAt = new Date();
+    await this.models.save(orm);
+
+    await this.recordLedger(
+      modelId,
+      'ADVERSARIAL_EVIDENCE_INGESTED',
+      { suite: dto.suite, total_probes: total, failures, resist_rate: resistRate, breached },
+      dto.actor,
+    );
+    if (breached) {
+      await this.notifier.notify('adversarial_breach', {
+        model_id: modelId, model_name: orm.name, suite: dto.suite, failures, total_probes: total, categories,
+      });
+    }
+
+    return {
+      model_id: modelId,
+      suite: dto.suite,
+      total_probes: total,
+      failures,
+      resist_rate: resistRate,
+      breached,
+      categories,
+      last_red_team_date: orm.lastRedTeamDate.toISOString(),
+      evidence_count: orm.evidenceArtifacts.length,
+      artifact,
+    };
+  }
+
   async getLedger(modelId: string): Promise<any[]> {
     const rows = await this.ledger.find({ where: { modelId }, order: { occurredAt: 'ASC' } });
     return rows.map((r) => ({

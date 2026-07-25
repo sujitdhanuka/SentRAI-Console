@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -15,6 +15,7 @@ import {
 import { Role } from '../common/enums';
 import { maskDict } from '../common/dpdp';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
+import { NotifierService } from '../common/notifier.service';
 import { authorizeTools } from '../domain/tool-authorization';
 import { ActionEventDto, IngestEventsDto } from './telemetry.dto';
 
@@ -38,6 +39,7 @@ export class TelemetryService {
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
     @InjectRepository(DriftReportEntity) private readonly drifts: Repository<DriftReportEntity>,
     @InjectRepository(DeploymentGateEventEntity) private readonly gates: Repository<DeploymentGateEventEntity>,
+    private readonly notifier: NotifierService,
   ) {}
 
   private scope(user: CurrentUser) {
@@ -211,10 +213,87 @@ export class TelemetryService {
     };
   }
 
+  /**
+   * Scope-deviation alerts (Pillar 4 — Security, unblocked by Pillar 3's action
+   * telemetry): models whose runtime tool calls have breached their sanctioned
+   * scope. Aggregates the flagged action events per model over a window and
+   * grades severity by the model's risk and oversight posture.
+   */
+  async scopeDeviations(user: CurrentUser, windowDays = 7) {
+    const tenantId = this.scope(user);
+    const since = new Date(Date.now() - windowDays * 86_400_000);
+    const qb = this.actions.createQueryBuilder('a').where('a.flagged = :f', { f: true }).andWhere('a.occurredAt > :s', { s: since }).orderBy('a.occurredAt', 'DESC').take(2000);
+    if (tenantId) qb.andWhere('a.tenantId = :tid', { tid: tenantId });
+    const flagged = await qb.getMany();
+    return this.aggregateDeviations(flagged, windowDays);
+  }
+
+  private async aggregateDeviations(flagged: AgentActionEventEntity[], windowDays: number) {
+    const byModel = new Map<string, { count: number; tools: Set<string>; last: Date }>();
+    for (const e of flagged) {
+      const g = byModel.get(e.modelId) ?? { count: 0, tools: new Set<string>(), last: e.occurredAt };
+      g.count += 1;
+      if (e.tool) g.tools.add(e.tool);
+      if (e.occurredAt > g.last) g.last = e.occurredAt;
+      byModel.set(e.modelId, g);
+    }
+    const models = byModel.size ? await this.models.find({ where: { id: In([...byModel.keys()]) } }) : [];
+    const modelMap = new Map(models.map((m) => [m.id, m]));
+
+    const out = [...byModel.entries()].map(([modelId, g]) => {
+      const m = modelMap.get(modelId);
+      const highRisk = m?.riskLevel === 'HIGH';
+      const autonomous = m ? !m.humanOversightRequired : false;
+      const severity = highRisk || autonomous || g.count >= 5 ? 'HIGH' : 'MEDIUM';
+      return {
+        model_id: modelId,
+        model_name: m?.name ?? '(unknown)',
+        risk_level: m?.riskLevel ?? null,
+        human_oversight_required: m?.humanOversightRequired ?? null,
+        unauthorized_calls: g.count,
+        tools: [...g.tools],
+        last_at: g.last.toISOString(),
+        severity,
+      };
+    });
+    out.sort((a, b) => (a.severity === b.severity ? b.unauthorized_calls - a.unauthorized_calls : a.severity === 'HIGH' ? -1 : 1));
+    return { window_days: windowDays, count: out.length, deviations: out };
+  }
+
+  /**
+   * Cron entrypoint: raise scope-deviation alerts for models with flagged
+   * runtime tool calls in the last day. Writes a ledger event on each affected
+   * model (so it shows in the cross-ledger timeline) and pushes a webhook.
+   */
+  async escalateScopeDeviations(): Promise<number> {
+    const since = new Date(Date.now() - 86_400_000);
+    const flagged = await this.actions.find({ where: { flagged: true, occurredAt: MoreThan(since) }, take: 2000 });
+    const { deviations } = await this.aggregateDeviations(flagged, 1);
+    for (const d of deviations) {
+      await this.ledger.save(this.ledger.create({
+        id: uuidv4(),
+        modelId: d.model_id,
+        eventType: 'SCOPE_DEVIATION_DETECTED',
+        eventData: maskDict({ unauthorized_calls: d.unauthorized_calls, tools: d.tools, severity: d.severity, window: '24h' }),
+        actor: 'system',
+        occurredAt: new Date(),
+      }));
+    }
+    if (deviations.length) {
+      await this.notifier.notify('scope_deviations', {
+        count: deviations.length,
+        models: deviations.slice(0, 25).map((d) => ({ model_id: d.model_id, model_name: d.model_name, unauthorized_calls: d.unauthorized_calls, severity: d.severity })),
+      });
+    }
+    return deviations.length;
+  }
+
   private ledgerSummary(type: string, data: Record<string, any>): string {
     if (type === 'GOVERNANCE_UPDATED') return `governance updated: ${Object.keys(data).join(', ')}`;
     if (type === 'APPROVAL_GRANTED' || type === 'APPROVAL_REQUESTED') return `${type.toLowerCase().replace('_', ' ')}`;
     if (type === 'OPERATIONAL_SUSPENDED') return `suspended — ${data.reason ?? ''}`;
+    if (type === 'SCOPE_DEVIATION_DETECTED') return `scope deviation: ${data.unauthorized_calls} unauthorized tool call(s)`;
+    if (type === 'ADVERSARIAL_EVIDENCE_INGESTED') return `adversarial eval: ${data.suite} · ${data.failures} breach(es)`;
     if (type === 'EVAL_EVIDENCE_INGESTED') return `eval evidence: ${data.suite} ${data.passed}/${data.total}`;
     return type.toLowerCase().replace(/_/g, ' ');
   }

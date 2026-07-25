@@ -95,6 +95,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const [checking, setChecking] = useState(false);
   const [remediation, setRemediation] = useState('');
   const [evalForm, setEvalForm] = useState({ suite: 'promptfoo', passed: '', total: '' });
+  const [advForm, setAdvForm] = useState({ suite: 'garak', probes: '', breaches: '' });
   const [ctrl, setCtrl] = useState<ControlInfo | null>(null);
   const [permitted, setPermitted] = useState<string[]>([]);
   const [suspendReason, setSuspendReason] = useState('');
@@ -232,6 +233,28 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       );
       toast(`Behavioral eval ingested — ${r.passed}/${r.total} passed (${r.pass_rate}%)`, 'positive');
       setEvalForm((f) => ({ ...f, passed: '', total: '' }));
+      await refreshCheck(component.id);
+      await load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Ingest failed', 'negative');
+    } finally { setBusy(null); }
+  };
+
+  const ingestAdversarial = async () => {
+    const probes = Number(advForm.probes);
+    const breaches = Number(advForm.breaches);
+    if (!advForm.suite.trim() || !Number.isFinite(probes) || probes <= 0 || !Number.isFinite(breaches) || breaches < 0) {
+      toast('Enter a suite, a positive probe count, and breaches.', 'negative');
+      return;
+    }
+    setBusy('adversarial');
+    try {
+      const r = await api<{ resist_rate: number; failures: number; total_probes: number }>(
+        `/inventory/models/${component.id}/adversarial-evidence`,
+        { method: 'POST', body: JSON.stringify({ suite: advForm.suite.trim(), total_probes: probes, failures: breaches, actor: 'dashboard_user' }) },
+      );
+      toast(`Adversarial evidence ingested — ${r.failures}/${r.total_probes} breached (${r.resist_rate}% resisted); red-team date set`, r.failures > 0 ? 'negative' : 'positive');
+      setAdvForm((f) => ({ ...f, probes: '', breaches: '' }));
       await refreshCheck(component.id);
       await load();
     } catch (e) {
@@ -465,6 +488,39 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               </div>
               <p className="mt-1.5 text-[9.5px] italic text-text-tertiary">
                 Records the eval-harness result as a typed <code className="font-mono not-italic text-accent">behavioral_eval</code> evidence artifact with its pass-rate — so a reviewer sees test <em>results</em>, not just a link.
+              </p>
+            </section>
+
+            {/* Adversarial / red-team evidence (Pillar 4 — Security). */}
+            <section className="rounded-md border border-border p-2.5">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <ShieldAlert size={11} className="text-accent" />
+                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Adversarial / red-team evidence</span>
+              </div>
+              <div className="flex flex-wrap items-end gap-1.5">
+                <label className="flex-1">
+                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Suite</span>
+                  <input className={`${FIELD} text-[10px]`} value={advForm.suite} onChange={(e) => setAdvForm({ ...advForm, suite: e.target.value })} placeholder="garak / pyrit / promptfoo" />
+                </label>
+                <label className="w-16">
+                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Probes</span>
+                  <input inputMode="numeric" className={`${FIELD} font-mono text-[10px]`} value={advForm.probes} onChange={(e) => setAdvForm({ ...advForm, probes: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" />
+                </label>
+                <label className="w-16">
+                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Breaches</span>
+                  <input inputMode="numeric" className={`${FIELD} font-mono text-[10px]`} value={advForm.breaches} onChange={(e) => setAdvForm({ ...advForm, breaches: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" />
+                </label>
+                <button
+                  type="button"
+                  onClick={ingestAdversarial}
+                  disabled={busy !== null}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[10px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+                >
+                  <Paperclip size={10} /> {busy === 'adversarial' ? 'Ingesting…' : 'Ingest'}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[9.5px] italic text-text-tertiary">
+                Ingest a garak / PyRIT / promptfoo run (breaches = probes that succeeded). Stores a typed <code className="font-mono not-italic text-accent">red_team</code> artifact <em>and</em> stamps the last-red-team date, satisfying the red-team control.
               </p>
             </section>
 

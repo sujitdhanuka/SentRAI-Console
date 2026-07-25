@@ -22,6 +22,7 @@ interface Summary {
 }
 interface TimelineRow { ts: string; source: string; type: string; summary: string; flagged?: boolean; actor?: string }
 interface Timeline { model_id: string; model_name: string; sentrai_model_id: string; count: number; timeline: TimelineRow[] }
+interface Deviation { model_id: string; model_name: string; risk_level: string | null; unauthorized_calls: number; tools: string[]; last_at: string; severity: string }
 
 const SOURCE_TONE: Record<string, BadgeTone> = {
   ledger: 'accent', action: 'neutral', gate: 'warning', incident: 'negative', drift: 'warning',
@@ -43,6 +44,7 @@ export function Visibility() {
   const canEmit = ['ADMIN', 'CISO', 'OWNER'].includes(role);
 
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [deviations, setDeviations] = useState<Deviation[]>([]);
   const [modelId, setModelId] = useState('');
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,12 @@ export function Visibility() {
   const loadSummary = useCallback(async (silent?: boolean) => {
     if (!silent) setLoading(true);
     try {
-      setSummary(await api<Summary>('/telemetry/summary'));
+      const [s, d] = await Promise.all([
+        api<Summary>('/telemetry/summary'),
+        api<{ deviations: Deviation[] }>('/telemetry/scope-deviations').catch(() => ({ deviations: [] })),
+      ]);
+      setSummary(s);
+      setDeviations(d.deviations ?? []);
       setError(null);
     } catch (e) {
       if (!silent) setError(e instanceof Error ? e.message : 'Failed to load telemetry');
@@ -118,6 +125,23 @@ export function Visibility() {
         <Kpi label="Active sessions" value={summary?.active_sessions ?? 0} />
         <Kpi label="Models reporting" value={summary?.models_reporting ?? 0} />
       </div>
+
+      {deviations.length > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-negative bg-negative-soft px-3 py-1.5">
+          <span className="flex items-center gap-1 font-mono text-[10px] font-medium uppercase tracking-wider text-negative">
+            <Flag size={11} /> {deviations.length} scope deviation{deviations.length === 1 ? '' : 's'}
+          </span>
+          {deviations.slice(0, 4).map((d) => (
+            <button key={d.model_id} onClick={() => setModelId(d.model_id)}
+              className="flex items-center gap-1 rounded-full border border-negative px-2 py-0.5 font-mono text-[9.5px] text-negative hover:bg-negative-soft"
+              title="View this model's timeline">
+              <Badge tone={d.severity === 'HIGH' ? 'negative' : 'warning'}>{d.severity}</Badge>
+              {d.model_name} · {d.unauthorized_calls} unauthorized
+            </button>
+          ))}
+          <span className="font-mono text-[9px] text-text-tertiary">models breaching their sanctioned tool scope at runtime</span>
+        </div>
+      )}
 
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-2 p-2 lg:grid-cols-3">
         <Panel title={`Cross-ledger timeline${timeline ? ` · ${timeline.model_name}` : ''}`} className="lg:col-span-2">

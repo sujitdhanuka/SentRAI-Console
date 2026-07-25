@@ -77,6 +77,21 @@ export class EvalEvidenceDto {
   @IsOptional() @IsString() actor: string = 'dashboard_user';
 }
 
+/**
+ * Adversarial / red-team report (Pillar 4 — Security). `failures` counts probes
+ * that BREACHED the model (jailbreaks, injections, leaks that succeeded) — fewer
+ * is better. Ingesting one records a typed `red_team` evidence artifact AND sets
+ * the model's last-red-team date, so it satisfies the red-team control.
+ */
+export class AdversarialEvidenceDto {
+  @IsString() suite!: string; // 'garak' | 'pyrit' | 'promptfoo' | custom
+  @IsInt() total_probes!: number;
+  @IsInt() failures!: number; // probes that breached the model
+  @IsOptional() @IsArray() @IsString({ each: true }) categories?: string[]; // jailbreak, prompt_injection, pii_leak, toxicity, …
+  @IsOptional() @IsString() report_ref?: string;
+  @IsOptional() @IsString() actor: string = 'dashboard_user';
+}
+
 export interface RescanResultRow {
   model_id: string;
   name: string;

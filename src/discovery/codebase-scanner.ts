@@ -11,6 +11,7 @@ import { ModelType, RiskLevel } from '../common/enums';
 import { detectLanguage } from './language-detector';
 import { detectAgenticFrameworks } from './framework-detector';
 import { detectedToolIds } from './tool-detector';
+import { detectSecrets } from '../common/secret-patterns';
 import { AstScanResult } from './tree-sitter-parser';
 
 export interface AstScanner {
@@ -229,20 +230,11 @@ function scanPromptsAndSecurity(content: string): { prompts: any[]; secrets: any
     }
   }
 
-  const secretPatterns: Array<[string, RegExp]> = [
-    ['AWS Access Key', /\b(AKIA[A-Z0-9]{16})\b/g],
-    ['Bearer API Token', /\b(bearer\s+[a-zA-Z0-9_\-.]{15,})\b/gi],
-    ['Generic Secret Key', /\b(api[_-]?key|secret[_-]?key|password|db[_-]?pass)\s*=\s*["'`]([a-zA-Z0-9_\-.]{8,})["'`]/gi],
-  ];
-  for (const [name, re] of secretPatterns) {
-    let s: RegExpExecArray | null;
-    const r = new RegExp(re.source, re.flags);
-    while ((s = r.exec(content)) !== null) {
-      const lineNo = countNewlines(content, s.index) + 1;
-      const secretVal = s[2] !== undefined ? s[2] : s[1];
-      const masked = secretVal.length > 8 ? secretVal.slice(0, 4) + '********' + secretVal.slice(-4) : '********';
-      secrets.push({ type: name, masked_value: masked, line: lineNo });
-    }
+  // Hardcoded-secret detection now comes from the one canonical library
+  // (Pillar 4), shared with the pre-LLM redactor. Findings keep the persisted
+  // { type, masked_value, line } shape; severity is available on each finding.
+  for (const f of detectSecrets(content)) {
+    secrets.push({ type: f.type, masked_value: f.masked_value, line: f.line, severity: f.severity });
   }
   return { prompts, secrets };
 }
