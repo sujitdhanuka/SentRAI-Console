@@ -1,7 +1,7 @@
 import { AlertTriangle, Eye } from 'lucide-react';
 import { KeyboardEvent } from 'react';
 
-import { AIComponent, GovernanceGap } from '../../providers';
+import { AIComponent, FrameworkCheck, GovernanceGap } from '../../providers';
 import { EnvFilter, useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
 import { Panel, PanelError } from '../ui/Panel';
@@ -11,6 +11,15 @@ import { StatusCell } from './StatusCell';
 
 const ENV_TONE = { PROD: 'positive', STAGING: 'warning', DEV: 'accent' } as const;
 const TIER_TONE = { Low: 'positive', Medium: 'warning', High: 'negative' } as const;
+const DRIFT_TITLE = { ok: 'no drift detected', warn: 'warning — investigate', alert: 'alert — retrain / breaker armed' } as const;
+
+// Hover tooltips spell out the real value behind each icon/abbreviation.
+const fwTitle = (label: string, check: FrameworkCheck) =>
+  check.status === 'ok'
+    ? `${label}: ${check.evidenceUrl ? 'Compliant — evidence attached' : 'Compliant (unevidenced) — attach an artifact'}`
+    : check.status === 'gap'
+      ? `${label}: Gap — control not satisfied`
+      : `${label}: Not applicable`;
 
 const TH = 'sticky top-0 z-10 bg-surface px-2 py-1.5 text-left text-[9px] font-medium uppercase tracking-widest text-text-tertiary border-b border-border';
 const TD = 'px-2 py-1.5 align-middle';
@@ -96,21 +105,29 @@ export function ComplianceMatrix({
                   <div className="font-mono text-[9px] text-text-tertiary">{c.model} · {c.version}</div>
                 </td>
                 <td className={TD}><Badge tone={ENV_TONE[c.env]}>{c.env}</Badge></td>
-                <td className={TD}><Badge tone={TIER_TONE[c.riskTier]}>{c.riskTier}</Badge></td>
-                <td className={`${TD} text-center`}><StatusCell check={c.frameworks.rbi} framework="RBI FREE-AI" /></td>
-                <td className={`${TD} text-center`}><StatusCell check={c.frameworks.nist} framework="NIST RMF" /></td>
-                <td className={`${TD} text-center`}><StatusCell check={c.frameworks.eu} framework="EU AI Act" /></td>
-                <td className={`${TD} text-center`}><StatusCell check={c.frameworks.iso} framework="ISO 42001" /></td>
-                <td className={`${TD} text-center`}>
+                <td className={TD} title={`Risk tier: ${c.riskTier}${c.riskRationale ? ` — ${c.riskRationale}` : ''}`}><Badge tone={TIER_TONE[c.riskTier]}>{c.riskTier}</Badge></td>
+                <td className={`${TD} text-center`} title={fwTitle('RBI FREE-AI', c.frameworks.rbi)}><StatusCell check={c.frameworks.rbi} framework="RBI FREE-AI" /></td>
+                <td className={`${TD} text-center`} title={fwTitle('NIST RMF', c.frameworks.nist)}><StatusCell check={c.frameworks.nist} framework="NIST RMF" /></td>
+                <td className={`${TD} text-center`} title={fwTitle('EU AI Act', c.frameworks.eu)}><StatusCell check={c.frameworks.eu} framework="EU AI Act" /></td>
+                <td className={`${TD} text-center`} title={fwTitle('ISO 42001', c.frameworks.iso)}><StatusCell check={c.frameworks.iso} framework="ISO 42001" /></td>
+                <td
+                  className={`${TD} text-center`}
+                  title={c.humanOversight ? 'Oversight: human-in-the-loop required' : `Oversight: autonomous${c.autonomousScope ? ` — ${c.autonomousScope}` : ''}`}
+                >
                   {c.humanOversight ? (
                     <Eye size={13} className="inline text-positive" aria-label="Human oversight required" />
                   ) : (
-                    <span className="font-mono text-[9px] text-text-tertiary" title={c.autonomousScope ?? 'autonomous'}>AUTO</span>
+                    <span className="font-mono text-[9px] text-text-tertiary">AUTO</span>
                   )}
                 </td>
-                <td className={TD}><DriftCell drift={c.drift} /></td>
-                <td className={TD}><RedTeamAge days={c.lastRedTeamDaysAgo} /></td>
-                <td className={TD}>
+                <td className={TD} title={`Drift: ${DRIFT_TITLE[c.drift]}`}><DriftCell drift={c.drift} /></td>
+                <td
+                  className={TD}
+                  title={c.lastRedTeamDaysAgo >= 9999 ? 'Red-team: never performed' : `Red-team: last performed ${c.lastRedTeamDaysAgo} days ago (policy ≤ 90d)`}
+                >
+                  <RedTeamAge days={c.lastRedTeamDaysAgo} />
+                </td>
+                <td className={TD} title={gc > 0 ? `${gc} open governance gap${gc === 1 ? '' : 's'}` : 'No open gaps'}>
                   {gc > 0 ? (
                     <span className="inline-flex items-center gap-1 font-mono text-[10px] font-medium text-negative">
                       <AlertTriangle size={11} /> {gc}
