@@ -1,10 +1,18 @@
-import { KeyRound, Loader2, Radar, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, KeyRound, Loader2, Radar, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api/client';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+
+/** One AST/static-analysis match: what was seen, and exactly where. */
+export interface ScanSignal {
+  category: string;
+  pattern?: string;
+  line?: number;
+  snippet?: string;
+}
 
 export interface ScanCandidate {
   suggested_name: string;
@@ -13,7 +21,8 @@ export interface ScanCandidate {
   risk_hint: string;
   confidence: string;
   secrets?: unknown[];
-  signals?: unknown[];
+  signals?: ScanSignal[];
+  prompts?: unknown[];
 }
 
 export interface ScanReview {
@@ -47,14 +56,23 @@ export function ScanResultsModal({
 }) {
   const toast = useConsoleUi((s) => s.toast);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [ownerTeam, setOwnerTeam] = useState('');
   const [boardRef, setBoardRef] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const toggleExpanded = (path: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
 
   // Everything is pre-selected — the common case is "govern all of it".
   useEffect(() => {
     if (review) {
       setChecked(new Set(review.candidates.map((c) => c.file_path)));
+      setExpanded(new Set());
       setOwnerTeam('');
       setBoardRef('');
     }
@@ -158,33 +176,89 @@ export function ScanResultsModal({
               </tr>
             </thead>
             <tbody>
-              {review.candidates.map((c) => (
-                <tr
-                  key={c.file_path}
-                  onClick={() => toggle(c.file_path)}
-                  className="cursor-pointer border-t border-border hover:bg-surface-hover"
-                >
-                  <td className="px-2.5 py-1.5">
-                    <input type="checkbox" checked={checked.has(c.file_path)} onChange={() => toggle(c.file_path)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${c.suggested_name}`} />
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <span className="flex items-center gap-1.5 font-medium text-text">
-                      {c.suggested_name}
-                      {(c.secrets?.length ?? 0) > 0 && (
-                        <span title="Hardcoded secret found in this file — imports at HIGH risk">
-                          <KeyRound size={10} className="text-negative" />
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1.5 font-mono text-[9.5px] text-text-secondary">{c.model_type_guess?.toLowerCase()}</td>
-                  <td className="px-2 py-1.5"><Badge tone={RISK_TONE(c.risk_hint)}>{c.risk_hint?.toLowerCase()}</Badge></td>
-                  <td className="px-2 py-1.5"><Badge tone={CONF_TONE(c.confidence)}>{c.confidence?.toLowerCase()}</Badge></td>
-                  <td className="max-w-[220px] truncate px-2 py-1.5 font-mono text-[9.5px] text-text-tertiary" title={c.file_path}>
-                    {c.file_path}
-                  </td>
-                </tr>
-              ))}
+              {review.candidates.map((c) => {
+                const isOpen = expanded.has(c.file_path);
+                const signals = (c.signals ?? []).filter((s) => s && s.category);
+                return [
+                  <tr
+                    key={c.file_path}
+                    onClick={() => toggle(c.file_path)}
+                    className="cursor-pointer border-t border-border hover:bg-surface-hover"
+                  >
+                    <td className="px-2.5 py-1.5">
+                      <input type="checkbox" checked={checked.has(c.file_path)} onChange={() => toggle(c.file_path)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${c.suggested_name}`} />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className="flex items-center gap-1.5 font-medium text-text">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleExpanded(c.file_path); }}
+                          title={isOpen ? 'Hide detection evidence' : `Show detection evidence — ${signals.length} static signal(s) with file + line`}
+                          aria-label={`${isOpen ? 'Hide' : 'Show'} detection evidence for ${c.suggested_name}`}
+                          aria-expanded={isOpen}
+                          className="-ml-0.5 text-text-tertiary hover:text-accent focus-visible:text-accent"
+                        >
+                          {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        </button>
+                        {c.suggested_name}
+                        {(c.secrets?.length ?? 0) > 0 && (
+                          <span title="Hardcoded secret found in this file — imports at HIGH risk">
+                            <KeyRound size={10} className="text-negative" />
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5 font-mono text-[9.5px] text-text-secondary">{c.model_type_guess?.toLowerCase()}</td>
+                    <td className="px-2 py-1.5"><Badge tone={RISK_TONE(c.risk_hint)}>{c.risk_hint?.toLowerCase()}</Badge></td>
+                    <td className="px-2 py-1.5"><Badge tone={CONF_TONE(c.confidence)}>{c.confidence?.toLowerCase()}</Badge></td>
+                    <td className="max-w-[220px] truncate px-2 py-1.5 font-mono text-[9.5px] text-text-tertiary" title={c.file_path}>
+                      {c.file_path}
+                    </td>
+                  </tr>,
+                  isOpen && (
+                    <tr key={`${c.file_path}::evidence`} className="border-t border-border/60 bg-surface-hover/40">
+                      <td />
+                      <td colSpan={5} className="px-2 pb-2 pt-1">
+                        {/* Detection evidence: the exact code the AST scan matched, line by line. */}
+                        <div className="mb-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-text-tertiary">
+                          <Radar size={9} className="text-accent" />
+                          Detection evidence · <span className="normal-case">{c.file_path}</span>
+                        </div>
+                        {signals.length === 0 ? (
+                          <div className="text-[9.5px] text-text-tertiary">No line-level signals recorded for this candidate.</div>
+                        ) : (
+                          <table className="w-full text-left font-mono text-[9.5px]">
+                            <tbody>
+                              {signals.slice(0, 8).map((s, i) => (
+                                <tr key={i} className="align-top">
+                                  <td className="w-10 whitespace-nowrap py-0.5 pr-2 text-right text-accent">L{s.line ?? '—'}</td>
+                                  <td className="w-36 whitespace-nowrap py-0.5 pr-3 uppercase text-text-secondary">{s.category}</td>
+                                  <td className="truncate py-0.5 text-text" title={s.snippet ?? s.pattern}>{s.snippet ?? s.pattern ?? ''}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        {signals.length > 8 && (
+                          <div className="mt-0.5 text-[9px] text-text-tertiary">+ {signals.length - 8} more signal(s)</div>
+                        )}
+                        {(c.prompts?.length ?? 0) > 0 && (
+                          <div className="mt-1 text-[9.5px] text-text-secondary">
+                            <span className="font-mono uppercase tracking-widest text-[9px] text-text-tertiary">Prompts</span>{' '}
+                            {c.prompts!.length} embedded prompt{c.prompts!.length === 1 ? '' : 's'} detected in this file.
+                          </div>
+                        )}
+                        {(c.secrets?.length ?? 0) > 0 && (
+                          <div className="mt-1 text-[9.5px] text-negative">
+                            <span className="font-mono uppercase tracking-widest text-[9px]">Secrets</span>{' '}
+                            {c.secrets!.length} hardcoded secret(s) found — imports at HIGH risk.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
             </tbody>
           </table>
         </div>
