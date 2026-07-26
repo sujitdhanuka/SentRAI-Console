@@ -2,6 +2,16 @@ import { create } from 'zustand';
 
 export type Theme = 'dark' | 'light';
 export type EnvFilter = 'All' | 'PROD' | 'STAGING' | 'DEV';
+/** Asset-kind filter for the inventory matrix (chip labels; see KIND_MATCH). */
+export type KindFilter = 'All' | 'LLM' | 'ML' | 'Agents' | 'MCP';
+
+/** Maps a kind chip to the component `model` values it admits. */
+export const KIND_MATCH: Record<Exclude<KindFilter, 'All'>, string[]> = {
+  LLM: ['generative_ai'],
+  ML: ['machine_learning'],
+  Agents: ['agent'],
+  MCP: ['mcp_server'],
+};
 
 export interface Toast {
   id: number;
@@ -12,12 +22,14 @@ export interface Toast {
 interface ConsoleUiState {
   theme: Theme;
   env: EnvFilter;
+  kind: KindFilter;
   selectedId: string | null;
   drawerOpen: boolean;
   grievanceOpen: boolean;
   toasts: Toast[];
   toggleTheme(): void;
   setEnv(env: EnvFilter): void;
+  setKind(kind: KindFilter): void;
   select(id: string): void;
   setDrawer(open: boolean): void;
   setGrievance(open: boolean): void;
@@ -32,6 +44,7 @@ const storedTheme = (localStorage.getItem('sentrai-theme') as Theme | null) ?? '
 export const useConsoleUi = create<ConsoleUiState>((set, get) => ({
   theme: storedTheme,
   env: 'All',
+  kind: 'All',
   selectedId: null,
   drawerOpen: false,
   grievanceOpen: false,
@@ -44,6 +57,9 @@ export const useConsoleUi = create<ConsoleUiState>((set, get) => ({
   },
   setEnv(env) {
     set({ env });
+  },
+  setKind(kind) {
+    set({ kind });
   },
   select(id) {
     set({ selectedId: id });

@@ -1,13 +1,14 @@
 import { FileDown, MessageSquarePlus } from 'lucide-react';
 
 import { provider } from '../../providers';
-import { EnvFilter, useConsoleUi } from '../../stores/consoleUi';
+import { EnvFilter, KindFilter, useConsoleUi } from '../../stores/consoleUi';
 
 const ENVS: EnvFilter[] = ['All', 'PROD', 'STAGING', 'DEV'];
+const KINDS: KindFilter[] = ['All', 'LLM', 'ML', 'Agents', 'MCP'];
 
 /** Inventory-specific header controls, injected into the AppShell header. */
 export function InventoryActions() {
-  const { env, setEnv, setGrievance, toast } = useConsoleUi();
+  const { env, setEnv, kind, setKind, setGrievance, toast } = useConsoleUi();
 
   const exportAudit = async () => {
     try {
@@ -21,6 +22,21 @@ export function InventoryActions() {
 
   return (
     <>
+      <div className="hidden overflow-hidden rounded-md border border-border lg:flex" role="group" aria-label="Asset kind filter">
+        {KINDS.map((k) => (
+          <button
+            key={k}
+            onClick={() => setKind(k)}
+            aria-pressed={kind === k}
+            title={k === 'All' ? 'Every asset kind' : `Only ${k === 'LLM' ? 'generative-AI / LLM components' : k === 'ML' ? 'classical ML models' : k === 'Agents' ? 'tool-calling agents' : 'MCP servers'}`}
+            className={`px-2 py-1 font-mono text-[10px] transition-colors ${
+              kind === k ? 'bg-accent-soft text-accent' : 'text-text-secondary hover:bg-surface-hover'
+            }`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
       <div className="hidden overflow-hidden rounded-md border border-border md:flex" role="group" aria-label="Environment filter">
         {ENVS.map((e) => (
           <button

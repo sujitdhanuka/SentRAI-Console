@@ -10,13 +10,14 @@ import { InventoryActions } from '../components/console/InventoryActions';
 import { KpiBand } from '../components/console/KpiBand';
 import { AppShell } from '../components/console/AppShell';
 import { useGovernanceData } from '../stores/governanceData';
-import { useConsoleUi } from '../stores/consoleUi';
+import { KIND_MATCH, useConsoleUi } from '../stores/consoleUi';
 import { useSession } from '../stores/session';
 
 /** Composition only — data comes from the stores, all logic lives in panels. */
 export function InventoryDashboard() {
   const { components, gaps, calendar, grievances, loading, error, load } = useGovernanceData();
   const env = useConsoleUi((s) => s.env);
+  const kind = useConsoleUi((s) => s.kind);
   const selectedId = useConsoleUi((s) => s.selectedId);
 
   const activeProjectId = useSession((s) => s.activeProjectId);
@@ -25,8 +26,10 @@ export function InventoryDashboard() {
   }, [load, activeProjectId]); // re-scope when the active project changes
 
   const scoped = useMemo(
-    () => (env === 'All' ? components : components.filter((c) => c.env === env)),
-    [components, env],
+    () => components.filter(
+      (c) => (env === 'All' || c.env === env) && (kind === 'All' || KIND_MATCH[kind].includes(c.model)),
+    ),
+    [components, env, kind],
   );
   const scopedIds = useMemo(() => new Set(scoped.map((c) => c.id)), [scoped]);
   const scopedGaps = useMemo(() => gaps.filter((g) => scopedIds.has(g.componentId)), [gaps, scopedIds]);
