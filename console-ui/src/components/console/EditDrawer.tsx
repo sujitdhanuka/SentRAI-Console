@@ -18,6 +18,18 @@ interface ControlInfo {
   operational_state_reason: string | null;
 }
 
+/** Latest review-board sign-off, as listed by /alignment/approvals. */
+interface BoardApproval {
+  approval_id: string;
+  model_id: string;
+  target_stage: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN' | string;
+  requested_by: string;
+  decisions: { actor: string; decision: string; decidedAt: string }[];
+  created_at?: string;
+  resolved_at?: string | null;
+}
+
 const toolLabel = (id: string) =>
   id.startsWith('tool:') ? id.slice(5) : id.replace(/^capability:/, '').replace(/[._]/g, ' ');
 
@@ -98,6 +110,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const [advForm, setAdvForm] = useState({ suite: 'garak', probes: '', breaches: '' });
   const [ctrl, setCtrl] = useState<ControlInfo | null>(null);
   const [permitted, setPermitted] = useState<string[]>([]);
+  const [approval, setApproval] = useState<BoardApproval | null | 'none'>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const role = useSession((s) => s.user?.role ?? 'VIEWER');
   const canControl = role === 'ADMIN' || role === 'CISO';
@@ -127,6 +140,20 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     }
   }, []);
 
+  // Latest review-board sign-off for this model — the drawer is mission
+  // control, so the approval state belongs here, not only on Alignment.
+  const fetchApproval = useCallback(async (id: string) => {
+    try {
+      const all = await api<BoardApproval[]>(`/alignment/approvals`);
+      const mine = all
+        .filter((a) => a.model_id === id)
+        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+      setApproval(mine[0] ?? 'none');
+    } catch {
+      setApproval('none');
+    }
+  }, []);
+
   useEffect(() => {
     if (open && component) {
       setForm({
@@ -144,9 +171,10 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       setRemediation(component.gapRemediation ?? '');
       void refreshCheck(component.id);
       void fetchControl(component.id);
+      void fetchApproval(component.id);
       setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
     }
-  }, [open, component, refreshCheck, fetchControl]);
+  }, [open, component, refreshCheck, fetchControl, fetchApproval]);
 
   useEffect(() => {
     if (!open) return;
@@ -642,6 +670,26 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   Human oversight required
                   <Hint text={HINTS.oversight} />
                 </label>
+              </div>
+
+              {/* Review-board approval state — read-only; granted on the Alignment page. */}
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-border px-2.5 py-2">
+                <span className={LABEL} style={{ marginBottom: 0 }}>Board approval</span>
+                {approval === null ? (
+                  <span className="text-[10px] text-text-tertiary">checking…</span>
+                ) : approval === 'none' ? (
+                  <Badge tone="neutral">none on record</Badge>
+                ) : (
+                  <>
+                    <Badge tone={approval.status === 'APPROVED' ? 'positive' : approval.status === 'REJECTED' ? 'negative' : 'warning'}>
+                      {approval.status.toLowerCase()}
+                    </Badge>
+                    <span className="font-mono text-[9.5px] text-text-secondary">
+                      → {approval.target_stage} · requested by {approval.requested_by}
+                      {approval.decisions[0] && ` · decided by ${approval.decisions[0].actor}`}
+                    </span>
+                  </>
+                )}
               </div>
               <div>
                 <span className="flex items-center justify-between gap-2">
