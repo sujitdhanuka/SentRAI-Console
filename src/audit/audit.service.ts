@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
+import { AuditEventsInterceptor } from './audit-events.interceptor';
+
 import {
   AIAuditTrailEntity,
   AIModelEntity,
@@ -47,7 +49,61 @@ export class AuditService {
       outcome: r.outcome,
       payload_summary: r.payloadSummary,
       occurred_at: r.occurredAt.toISOString(),
+      content_hash: r.contentHash,
+      prev_hash: r.prevHash,
     }));
+  }
+
+  /**
+   * Walks the audit hash chain end to end: recomputes every event's SHA-256
+   * from its canonical content + prevHash and follows the pointers from
+   * GENESIS. Any edited, deleted, or reordered row breaks the walk — which is
+   * what makes "append-only" a verifiable property instead of a promise.
+   */
+  async verifyChain(): Promise<{
+    intact: boolean;
+    chained: number;
+    legacy_unchained: number;
+    head_hash: string | null;
+    broken_at: string | null;
+    reason: string | null;
+  }> {
+    const rows = await this.events.find();
+    const chained = rows.filter((r) => r.contentHash != null);
+    const legacy = rows.length - chained.length;
+    if (chained.length === 0) {
+      return { intact: true, chained: 0, legacy_unchained: legacy, head_hash: null, broken_at: null, reason: 'no chained events yet' };
+    }
+    const byPrev = new Map<string, AuditEventEntity[]>();
+    for (const r of chained) {
+      const k = r.prevHash ?? 'GENESIS';
+      byPrev.set(k, [...(byPrev.get(k) ?? []), r]);
+    }
+    let cursor = 'GENESIS';
+    let head: AuditEventEntity | null = null;
+    let visited = 0;
+    while (true) {
+      const next = byPrev.get(cursor) ?? [];
+      if (next.length === 0) break;
+      if (next.length > 1) {
+        return { intact: false, chained: chained.length, legacy_unchained: legacy, head_hash: null, broken_at: cursor, reason: `chain forks: ${next.length} events share prev_hash` };
+      }
+      const row = next[0];
+      const expect = AuditEventsInterceptor.hash(
+        AuditEventsInterceptor.canonical(row),
+        row.prevHash ?? 'GENESIS',
+      );
+      if (expect !== row.contentHash) {
+        return { intact: false, chained: chained.length, legacy_unchained: legacy, head_hash: null, broken_at: row.id, reason: 'content hash mismatch — event content differs from what was recorded' };
+      }
+      visited += 1;
+      head = row;
+      cursor = row.contentHash!;
+    }
+    if (visited !== chained.length) {
+      return { intact: false, chained: chained.length, legacy_unchained: legacy, head_hash: head?.contentHash ?? null, broken_at: null, reason: `${chained.length - visited} chained event(s) unreachable from GENESIS — chain gap` };
+    }
+    return { intact: true, chained: chained.length, legacy_unchained: legacy, head_hash: head?.contentHash ?? null, broken_at: null, reason: null };
   }
 
   async list(modelId: string): Promise<any[]> {

@@ -60,6 +60,9 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'projects', column: 'execNarrativeAt', definition: 'DATETIME NULL' },
   // ai-provider-config.entity.ts — link to the self-registered inventory model.
   { table: 'ai_provider_configs', column: 'linkedModelId', definition: 'VARCHAR(36) NULL' },
+  // audit-event.entity.ts — tamper-evident hash chain (null on pre-chain rows).
+  { table: 'audit_events', column: 'contentHash', definition: 'VARCHAR(64) NULL' },
+  { table: 'audit_events', column: 'prevHash', definition: 'VARCHAR(64) NULL' },
 ];
 
 /**

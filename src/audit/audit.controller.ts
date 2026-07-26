@@ -43,6 +43,13 @@ export class AuditController {
   }
 
   /** Global audit-event stream: one row per mutating API action, PII-masked. */
+  /** Recomputes the whole hash chain — proof the ledger hasn't been altered. */
+  @Get('events/verify')
+  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER)
+  verifyChain() {
+    return this.audit.verifyChain();
+  }
+
   @Get('events')
   @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER)
   listEvents(

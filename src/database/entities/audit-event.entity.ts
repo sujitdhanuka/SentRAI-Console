@@ -37,4 +37,13 @@ export class AuditEventEntity {
   @Index()
   @Column('datetime')
   occurredAt!: Date;
+
+  /** SHA-256 over the event's canonical content + prevHash — the chain link
+   *  that makes the ledger tamper-evident. Null only on pre-chain rows. */
+  @Column('varchar', { length: 64, nullable: true })
+  contentHash!: string | null;
+
+  /** contentHash of the previous chained event ('GENESIS' for the first). */
+  @Column('varchar', { length: 64, nullable: true })
+  prevHash!: string | null;
 }

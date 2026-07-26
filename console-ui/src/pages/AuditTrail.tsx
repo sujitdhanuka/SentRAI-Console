@@ -346,6 +346,16 @@ interface AuditEvent {
   status_code?: number;
   occurred_at?: string;
   payload_summary?: unknown;
+  content_hash?: string | null;
+  prev_hash?: string | null;
+}
+
+interface ChainVerdict {
+  intact: boolean;
+  chained: number;
+  legacy_unchained: number;
+  head_hash: string | null;
+  reason: string | null;
 }
 
 const METHOD_TONE: Record<string, BadgeTone> = {
@@ -359,6 +369,19 @@ function EventLog({ reloadKey }: { reloadKey: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [chain, setChain] = useState<ChainVerdict | null>(null);
+  const [verifying, setVerifying] = useState(false);
+
+  const verify = async () => {
+    setVerifying(true);
+    try {
+      setChain(await api<ChainVerdict>('/audit/events/verify'));
+    } catch {
+      setChain(null);
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -381,7 +404,28 @@ function EventLog({ reloadKey }: { reloadKey: number }) {
   }, [load, reloadKey]);
 
   return (
-    <Panel title="Mutating API actions" className="min-h-0 flex-1" right={<Badge tone="neutral">{events.length}</Badge>}>
+    <Panel
+      title="Mutating API actions"
+      className="min-h-0 flex-1"
+      right={
+        <span className="flex items-center gap-2">
+          {chain && (
+            <Badge tone={chain.intact ? 'positive' : 'negative'} title={chain.reason ?? `head ${chain.head_hash?.slice(0, 12)}…`}>
+              {chain.intact ? `⛓ chain intact · ${chain.chained} events` : `⛓ CHAIN BROKEN — ${chain.reason}`}
+            </Badge>
+          )}
+          <button
+            onClick={verify}
+            disabled={verifying}
+            title="Recompute every event's SHA-256 and follow the chain from GENESIS — proof the ledger hasn't been altered"
+            className="rounded-md border border-border px-2 py-0.5 font-mono text-[10px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
+          >
+            {verifying ? 'verifying…' : 'Verify chain'}
+          </button>
+          <Badge tone="neutral">{events.length}</Badge>
+        </span>
+      }
+    >
       <div className="sticky top-0 z-20 flex flex-wrap gap-2 border-b border-border bg-surface p-2">
         <span className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-2">
           <Search size={11} className="text-text-tertiary" />
@@ -410,6 +454,7 @@ function EventLog({ reloadKey }: { reloadKey: number }) {
               <th className={TH}>Actor</th>
               <th className={TH}>Action</th>
               <th className={TH}>Status</th>
+              <th className={TH}>Hash</th>
             </tr>
           </thead>
           <tbody>
@@ -431,13 +476,25 @@ function EventLog({ reloadKey }: { reloadKey: number }) {
                       </span>
                     </td>
                     <td className={`${TD} font-mono text-[10px] ${ok ? 'text-positive' : 'text-negative'}`}>{e.status_code ?? '—'}</td>
+                    <td className={`${TD} font-mono text-[9px] text-text-tertiary`} title={e.content_hash ?? 'pre-chain event (no hash)'}>
+                      {e.content_hash ? `${e.content_hash.slice(0, 10)}…` : '—'}
+                    </td>
                   </tr>
-                  {expanded === key && e.payload_summary != null && (
+                  {expanded === key && (
                     <tr key={`${key}-x`} className="border-b border-border">
-                      <td colSpan={4} className="px-2 pb-2">
+                      <td colSpan={5} className="px-2 pb-2">
+                        {e.content_hash && (
+                          <div className="mb-1.5 rounded border border-border bg-bg-elevated p-2 font-mono text-[9px] leading-relaxed">
+                            <div><span className="text-text-tertiary">sha256    </span><span className="text-accent">{e.content_hash}</span></div>
+                            <div><span className="text-text-tertiary">prev_hash </span><span className="text-text-secondary">{e.prev_hash}</span></div>
+                            <div className="mt-0.5 text-text-tertiary">Each event's hash covers its content + the previous hash — altering any record breaks every link after it.</div>
+                          </div>
+                        )}
+                        {e.payload_summary != null && (
                         <pre className="max-h-52 overflow-auto rounded border border-border bg-bg-elevated p-2 font-mono text-[9.5px] text-text-secondary">
                           {JSON.stringify(e.payload_summary, null, 2)}
                         </pre>
+                        )}
                       </td>
                     </tr>
                   )}
