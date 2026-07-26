@@ -10,7 +10,7 @@ import { basename, extname, join, relative } from 'path';
 import { ModelType, RiskLevel } from '../common/enums';
 import { detectLanguage } from './language-detector';
 import { detectAgenticFrameworks } from './framework-detector';
-import { detectedToolIds } from './tool-detector';
+import { DetectedTool, extractTools } from './tool-detector';
 import { detectSecrets } from '../common/secret-patterns';
 import { AstScanResult } from './tree-sitter-parser';
 
@@ -39,6 +39,8 @@ export interface DiscoveredCandidate {
   signals: SignalMatch[];
   /** Normalised tool/capability ids the code invokes (Pillar 2 — Control). */
   tools: string[];
+  /** Full detections behind `tools` — line + snippet, for gate evidence. */
+  toolDetails: DetectedTool[];
   gaps: string[];
   description: string;
   prompts: Array<Record<string, any>>;
@@ -289,6 +291,7 @@ export function candidateAsDict(c: DiscoveredCandidate): Record<string, any> {
     secrets: c.secrets,
     signals: c.signals.map((s) => ({ category: s.category, pattern: s.pattern, line: s.lineNumber, snippet: s.snippet })),
     tools: c.tools,
+    tool_details: c.toolDetails.map((t) => ({ id: t.id, label: t.label, line: t.line, snippet: t.snippet })),
     gaps: c.gaps,
   };
 }
@@ -314,6 +317,9 @@ export function candidateFromDict(d: Record<string, any>): DiscoveredCandidate {
       category: s.category, pattern: s.pattern, lineNumber: s.line, snippet: s.snippet,
     })),
     tools: d.tools ?? [],
+    toolDetails: (d.tool_details ?? []).map((t: Record<string, any>) => ({
+      id: t.id, label: t.label ?? t.id, category: 'named_tool' as const, line: t.line ?? 1, snippet: t.snippet ?? '',
+    })),
     gaps: d.gaps ?? [],
   };
 }
@@ -422,6 +428,7 @@ export function scanDirectory(root: string, ast?: AstScanner): DiscoveredCandida
 
     const confidence = weight >= 5 ? 'HIGH' : weight >= 2 ? 'MEDIUM' : 'LOW';
     const { prompts, secrets } = scanPromptsAndSecurity(content);
+    const toolDetails = extractTools(content);
 
     candidates.push({
       suggestedName: guessName(relPath),
@@ -432,7 +439,8 @@ export function scanDirectory(root: string, ast?: AstScanner): DiscoveredCandida
       confidence,
       domainTags: classifyDomain(content, relPath),
       signals: matches.slice(0, 10),
-      tools: detectedToolIds(content),
+      tools: toolDetails.map((t) => t.id),
+      toolDetails,
       gaps: [...assessGaps(content), ...astGaps],
       description: extractDescription(content),
       prompts,

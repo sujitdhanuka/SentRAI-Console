@@ -181,6 +181,16 @@ export class CiEvaluationService {
             reason: auth.undeclared
               ? `Tool authorization: uses ${auth.unauthorized.map(toolLabel).join(', ')} but no permitted tools are declared. Declare the agent's tool scope.`
               : `Tool authorization violation: uses ${auth.unauthorized.map(toolLabel).join(', ')} outside its permitted set (${auth.permitted.map(toolLabel).join(', ') || 'none'}).`,
+            // The exact line each unauthorized tool is invoked on — so the
+            // SARIF annotation and the auditor land on the offending code.
+            evidence: (candidate.toolDetails ?? [])
+              .filter((t) => auth.unauthorized.includes(t.id))
+              .slice(0, MAX_EVIDENCE_PER_GAP)
+              .map((t) => ({
+                line: t.line,
+                snippet: (t.snippet ?? '').slice(0, MAX_SNIPPET_CHARS),
+                category: 'unauthorized_tool',
+              })),
           });
         }
       }
@@ -224,7 +234,7 @@ export class CiEvaluationService {
             level: 'error',
             message: { text: g.reason },
             locations: [
-              { physicalLocation: { artifactLocation: { uri: g.file_location }, region: { startLine: 1 } } },
+              { physicalLocation: { artifactLocation: { uri: g.file_location }, region: { startLine: g.evidence?.[0]?.line ?? 1 } } },
             ],
             properties: { shadow: g.shadow, missing: g.missing, kind: g.kind ?? 'governance', unauthorized_tools: g.unauthorized_tools ?? [] },
           })),
