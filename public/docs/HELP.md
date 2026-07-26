@@ -232,6 +232,79 @@ Organization isolation is enforced everywhere: a non-admin user only ever sees a
 
 ---
 
+## Installation & configuration (self-hosting)
+
+SentRAI is a single NestJS application that serves the API and both consoles from one process — one server, one database, no separate frontend deployment.
+
+### Requirements
+
+- **Node.js 18+** (20 LTS recommended) and npm.
+- **MariaDB / MySQL** for production (SQLite is used automatically in development — zero setup).
+- Optional: **Neo4j** for the Lineage Graph (everything else works without it).
+
+### Quick start (development)
+
+```bash
+git clone https://github.com/sujitdhanuka/SentRAI-Console.git
+cd SentRAI-Console
+npm install
+npm run start:dev        # SQLite dev.db, schema auto-created, admin auto-seeded
+```
+
+Open `http://localhost:3000`, sign in with the seeded admin (`admin@sentrai.local` / the password printed to the console on first boot), and you're in.
+
+### Production configuration (environment variables)
+
+Set these in your host's environment (control panel → environment variables, a `.env` file, or your process manager):
+
+| Variable | Required | What it does |
+|---|---|---|
+| `NODE_ENV` | yes | Set to `production`. Hardens boot checks, disables Swagger. |
+| `PORT` | no | HTTP port (default 3000). |
+| `PUBLIC_URL` | yes | Canonical external URL (e.g. `https://sentraiconsole.com`) — used in links, cards, and the sitemap. |
+| `DB_PROVIDER` | yes | `mariadb` in production. |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | yes | Your MariaDB connection. |
+| `DB_SYNCHRONIZE` | yes | **`false` in production.** The built-in schema-guard applies safe, additive schema updates on boot instead — no manual migrations to run. |
+| `REQUIRE_PERSISTENT_DB` | recommended | `true` — refuses to boot on an ephemeral database so a misconfiguration can't silently lose data. |
+| `JWT_SECRET` | yes | Long random string (32+ chars). **The app refuses to boot in production with a weak or default secret.** |
+| `APP_ENCRYPTION_KEY` | yes | 32-byte key for AES-256-GCM encryption of stored AI-provider API keys. Generate once (`openssl rand -hex 32`) and never rotate casually — existing encrypted keys need it. |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | first boot | Bootstrap admin. In production the password must be 12+ chars. `SEED_ADMIN_RESET=true` is the break-glass recovery path (forces the admin password back, then set it to `false` again). |
+| `CORS_ORIGINS` | no | Comma-separated allowed origins if a separate frontend origin calls the API. |
+| `WEBHOOK_URL` | no | Receives governance notifications (gate failures, drift alerts, kill-switch events). |
+| `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | no | Enables the Lineage Graph; the app degrades gracefully without it. |
+| `EXPOSE_DOCS` | no | `true` to expose the Swagger API explorer in production (off by default). |
+| `AI_SUMMARIZER_PROVIDER` / `AI_SUMMARIZER_BASE_URL` / `AI_SUMMARIZER_MODEL` | no | Platform-default LLM for AI drafting (orgs can override per-tenant in **AI Settings**; point at Ollama for zero-egress). |
+
+### Build & run
+
+```bash
+npm ci
+npm run build            # compiles the API to dist/
+npm run start:prod       # node dist/main
+```
+
+The React console is pre-built and served by the same process — no separate frontend step. On boot the **schema-guard** creates any missing tables/columns (additive only, never destructive), the admin is seeded if absent, and `/health` goes green.
+
+### Auto-update from GitHub (git-based deployment)
+
+To have your server update itself on every release — the way the hosted instance works:
+
+1. **Connect the repository** in your host's Git deployment panel (Hostinger: *Websites → your site → Git*; most panels are equivalent): repository `https://github.com/<you>/SentRAI-Console.git`, branch **`main`**.
+2. **Set the build command** to `npm ci && npm run build`, and the start command to `npm run start:prod` (or restart your process manager).
+3. **Enable the webhook / auto-deploy toggle.** The panel registers a GitHub webhook; from then on **every push to `main` pulls, rebuilds, and restarts automatically** — typically live in 2–3 minutes.
+4. **Verify a deploy landed:** `curl https://your-host/health` — the response carries `build` (the running version tag), `db: ok`, and `uptime_s` (near zero right after a restart). If `build` shows the new version, the update is live.
+
+> ⚠️ With auto-deploy, **a push to `main` *is* a production release**. Do day-to-day work on a `dev` branch and fast-forward `main` only after tests pass — and take a database backup before schema-affecting releases (`scripts/backup.sh`).
+
+### First-login hardening checklist
+
+1. Sign in as the seeded admin → change the password immediately.
+2. Create your organization and real users with least-privilege roles (see *Roles & permissions* above); keep ADMIN accounts to a minimum.
+3. Confirm `/health` shows `db: ok` and the expected `build`.
+4. Schedule `scripts/backup.sh` (cron) and test `scripts/restore.sh` once — before you need it.
+
+---
+
 ## CI/CD integration (the shift-left gate)
 
 Stop ungoverned AI *before* it ships:
@@ -240,6 +313,36 @@ Stop ungoverned AI *before* it ships:
 2. Add the SentRAI gate to your pipeline — a ready-made **GitHub Action** and **GitLab** template live under `ci-integration/`. On each push or PR it sends the changed source to `POST /api/v1/ci/scan`.
 3. SentRAI scans for AI usage, evaluates it against your **`.sentrai/policy.yaml`** (policy-as-code; it falls back to safe defaults if the file is absent), and returns a **pass/fail verdict plus SARIF** (rendered natively in GitHub/GitLab security tabs). A failing gate exits non-zero and blocks the deploy.
 4. Every decision is recorded in the **CI Gate Ledger**, where an auditor can review the flagged code and, if justified, sign off an override.
+
+### Step-by-step: wiring a GitHub repository
+
+**A. Mint the CI token (in the app).** CI Gate Ledger → **"⚙ Set up CI scanning"** (ADMIN/CISO). Pick the project to gate; the app generates a project-scoped token and a ready-to-paste snippet. The token can *only* drive the pipeline gate — it cannot log into the console.
+
+**B. Add the credentials to GitHub.** In the repository: *Settings → Secrets and variables → Actions*:
+- **Secret** `SENTRAI_CI_TOKEN` — the token from step A.
+- **Variable** `SENTRAI_URL` — your SentRAI base URL (e.g. `https://sentraiconsole.com`).
+
+**C. Add the workflow.** Copy `ci-integration/github-workflow.yml` into the repo as `.github/workflows/sentrai-gate.yml`. It runs on every PR and push to `main`, references the packaged action (nothing to vendor), and uploads SARIF:
+
+```yaml
+- name: SentRAI Pre-Deployment Gate
+  uses: sujitdhanuka/SentRAI-Console/ci-integration/sentrai-gate-action@v1
+  with:
+    sentrai-url: ${{ vars.SENTRAI_URL }}
+    ci-token: ${{ secrets.SENTRAI_CI_TOKEN }}
+```
+
+**D. Add your policy.** Copy `ci-integration/policy.example.yaml` to **`.sentrai/policy.yaml`** in the gated repo and tune the gates (risk ceilings, secret rules, tool authorization). No file = safe fail-closed defaults.
+
+**E. Make the gate blocking.** *Settings → Branches → Branch protection rule* for `main` → **"Require status checks to pass"** → select **"SentRAI AI Compliance Gate"**. From now on a PR that introduces ungoverned AI, a leaked secret, or an agent using an unauthorized tool **cannot be merged** until it's fixed or an APPROVER signs an override in the CI Gate Ledger.
+
+**F. See findings where developers live.** Violations render in the PR's **Security tab** via SARIF (the workflow's `security-events: write` permission handles the upload; private repos need GitHub Code Scanning enabled).
+
+**GitLab:** the same gate script (`ci-integration/sentrai-gate.mjs`) runs as a `node` job — see `ci-integration/README.md` for the `.gitlab-ci.yml` block.
+
+### Keeping the inventory in sync automatically
+
+`ci-integration/sync-models.mjs` pushes model records from *your* application's database into the SentRAI inventory via the API. It's idempotent (already-registered models are skipped), so it's safe to run on a schedule — a nightly cron or CI job keeps the governed inventory mirroring reality without manual entry. See the header of the script for the environment variables it needs.
 
 ---
 
