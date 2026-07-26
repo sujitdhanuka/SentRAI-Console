@@ -8,6 +8,7 @@ import { CurrentUser as CurrentUserType } from '../common/interfaces/current-use
 import { ComplianceService } from './compliance.service';
 import { coverageSummary } from './coverage.data';
 import { generatePortfolioPdf } from './pdf-generator';
+import { generateBoardReportPdf } from './board-report';
 
 @ApiTags('Compliance')
 @ApiBearerAuth()
@@ -43,6 +44,22 @@ export class ComplianceController {
   @Get('matrix')
   matrix(@CurrentUser() user: CurrentUserType, @Query('project_id') projectId?: string) {
     return this.compliance.matrix(user, projectId ?? null);
+  }
+
+  /** Board pack: multi-section governance report (the periodic board deliverable). */
+  @Get('board-report/export-pdf')
+  async boardReportPdf(
+    @CurrentUser() user: CurrentUserType,
+    @Res() res: Response,
+    @Query('project_id') projectId?: string,
+  ): Promise<void> {
+    const payload = await this.compliance.boardReport(user, projectId ?? null);
+    const pdf = await generateBoardReportPdf(payload);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename=sentrai-board-report.pdf',
+    });
+    res.send(pdf);
   }
 
   /** Portfolio-level framework readiness PDF (executive/auditor deliverable). */

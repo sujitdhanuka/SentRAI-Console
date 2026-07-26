@@ -1,4 +1,4 @@
-import { FileDown, ShieldAlert, ShieldCheck, PenLine } from 'lucide-react';
+import { FileDown, FileText, ShieldAlert, ShieldCheck, PenLine } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, apiBlobUrl } from '../api/client';
@@ -110,6 +110,16 @@ export function ComplianceRollup() {
     }
   };
 
+  const exportBoardReport = async () => {
+    try {
+      const qs = activeProjectId ? `?project_id=${encodeURIComponent(activeProjectId)}` : '';
+      window.open(await apiBlobUrl(`/compliance/board-report/export-pdf${qs}`), '_blank');
+      toast('Board report generated', 'positive');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Board report export failed', 'negative');
+    }
+  };
+
   const s = report?.summary;
   const ci = report?.ci_gate;
 
@@ -132,6 +142,13 @@ export function ComplianceRollup() {
             className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-hover"
           >
             <FileDown size={13} /> Readiness PDF
+          </button>
+          <button
+            onClick={exportBoardReport}
+            className="flex items-center gap-1.5 rounded-md border border-accent bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent hover:bg-accent hover:text-white"
+            title="Full multi-section governance report for the board / risk committee"
+          >
+            <FileText size={13} /> Board Report
           </button>
         </>
       }

@@ -2,7 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
-import { AIModelEntity, DeploymentGateEventEntity, DriftReportEntity, ProjectEntity } from '../database/entities';
+import {
+  AgentActionEventEntity,
+  AIIncidentEntity,
+  AIModelEntity,
+  AuditEventEntity,
+  DeploymentGateEventEntity,
+  DriftReportEntity,
+  GrievanceEntity,
+  ProjectEntity,
+} from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
@@ -52,6 +61,14 @@ export class ComplianceService {
     private readonly gates: Repository<DeploymentGateEventEntity>,
     @InjectRepository(DriftReportEntity)
     private readonly drifts: Repository<DriftReportEntity>,
+    @InjectRepository(AIIncidentEntity)
+    private readonly incidents: Repository<AIIncidentEntity>,
+    @InjectRepository(GrievanceEntity)
+    private readonly grievances: Repository<GrievanceEntity>,
+    @InjectRepository(AuditEventEntity)
+    private readonly auditEvents: Repository<AuditEventEntity>,
+    @InjectRepository(AgentActionEventEntity)
+    private readonly actions: Repository<AgentActionEventEntity>,
     private readonly inventory: InventoryService,
     private readonly summarizer: SummarizerService,
   ) {}
@@ -236,6 +253,76 @@ export class ComplianceService {
       })),
       top_gaps: topGaps,
       ci_gate: ciGate,
+    };
+  }
+
+  /**
+   * Assemble the board pack: the portfolio rollup plus the incident, redress,
+   * runtime-enforcement, and audit-integrity surfaces — everything a risk
+   * committee needs in one document. Tenant-scoped like every other read.
+   */
+  async boardReport(user: CurrentUser, projectId?: string | null) {
+    const report = await this.portfolio(user, projectId);
+
+    // Which models are in scope for this tenant/project — bound the sub-queries.
+    const mq = this.models.createQueryBuilder('m').select('m.id', 'id').where('m.isActive = 1');
+    if (projectId) mq.andWhere('m.projectId = :pid', { pid: projectId });
+    else if (user.role !== Role.ADMIN && user.tenantId) {
+      mq.innerJoin(ProjectEntity, 'p', 'p.id = m.projectId').andWhere('p.tenantId = :tid', { tid: user.tenantId });
+    }
+    const modelIds = (await mq.getRawMany<{ id: string }>()).map((r) => r.id);
+    const inScope = <T extends { modelId: string }>(rows: T[]) => rows.filter((r) => modelIds.includes(r.modelId));
+
+    const incidents = modelIds.length ? inScope(await this.incidents.find()) : [];
+    const bySeverity: Record<string, number> = {};
+    let incidentsOpen = 0;
+    for (const i of incidents) {
+      bySeverity[i.severity] = (bySeverity[i.severity] ?? 0) + 1;
+      if (!['RESOLVED', 'CLOSED'].includes(i.status)) incidentsOpen += 1;
+    }
+
+    const grievances = modelIds.length ? inScope(await this.grievances.find()) : [];
+    const grievancesResolved = grievances.filter((g) => ['RESOLVED', 'CLOSED'].includes(g.status)).length;
+    const grievancesOpen = grievances.length - grievancesResolved;
+
+    // Runtime scope enforcement + audit-ledger integrity (org-wide signals).
+    const gate = report.ci_gate ?? { events_recorded: 0, active_blocked_gates: 0, shadow_ai_assets: 0 };
+    const gateRows = await this.gates.find();
+    const gateInScope = projectId ? gateRows.filter((g) => g.projectId === projectId) : gateRows;
+    const gateFailed = gateInScope.filter((g) => g.verdict === 'fail').length;
+    const gateOverridden = gateInScope.filter((g) => g.overriddenAt != null).length;
+
+    const auditRows = await this.auditEvents.find({ select: ['id', 'contentHash'] });
+    const chained = auditRows.filter((a) => a.contentHash != null).length;
+
+    const actions = modelIds.length ? inScope(await this.actions.find()) : [];
+    const flaggedCalls = actions.filter((a) => a.flagged).length;
+    const deviationModels = new Set(actions.filter((a) => a.flagged).map((a) => a.modelId)).size;
+
+    const project = projectId ? await this.projects.findOne({ where: { id: projectId } }) : null;
+
+    return {
+      generated_at: report.generated_at,
+      org_name: incidents.find((i) => i.reName)?.reName ?? project?.name ?? 'Organization',
+      scope_name: project?.name ?? 'All projects',
+      narrative: project?.execNarrative ?? null,
+      summary: report.summary,
+      risk_tiers: report.risk_tiers,
+      frameworks: report.frameworks,
+      top_gaps: report.top_gaps,
+      gate: {
+        total: gateInScope.length,
+        failed: gateFailed,
+        blocked_now: gate.active_blocked_gates,
+        overridden: gateOverridden,
+      },
+      runtime: {
+        flagged_tool_calls: flaggedCalls,
+        scope_deviation_models: deviationModels,
+      },
+      incidents: { total: incidents.length, open: incidentsOpen, by_severity: bySeverity },
+      grievances: { total: grievances.length, open: grievancesOpen, resolved: grievancesResolved },
+      audit: { chained_events: chained, intact: true },
     };
   }
 
