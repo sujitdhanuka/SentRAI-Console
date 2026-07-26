@@ -1,6 +1,7 @@
-import { CheckCircle2, FileCode2, ShieldCheck, PenLine } from 'lucide-react';
+import { CheckCircle2, FileCode2, FileJson2, ShieldCheck, PenLine } from 'lucide-react';
 import { useState } from 'react';
 
+import { api } from '../../api/client';
 import type { GateEvent } from '../../pages/CiLedger';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -32,6 +33,31 @@ export function GateEventDetail({
 }) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sarif, setSarif] = useState<{ forId: string; body: string } | null>(null);
+  const [sarifBusy, setSarifBusy] = useState(false);
+
+  // The exact artifact the pipeline uploaded to the Security tab, rebuilt
+  // from the ledger — viewable and downloadable without leaving the console.
+  const toggleSarif = async (ev: GateEvent) => {
+    if (sarif?.forId === ev.gate_event_id) { setSarif(null); return; }
+    setSarifBusy(true);
+    try {
+      const doc = await api<unknown>(`/ci/events/${ev.gate_event_id}/sarif`);
+      setSarif({ forId: ev.gate_event_id, body: JSON.stringify(doc, null, 2) });
+    } finally {
+      setSarifBusy(false);
+    }
+  };
+
+  const downloadSarif = (ev: GateEvent) => {
+    if (!sarif) return;
+    const url = URL.createObjectURL(new Blob([sarif.body], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sentrai-${ev.commit_sha ?? ev.gate_event_id}.sarif`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (!event) {
     return (
@@ -123,6 +149,25 @@ export function GateEventDetail({
             ))}
           </ul>
         )}
+
+        {/* The SARIF artifact — what the pipeline uploads to the Security tab. */}
+        <div className="mt-3">
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => toggleSarif(event)} disabled={sarifBusy}
+              title="The SARIF report for this gate decision, rebuilt from the ledger — identical to what the pipeline uploaded to the GitHub/GitLab Security tab"
+              icon={<FileJson2 size={11} />}>
+              {sarifBusy ? 'Loading…' : sarif?.forId === event.gate_event_id ? 'Hide SARIF' : 'View SARIF'}
+            </Button>
+            {sarif?.forId === event.gate_event_id && (
+              <Button variant="secondary" size="sm" onClick={() => downloadSarif(event)}>Download .sarif</Button>
+            )}
+          </div>
+          {sarif?.forId === event.gate_event_id && (
+            <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-border bg-bg-elevated p-2.5 font-mono text-[9.5px] leading-relaxed text-text-secondary">
+              {sarif.body}
+            </pre>
+          )}
+        </div>
 
         {canOverride && event.verdict === 'fail' && !event.overridden && (
           <div className="mt-3 rounded-md border border-border p-2.5">

@@ -394,6 +394,18 @@ export class CiEvaluationService {
    * AuditEventsInterceptor separately persists an immutable audit_events row
    * (actor, role, route, masked justification) for this POST.
    */
+  /**
+   * Rebuilds the SARIF report for a recorded gate event from its persisted
+   * blocking gaps — the same artifact the pipeline uploaded to the Security
+   * tab, now retrievable from the ledger by an auditor at any time.
+   */
+  async eventSarif(user: CurrentUser, eventId: string) {
+    const event = await this.gates.findOne({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Gate event not found');
+    await this.assertProjectAccess(user, event.projectId);
+    return this.buildSarif((event.blockingGaps ?? []) as BlockingGap[], event.commitSha);
+  }
+
   async overrideEvent(user: CurrentUser, eventId: string, reason: string) {
     const event = await this.gates.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Gate event not found');

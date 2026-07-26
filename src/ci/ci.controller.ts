@@ -71,6 +71,14 @@ export class CiController {
     });
   }
 
+  /** The SARIF artifact for a recorded gate event, rebuilt from the ledger. */
+  @ApiBearerAuth()
+  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER, Role.APPROVER)
+  @Get('events/:id/sarif')
+  eventSarif(@CurrentUser() user: CurrentUserType, @Param('id') id: string) {
+    return this.ci.eventSarif(user, id);
+  }
+
   /**
    * Auditor sign-off override of a failed gate. Additive by design: the
    * original `verdict='fail'` is preserved on the record; this attaches the
