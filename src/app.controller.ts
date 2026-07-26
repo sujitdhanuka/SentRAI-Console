@@ -10,7 +10,7 @@ import { Public } from './common/decorators/public.decorator';
 import { INDEX_HTML, LANDING_HTML, HELP_MD, GATE_SCRIPT_CANDIDATES } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
 import { COVERAGE } from './compliance/coverage.data';
-import { BUILD_TAG } from './common/build';
+import { APP_VERSION, BUILD_TAG } from './common/build';
 import { GA_SNIPPET } from './common/analytics';
 
 /** Cache-bust /static assets per deploy: the browser only re-fetches when the
@@ -198,7 +198,7 @@ Sitemap: ${this.siteBase(req)}/sitemap.xml
   @Get('/health')
   async health(
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ status: string; service: string; db: string; uptime_s: number; build: string }> {
+  ): Promise<{ status: string; service: string; version: string; build: string; db: string; uptime_s: number }> {
     let db = 'ok';
     try {
       await this.dataSource.query('SELECT 1');
@@ -209,9 +209,10 @@ Sitemap: ${this.siteBase(req)}/sitemap.xml
     return {
       status: db === 'ok' ? 'ok' : 'degraded',
       service: this.config.get<string>('appName')!,
+      version: APP_VERSION,
+      build: BUILD_TAG,
       db,
       uptime_s: Math.floor((Date.now() - STARTED_AT) / 1000),
-      build: BUILD_TAG,
     };
   }
 
