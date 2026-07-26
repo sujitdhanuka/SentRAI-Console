@@ -34,4 +34,14 @@ export class CardsController {
     res.set('Cache-Control', 'no-cache');
     res.type('html').send(html);
   }
+
+  /** Public grievance form for a model — the card's redress button opens this. */
+  @Public()
+  @Get('grievance/file/:modelId')
+  @ApiExcludeEndpoint()
+  async grievanceForm(@Param('modelId') modelId: string, @Res() res: Response): Promise<void> {
+    const html = await this.cards.renderGrievanceForm(modelId);
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(html);
+  }
 }

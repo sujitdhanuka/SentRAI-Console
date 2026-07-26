@@ -48,11 +48,105 @@ export class CardsService {
       disclosures: [...new Set(regimes.flatMap((r) => r.disclosureObligations))],
       redress: {
         available: true,
-        file_url: `/api/v1/grievances/public/${m.id}`,
+        file_url: `/grievance/file/${m.id}`,
         grievances,
       },
       generated_at: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Consumer-facing grievance form for a model — the page the card's "File a
+   * grievance" button opens. Public, no account; posts to the existing
+   * /api/v1/grievances/public/:id endpoint and confirms with the case
+   * reference and its SLA. Self-contained (inline script, allowed by CSP).
+   */
+  async renderGrievanceForm(modelId: string): Promise<string> {
+    const c = await this.card(modelId);
+    const esc = (t: string) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<!doctype html><html lang="en"><head>${GA_SNIPPET}<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File a grievance — ${esc(c.name)}</title>
+<style>
+  :root{--paper:#f4f6f2;--ink:#0f2233;--muted:#586a77;--sig:#2240c9;--hair:#e2e6df;--surface:#fff;--good:#1e7a4f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  .wrap{max-width:560px;margin:0 auto;padding:34px 20px 80px}
+  .eyebrow{font:600 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:25px;letter-spacing:-.02em;margin:8px 0 2px}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .card{background:var(--surface);border:1px solid var(--hair);border-radius:4px;padding:20px}
+  label{display:block;font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 5px}
+  input,select,textarea{width:100%;border:1px solid var(--hair);border-radius:3px;padding:10px 11px;font:inherit;font-size:14px;background:#fff;color:var(--ink)}
+  textarea{min-height:104px;resize:vertical}
+  .btn{width:100%;background:var(--sig);color:#fff;border:0;border-radius:3px;padding:12px 16px;font-weight:600;font-size:15px;margin-top:18px;cursor:pointer}
+  .note{color:var(--muted);font-size:12px;margin-top:12px}
+  .ok{background:var(--surface);border:1px solid var(--good);border-left:4px solid var(--good);border-radius:4px;padding:20px}
+  .ok h2{margin:0 0 8px;color:var(--good);font-size:19px}
+  .ref{font:600 13px/1.5 ui-monospace,Menlo,monospace;background:#eef4ef;border-radius:3px;padding:8px 10px;margin:10px 0;word-break:break-all}
+  a{color:var(--sig)}
+  .foot{color:var(--muted);font:11px/1.5 ui-monospace,Menlo,monospace;margin-top:22px}
+</style></head><body><div class="wrap">
+  <div class="eyebrow">Consumer grievance</div>
+  <h1>File a grievance</h1>
+  <p class="sub">About decisions made by <b>${esc(c.name)}</b> · ${esc(c.functional_area)}</p>
+  <div class="card" id="panel">
+    <form id="gform">
+      <label for="subject">What happened (summary)</label>
+      <input id="subject" name="subject" required minlength="4" maxlength="200" placeholder="e.g. My loan application was declined unfairly" />
+      <label for="category">Category</label>
+      <select id="category" name="category">
+        <option value="unfair_outcome">Unfair or biased decision</option>
+        <option value="discrimination">Discrimination</option>
+        <option value="no_explanation">No explanation given</option>
+        <option value="inaccuracy">Inaccurate result</option>
+        <option value="privacy">Concern about my data</option>
+        <option value="other">Other</option>
+      </select>
+      <label for="description">Describe what happened</label>
+      <textarea id="description" name="description" required minlength="10" maxlength="4000" placeholder="Tell us what happened and how it affected you."></textarea>
+      <label for="complainant">Your name or contact (optional)</label>
+      <input id="complainant" name="complainant" maxlength="255" placeholder="Optional — so we can follow up" />
+      <button class="btn" type="submit" id="submit">Submit grievance</button>
+      <p class="note">We acknowledge every submission and investigate under a service-level deadline set by the model's risk tier. No account needed.</p>
+    </form>
+  </div>
+  <p class="foot"><a href="/card/${esc(modelId)}">← Back to the transparency card</a></p>
+</div>
+<script>
+  var f = document.getElementById('gform');
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = document.getElementById('submit');
+    btn.disabled = true; btn.textContent = 'Submitting…';
+    var body = {
+      subject: f.subject.value.trim(),
+      description: f.description.value.trim(),
+      category: f.category.value,
+      complainant: f.complainant.value.trim() || undefined
+    };
+    fetch('/api/v1/grievances/public/${esc(modelId)}', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error((res.d && res.d.message) || 'Submission failed');
+        var g = res.d;
+        var due = g.sla_due_at ? new Date(g.sla_due_at).toLocaleDateString() : null;
+        document.getElementById('panel').className = 'ok';
+        document.getElementById('panel').innerHTML =
+          '<h2>✓ Grievance received</h2>' +
+          '<p>Your case has been logged and is now in the review queue.</p>' +
+          '<div class="ref">Reference: ' + (g.grievance_id || g.id || 'recorded') + '</div>' +
+          '<p>Status: <b>' + (g.status || 'RECEIVED') + '</b>' + (due ? ' · acknowledgement due by <b>' + due + '</b>' : '') + '</p>' +
+          '<p class="note">Keep your reference number. You can quote it in any follow-up.</p>';
+      })
+      .catch(function (err) {
+        btn.disabled = false; btn.textContent = 'Submit grievance';
+        alert(err.message || 'Something went wrong — please try again.');
+      });
+  });
+</script>
+</body></html>`;
   }
 
   async renderHtml(modelId: string): Promise<string> {
