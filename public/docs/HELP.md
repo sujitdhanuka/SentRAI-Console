@@ -290,7 +290,7 @@ The React console is pre-built and served by the same process — no separate fr
 To have your server update itself on every release — the way the hosted instance works:
 
 1. **Connect the repository** in your host's Git deployment panel (Hostinger: *Websites → your site → Git*; most panels are equivalent): repository `https://github.com/<you>/SentRAI-Console.git`, branch **`main`**.
-2. **Set the build command** to `npm ci && npm run build`, and the start command to `npm run start:prod` (or restart your process manager).
+2. **Set the build command** to `npm run deploy:build` (equivalent to `npm ci && npm run build && npm prune --omit=dev` — the prune strips dev-only packages after building, so the server disk carries runtime dependencies only and vulnerability scanners don't flag build tooling). Set the start command to `npm run start:prod` (or restart your process manager).
 3. **Enable the webhook / auto-deploy toggle.** The panel registers a GitHub webhook; from then on **every push to `main` pulls, rebuilds, and restarts automatically** — typically live in 2–3 minutes.
 4. **Verify a deploy landed:** `curl https://your-host/health` — the response carries `build` (the running version tag), `db: ok`, and `uptime_s` (near zero right after a restart). If `build` shows the new version, the update is live.
 
