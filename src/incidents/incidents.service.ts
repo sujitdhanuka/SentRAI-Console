@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AIIncidentEntity } from '../database/entities';
+import { AIIncidentEntity, ModelLedgerEventEntity } from '../database/entities';
 import { IncidentSeverity, IncidentStatus } from '../common/enums';
 import { computeReportingDeadline, hoursUntilDeadline, isOverdue } from '../domain/incident';
 import { maskDict } from '../common/dpdp';
@@ -20,7 +20,20 @@ export class IncidentsService {
 
   constructor(
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
+    @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
   ) {}
+
+  /** Append an event to a model's immutable ledger (feeds the cross-ledger
+   *  timeline). Best-effort: a ledger hiccup must not fail the incident write. */
+  private async recordLedger(modelId: string, eventType: string, data: Record<string, any>, actor: string): Promise<void> {
+    try {
+      await this.ledger.save(this.ledger.create({
+        id: uuidv4(), modelId, eventType, eventData: maskDict(data), actor, occurredAt: new Date(),
+      }));
+    } catch (e) {
+      this.logger.error(`failed to write ${eventType} ledger event for ${modelId}: ${String(e)}`);
+    }
+  }
 
   async list(severity?: IncidentSeverity, statusFilter?: IncidentStatus, limit = 100): Promise<any[]> {
     const qb = this.incidents.createQueryBuilder('i').orderBy('i.createdAt', 'DESC').take(limit);
@@ -99,6 +112,10 @@ export class IncidentsService {
       );
     }
 
+    await this.recordLedger(dto.model_id, 'INCIDENT_REPORTED', {
+      incident_id: incidentId, category: dto.incident_category, severity: dto.severity,
+    }, dto.re_name || 'incident_reporter');
+
     return {
       incident_id: incidentId,
       severity: dto.severity,
@@ -125,6 +142,12 @@ export class IncidentsService {
       inc.boardInformed = dto.board_informed;
     }
     await this.incidents.save(inc);
+
+    if (dto.status === IncidentStatus.RESOLVED || dto.status === IncidentStatus.CLOSED) {
+      await this.recordLedger(inc.modelId, 'INCIDENT_RESOLVED', {
+        incident_id: incidentId, category: inc.incidentCategory, status: dto.status,
+      }, 'incident_manager');
+    }
     return { incident_id: incidentId, status: dto.status };
   }
 

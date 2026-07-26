@@ -295,6 +295,8 @@ export class TelemetryService {
     if (type === 'SCOPE_DEVIATION_DETECTED') return `scope deviation: ${data.unauthorized_calls} unauthorized tool call(s)`;
     if (type === 'ADVERSARIAL_EVIDENCE_INGESTED') return `adversarial eval: ${data.suite} · ${data.failures} breach(es)`;
     if (type === 'EVAL_EVIDENCE_INGESTED') return `eval evidence: ${data.suite} ${data.passed}/${data.total}`;
+    if (type === 'INCIDENT_REPORTED') return `incident reported — ${data.category} (${data.severity})`;
+    if (type === 'INCIDENT_RESOLVED') return `incident ${String(data.status ?? 'resolved').toLowerCase()} — ${data.category}`;
     return type.toLowerCase().replace(/_/g, ' ');
   }
 }
