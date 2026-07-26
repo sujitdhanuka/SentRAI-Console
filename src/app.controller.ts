@@ -11,6 +11,7 @@ import { INDEX_HTML, LANDING_HTML, HELP_MD, GATE_SCRIPT_CANDIDATES } from './com
 import { SUTRAS } from './common/sutras.data';
 import { COVERAGE } from './compliance/coverage.data';
 import { BUILD_TAG } from './common/build';
+import { GA_SNIPPET } from './common/analytics';
 
 /** Cache-bust /static assets per deploy: the browser only re-fetches when the
  *  query string changes. Without this, a redeploy leaves the old dashboard.js in
@@ -85,7 +86,7 @@ export class AppController {
         ${f.operational?.length ? `<details><summary>Platform machinery implementing this regime</summary><ul>${f.operational.map((o) => `<li>${esc(o)}</li>`).join('')}</ul></details>` : ''}
       </section>`).join('\n');
 
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+    const html = `<!doctype html><html lang="en"><head>${GA_SNIPPET}<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SentRAI — Framework Coverage Disclosure</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

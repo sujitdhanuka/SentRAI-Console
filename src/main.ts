@@ -30,14 +30,21 @@ async function bootstrap() {
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
-          'script-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+          'script-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com', 'https://www.googletagmanager.com'],
           // The console uses inline event handlers (onclick, onsubmit, ...);
           // allow them, consistent with 'unsafe-inline' already on script-src.
           // Helmet's default sets this to 'none', which would break the SPA.
           'script-src-attr': ["'unsafe-inline'"],
-          'style-src': ["'self'", "'unsafe-inline'"],
-          'img-src': ["'self'", 'data:'],
-          'connect-src': ["'self'"],
+          // The consoles load their typefaces (Archivo / Source Serif /
+          // IBM Plex Mono) from Google Fonts — without these two entries the
+          // CSP silently drops them and every page falls back to system fonts.
+          'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
+          // Google Analytics: the gtag loader beacons to google-analytics /
+          // googletagmanager endpoints (regional hosts, hence wildcards) and
+          // may fall back to an image pixel when fetch is unavailable.
+          'img-src': ["'self'", 'data:', 'https://*.google-analytics.com', 'https://www.googletagmanager.com'],
+          'connect-src': ["'self'", 'https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://*.googletagmanager.com'],
           'object-src': ["'none'"],
           'frame-ancestors': ["'none'"],
         },

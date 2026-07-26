@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { GA_SNIPPET } from '../common/analytics';
 import { AIModelEntity } from '../database/entities';
 import { operationalRegimes } from '../compliance/regimes';
 import { GrievancesService } from '../grievances/grievances.service';
@@ -64,7 +65,7 @@ export class CardsService {
       <td>${r.consumer_redress ? 'Yes' : 'No'}</td></tr>`).join('');
     const disclosures = c.disclosures.map((d) => `<li>${esc(d)}</li>`).join('');
 
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+    return `<!doctype html><html lang="en"><head>${GA_SNIPPET}<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Transparency Card — ${esc(c.name)}</title>
 <style>
