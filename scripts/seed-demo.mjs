@@ -30,6 +30,9 @@ const ADMIN_EMAIL = process.env.SENTRAI_ADMIN_EMAIL ?? 'admin@sentrai.local';
 const ADMIN_PASSWORD = process.env.SENTRAI_ADMIN_PASSWORD ?? 'admin123';
 const CISO_EMAIL = 'priya.ciso@meridianfinance.demo';
 const CISO_PASSWORD = process.env.MERIDIAN_CISO_PASSWORD ?? 'Meridian!Demo2026';
+// Read-only VIEWER for evaluators/judges — sees the whole governed tenant, changes nothing.
+const JUDGE_EMAIL = process.env.JUDGE_EMAIL ?? 'judge@meridianfinance.demo';
+const JUDGE_PASSWORD = process.env.JUDGE_PASSWORD ?? 'Review!Meridian2026';
 const ORG_NAME = 'Meridian Finance';
 const PROJECT_NAME = 'Retail Lending Platform';
 
@@ -80,6 +83,14 @@ async function main() {
     log('created');
   } else log('exists');
   const ciso = await login(CISO_EMAIL, CISO_PASSWORD);
+
+  step(`Read-only judge ${JUDGE_EMAIL}`);
+  if (!users.find((u) => u.email === JUDGE_EMAIL)) {
+    await api('/users', { method: 'POST', token: admin, body: {
+      email: JUDGE_EMAIL, full_name: 'Awards Reviewer', password: JUDGE_PASSWORD, role: 'VIEWER', organization_id: orgId,
+    } });
+    log('created (VIEWER — read-only)');
+  } else log('exists');
 
   step(`Project "${PROJECT_NAME}"`);
   const projects = await api('/projects', { token: ciso });
@@ -221,7 +232,8 @@ async function main() {
   }
 
   console.log(`\n✔ Meridian Finance ready on ${BASE}`);
-  console.log(`  Sign in: ${CISO_EMAIL} / ${CISO_PASSWORD}`);
+  console.log(`  Sign in (CISO):        ${CISO_EMAIL} / ${CISO_PASSWORD}`);
+  console.log(`  Sign in (judge, R/O):  ${JUDGE_EMAIL} / ${JUDGE_PASSWORD}`);
   console.log(`  Golden path: Projects → "${PROJECT_NAME}" → Inventory → Edit Entry → CI Gate → Monitoring (Evaluate now) → Incidents → Rollup`);
 }
 
