@@ -49,6 +49,39 @@ done
 
 [ -f "$DUMP" ] || { echo "[restore] ERROR: dump not found: $DUMP" >&2; exit 1; }
 
+# ── SQLite path ─────────────────────────────────────────────────────────────
+# A .sqlite.gz dump (or DB_PROVIDER=sqlite) is restored into a scratch .db file,
+# integrity-checked and row-counted. --prod replaces the live SQLITE_PATH.
+if [ "${DB_PROVIDER:-}" = "sqlite" ] || [[ "$DUMP" == *.sqlite.gz ]]; then
+  LIVE_SQLITE="${SQLITE_PATH:-./dev.db}"
+  if [ "$IS_PROD" -eq 1 ]; then
+    scratch="$LIVE_SQLITE"
+    echo "[restore] !! PRODUCTION restore into '$scratch' — this OVERWRITES live data."
+    read -r -p "[restore] Type the file name to confirm: " confirm
+    [ "$confirm" = "$(basename "$scratch")" ] || [ "$confirm" = "$scratch" ] || { echo "[restore] aborted."; exit 1; }
+  else
+    scratch="${TARGET}.db"; [ "$TARGET" = "sentrai_restore_test" ] && scratch="sentrai_restore_test.db"
+  fi
+  echo "[restore] loading $DUMP -> $scratch (sqlite)"
+  gunzip -c "$DUMP" > "$scratch"
+  ok="$(sqlite3 "$scratch" 'PRAGMA integrity_check;' | head -1)"
+  [ "$ok" = "ok" ] || { echo "[restore] ERROR: restored db failed integrity_check ($ok)" >&2; exit 1; }
+  echo "[restore] integrity_check: ok"
+  echo "[restore] verification — row counts in the restored database:"
+  for t in organizations users projects ai_models model_ledger_events audit_events grievances ai_incidents; do
+    c="$(sqlite3 "$scratch" "SELECT COUNT(*) FROM $t;" 2>/dev/null || echo '—')"
+    printf '  %-22s %s\n' "$t" "$c"
+  done
+  if [ "$IS_PROD" -ne 1 ] && [ "$KEEP" -ne 1 ]; then
+    rm -f "$scratch"
+    echo "[restore] dropped scratch db (pass --keep to retain it)"
+    echo "[restore] DRILL PASSED — the dump restores cleanly and reports data. ✅"
+  else
+    echo "[restore] done. Database '$scratch' left in place."
+  fi
+  exit 0
+fi
+
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USER="${DB_USER:-sentrai}"

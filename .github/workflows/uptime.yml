@@ -1,0 +1,31 @@
+# External uptime + build-marker check for the live production deployment.
+# Runs on a schedule (and on demand). A failed run is a loud, visible signal
+# that sentraiconsole.com is down or degraded — the monitor the enterprise
+# readiness review flagged as missing.
+name: Uptime · sentraiconsole.com
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes (GitHub's minimum granularity is 5)
+  workflow_dispatch: {}
+
+jobs:
+  health:
+    name: GET /health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe /health
+        run: |
+          set -euo pipefail
+          URL="https://sentraiconsole.com/health"
+          echo "Probing $URL"
+          body="$(curl -fsS --max-time 20 "$URL")" || { echo "::error::health endpoint unreachable"; exit 1; }
+          echo "$body"
+          status="$(printf '%s' "$body" | jq -r '.status')"
+          db="$(printf '%s' "$body" | jq -r '.db')"
+          version="$(printf '%s' "$body" | jq -r '.version // .build')"
+          echo "status=$status db=$db version=$version"
+          if [ "$status" != "ok" ] || [ "$db" != "ok" ]; then
+            echo "::error::degraded — status=$status db=$db"; exit 1
+          fi
+          echo "✅ live and healthy · version $version"

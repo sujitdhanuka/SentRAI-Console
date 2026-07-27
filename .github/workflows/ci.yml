@@ -1,0 +1,37 @@
+# Verification gate for SentRAI itself — the checks that must pass before code
+# is trusted on main (which auto-deploys to production). We gate customers'
+# pipelines with the SentRAI CI gate; this is us dogfooding the same discipline.
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  verify:
+    name: build · unit · e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install (clean, from lockfile)
+        run: npm ci
+
+      - name: Build (nest build — TypeScript must compile)
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      - name: End-to-end tests (boots the app on in-memory SQLite)
+        run: npm run test:e2e
+
+      - name: Dependency audit (production deps, informational)
+        run: npm audit --omit=dev --audit-level=high || true

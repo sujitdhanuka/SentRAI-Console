@@ -303,6 +303,12 @@ To have your server update itself on every release — the way the hosted instan
 
 > ⚠️ With auto-deploy, **a push to `main` *is* a production release**. Do day-to-day work on a `dev` branch and fast-forward `main` only after tests pass — and take a database backup before schema-affecting releases (`scripts/backup.sh`).
 
+### Backups, recovery & uptime
+
+- **Backup** (`scripts/backup.sh`) is provider-aware — MariaDB (`mysqldump`) in production, SQLite (`sqlite3 .backup`) in dev/demo — gzip-compressed with an integrity gate. Schedule it via cron (nightly, 7-day retention); take one before any schema-affecting release.
+- **Prove it** (`scripts/restore.sh <dump>`) restores into a scratch database and prints row counts — non-destructive, so run the drill regularly. `--prod` restores over the live database (deliberate, interlocked). A documented drill (measured RPO/RTO) lives in `docs/ET-A2-DR-DRILL.md`.
+- **Uptime:** the `Uptime` GitHub Action probes `/health` every 15 minutes; a failed run flags that production is down or degraded. The `CI` workflow runs build + unit + e2e on every push, catching a broken build before it can reach `main`.
+
 ### First-login hardening checklist
 
 1. Sign in as the seeded admin → change the password immediately.
