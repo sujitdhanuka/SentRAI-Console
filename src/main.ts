@@ -115,7 +115,10 @@ async function bootstrap() {
       // eslint-disable-next-line no-console
       console.warn('[demo-seed] SEED_DEMO_TENANT set but no SEED_ADMIN_PASSWORD — skipping.');
     } else {
-      const base = `http://127.0.0.1:${port}`;
+      // Under Passenger/proxy hosting there is no reachable 127.0.0.1:$PORT, so
+      // an operator must point DEMO_SEED_BASE_URL (or PUBLIC_URL) at the public
+      // origin for the boot toggle to work there; localhost suits a dev run.
+      const base = (process.env.DEMO_SEED_BASE_URL?.trim() || process.env.PUBLIC_URL?.trim() || `http://127.0.0.1:${port}`).replace(/\/$/, '');
       // eslint-disable-next-line no-console
       console.log('[demo-seed] provisioning Meridian demo tenant + read-only judge account…');
       void (async () => {

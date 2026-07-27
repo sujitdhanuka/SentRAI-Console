@@ -31,6 +31,12 @@
  *         so an operator triggers it live from their session — no scripts/
  *         folder, no shell, no password. The SEED_DEMO_TENANT boot toggle uses
  *         the same service instead of spawning a script.
+ * 1.2.5 — Fix the seeder under Passenger/proxy hosting (Hostinger): there is no
+ *         reachable 127.0.0.1:$PORT, so self-calls to localhost failed ("fetch
+ *         failed"). The seed now drives the app through its public origin,
+ *         derived from the triggering request (x-forwarded-proto/host), so it
+ *         round-trips back in through the proxy. DEMO_SEED_BASE_URL / PUBLIC_URL
+ *         override it (and enable the boot toggle on such hosts).
  */
-export const APP_VERSION = '1.2.4';
-export const BUILD_TAG = '1.2.4';
+export const APP_VERSION = '1.2.5';
+export const BUILD_TAG = '1.2.5';

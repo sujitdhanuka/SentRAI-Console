@@ -28,7 +28,24 @@ export class AdminController {
     const header = String(req.headers?.authorization ?? '');
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     if (!token) throw new ForbiddenException('Missing bearer token.');
+    return this.demoSeed.seed(token, this.baseUrl(req));
+  }
+
+  /**
+   * The origin to drive the seed through. The seeder calls the app's own REST
+   * API, so it must reach a live listener — and under Passenger/proxy hosting
+   * (e.g. Hostinger) there is no reachable 127.0.0.1:$PORT, only the public
+   * origin. Prefer an explicit override, then the request's own forwarded
+   * origin (what the admin's browser reached us on — the proxy round-trips it
+   * straight back in), then localhost for a plain `node dist/main` dev run.
+   */
+  private baseUrl(req: any): string {
+    const override = process.env.DEMO_SEED_BASE_URL?.trim() || process.env.PUBLIC_URL?.trim();
+    if (override) return override.replace(/\/$/, '');
+    const proto = String(req.headers?.['x-forwarded-proto'] ?? req.protocol ?? 'http').split(',')[0].trim();
+    const host = String(req.headers?.['x-forwarded-host'] ?? req.headers?.host ?? '').split(',')[0].trim();
+    if (host) return `${proto}://${host}`;
     const port = this.config.get<number>('port') ?? Number(process.env.PORT ?? 8000);
-    return this.demoSeed.seed(token, `http://127.0.0.1:${port}`);
+    return `http://127.0.0.1:${port}`;
   }
 }
