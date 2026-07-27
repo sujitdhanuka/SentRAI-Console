@@ -5,11 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { AppModule } from './app.module';
+import { DemoSeedService } from './admin/demo-seed.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -106,34 +104,41 @@ async function bootstrap() {
   // Optional one-shot demo seed (idempotent). Set SEED_DEMO_TENANT=true to
   // provision the "Meridian Finance" demonstration tenant + a read-only judge
   // account on this instance — e.g. for an award/evaluation review — with no
-  // command line or password handling: it authenticates as the already-seeded
-  // admin against localhost and reuses scripts/seed-demo.mjs. Unset the flag
-  // once seeded (re-running is harmless but does needless work each boot).
+  // command line or password handling: it logs in as the already-seeded admin
+  // against localhost and runs the in-process DemoSeedService (compiled into
+  // dist/, so no scripts/ folder is required on the host). The same routine is
+  // also exposed at POST /api/v1/admin/seed-demo for an ADMIN to trigger live
+  // from their session. Unset the flag once seeded (re-running is harmless).
   if (['1', 'true', 'yes'].includes(String(process.env.SEED_DEMO_TENANT ?? '').toLowerCase())) {
     const seed = config.get<{ email: string; password: string | null }>('seedAdmin');
-    const script = join(process.cwd(), 'scripts', 'seed-demo.mjs');
     if (!seed?.password) {
       // eslint-disable-next-line no-console
       console.warn('[demo-seed] SEED_DEMO_TENANT set but no SEED_ADMIN_PASSWORD — skipping.');
-    } else if (!existsSync(script)) {
-      // eslint-disable-next-line no-console
-      console.warn(`[demo-seed] SEED_DEMO_TENANT set but ${script} not found — skipping.`);
     } else {
+      const base = `http://127.0.0.1:${port}`;
       // eslint-disable-next-line no-console
       console.log('[demo-seed] provisioning Meridian demo tenant + read-only judge account…');
-      const child = spawn(process.execPath, [script], {
-        env: {
-          ...process.env,
-          SENTRAI_URL: `http://127.0.0.1:${port}`,
-          SENTRAI_ADMIN_EMAIL: seed.email,
-          SENTRAI_ADMIN_PASSWORD: seed.password,
-        },
-        stdio: 'inherit',
-      });
-      // eslint-disable-next-line no-console
-      child.on('exit', (code) => console.log(`[demo-seed] finished (exit ${code}).`));
-      // eslint-disable-next-line no-console
-      child.on('error', (e) => console.warn(`[demo-seed] failed to start: ${String(e)}`));
+      void (async () => {
+        try {
+          const res = await fetch(`${base}/api/v1/auth/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: seed.email, password: seed.password }),
+          });
+          if (!res.ok) throw new Error(`admin login → ${res.status}`);
+          const token = (await res.json()).access_token as string;
+          const out = await app.get(DemoSeedService).seed(token, base);
+          // eslint-disable-next-line no-console
+          console.log(
+            out.ok
+              ? `[demo-seed] done — ${out.models} models; judge ${out.credentials.judge.email} (read-only).`
+              : `[demo-seed] FAILED: ${out.error}`,
+          );
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn(`[demo-seed] boot seed failed: ${String(e)}`);
+        }
+      })();
     }
   }
 }

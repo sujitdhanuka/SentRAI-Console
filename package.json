@@ -1,6 +1,6 @@
 {
   "name": "sentrai-console-node",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "SentrAI Compliance Console — NestJS port of the RBI SentrAI Framework compliance backend",
   "author": "",
   "private": true,

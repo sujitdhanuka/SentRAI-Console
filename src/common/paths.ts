@@ -26,6 +26,18 @@ export const HELP_MD = join(DOCS_DIR, 'HELP.md');
 export const DEMO_MP4 = join(PUBLIC_DIR, 'media', 'sentrai-demo.mp4');
 
 /**
+ * The "Meridian Finance" demo codebase, zipped and uploaded by the in-process
+ * demo seeder (POST /api/v1/admin/seed-demo and the SEED_DEMO_TENANT boot
+ * toggle) to drive discovery. Kept under public/ — which is always deployed —
+ * with the repo's scripts/demo/repo as a fallback for full checkouts, so the
+ * seeder works even where only dist/ + public/ ship to the host.
+ */
+export const DEMO_REPO_CANDIDATES = [
+  join(PUBLIC_DIR, 'demo-repo'),
+  join(process.cwd(), 'scripts', 'demo', 'repo'),
+];
+
+/**
  * The standalone CI gate runner, served publicly at /api/v1/ci/gate.mjs so any
  * pipeline (incl. private repos that can't reference a cross-repo Action) can
  * `curl … | node` it without vendoring a copy. Read from public/ (which is

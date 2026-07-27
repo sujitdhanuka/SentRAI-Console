@@ -25,6 +25,12 @@
  *         (VIEWER) account on the host, and a global ViewerReadOnlyGuard that
  *         makes the VIEWER tier read-only across every controller (closing the
  *         gap where projects/inventory/compliance had no @Roles guard).
+ * 1.2.4 — Make demo provisioning host-independent & observable: the seed logic
+ *         is now the in-process DemoSeedService (compiled into dist/, demo repo
+ *         under public/), exposed at POST /api/v1/admin/seed-demo (ADMIN-only)
+ *         so an operator triggers it live from their session — no scripts/
+ *         folder, no shell, no password. The SEED_DEMO_TENANT boot toggle uses
+ *         the same service instead of spawning a script.
  */
-export const APP_VERSION = '1.2.3';
-export const BUILD_TAG = '1.2.3';
+export const APP_VERSION = '1.2.4';
+export const BUILD_TAG = '1.2.4';

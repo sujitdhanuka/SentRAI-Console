@@ -17,7 +17,11 @@
  * WITHOUT the flag to layer governance + drift + incidents onto the models the
  * live import created (it auto-skips discovery once models exist).
  *
- * Requires the `zip` CLI (used to package scripts/demo/repo for upload).
+ * Packages scripts/demo/repo for upload with the bundled `adm-zip` — no
+ * external tooling required. NOTE: the app also ships an in-process twin of
+ * this flow (src/admin/demo-seed.service.ts), reachable at
+ * POST /api/v1/admin/seed-demo (ADMIN) and via the SEED_DEMO_TENANT boot
+ * toggle, which needs no checkout of scripts/ on the host.
  */
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

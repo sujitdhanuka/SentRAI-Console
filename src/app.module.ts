@@ -32,6 +32,7 @@ import { ControlModule } from './control/control.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { GrievancesModule } from './grievances/grievances.module';
 import { CardsModule } from './cards/cards.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { CardsModule } from './cards/cards.module';
     TelemetryModule,
     GrievancesModule,
     CardsModule,
+    AdminModule,
     // Mirrors FastAPI's StaticFiles mounts: /static -> web/static, /images -> docs/images
     ServeStaticModule.forRoot(
       { rootPath: STATIC_DIR, serveRoot: '/static' },

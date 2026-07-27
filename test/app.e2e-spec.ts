@@ -187,6 +187,10 @@ describe('SentrAI Console (e2e)', () => {
     const after = await request(http).get(`/api/v1/projects/${projectId}`)
       .set('Authorization', `Bearer ${admin}`).expect(200);
     expect(after.body.description).toBe('read-only target');
+
+    // The demo-provisioning endpoint is ADMIN-only (guard rejects before it runs).
+    await request(http).post('/api/v1/admin/seed-demo').expect(401);
+    await request(http).post('/api/v1/admin/seed-demo').set('Authorization', `Bearer ${viewer}`).expect(403);
   });
 
   it('SECURITY: public registration cannot self-assign a privileged role', async () => {
