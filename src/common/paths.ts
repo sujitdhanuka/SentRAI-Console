@@ -22,6 +22,9 @@ export const LANDING_HTML = join(PUBLIC_DIR, 'landing.html');
 export const WORKSPACES_DIR = process.env.WORKSPACES_DIR?.trim() || join(process.cwd(), 'workspaces');
 export const HELP_MD = join(DOCS_DIR, 'HELP.md');
 
+/** The public 2-minute product walkthrough, served at /demo (page) + /demo.mp4. */
+export const DEMO_MP4 = join(PUBLIC_DIR, 'media', 'sentrai-demo.mp4');
+
 /**
  * The standalone CI gate runner, served publicly at /api/v1/ci/gate.mjs so any
  * pipeline (incl. private repos that can't reference a cross-repo Action) can
