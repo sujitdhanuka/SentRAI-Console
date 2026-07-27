@@ -71,7 +71,8 @@ The **executive, portfolio-wide** readiness view — the board-level answer. It 
 - **Shift-Left Pre-Deployment Gate** — live signal from the CI ledger: Gate Readiness %, Active Blocked Gates, Shadow AI Assets, Gate Events.
 - **Framework Readiness** cards — RBI FREE-AI (7 Sutras), NIST AI RMF, EU AI Act, ISO/IEC 42001 — each with a pass rate and a plain-English readiness line.
 - **Most Common Blocking Gaps** — the top control gaps across the portfolio, in plain language (e.g. *"2 models lack a named accountability owner"*).
-- **⬇ Readiness PDF** — export a board-ready readiness report.
+- **⬇ Readiness PDF** — a concise one-page portfolio-readiness snapshot (framework readiness, risk tiers, top gaps).
+- **⬇ Board Report** — the full board pack: cover, executive summary with the AI-drafted narrative, regulatory framework readiness, **Controls In Force** (shift-left CI gate, runtime tool-authorization enforcement, and audit-ledger integrity), **Incidents & Consumer Redress**, and priority remediation. Every figure is assembled live from the rollup plus the incident, grievance, gate, runtime-telemetry and hash-chained-audit records — a single document a risk committee reads in one sitting.
 
 ### 4. CI Gate Ledger
 *Visible to: ADMIN, CISO, REVIEWER, APPROVER.*
@@ -83,7 +84,8 @@ The immutable, append-only record of **every CI/CD pre-deployment gate decision*
 **Controls:** verdict filter (All / Failed / Passed) and **↻ Refresh**.
 
 **Audit →** opens the detail modal:
-- **Blocking Violations & Flagged Code** — each violation shows the flagged file, the missing controls, and an inline **code viewer** highlighting the exact AST-flagged lines (for example a disguised `from transformers import Pipeline as rogue_ai`).
+- **Blocking Violations & Flagged Code** — each violation shows the flagged file, the missing controls, and an inline **code viewer** highlighting the exact AST-flagged lines (for example a disguised `from transformers import Pipeline as rogue_ai`). **Tool-authorization violations are line-accurate**: an agent that calls an unauthorized tool (say `initiate_refund` / a payments capability) shows the exact line the tool is invoked on, and that line drives the SARIF annotation too.
+- **View SARIF / Download .sarif** — reproduce the exact SARIF report the pipeline uploaded to the GitHub/GitLab Security tab, rebuilt from the recorded gate event: rule id, `error` level, message, and the offending file + line. Read it inline or download it — the auditor never has to leave the console to see what the pipeline saw.
 - **Grant Auditing Sign-Off Override** *(ADMIN / CISO / APPROVER only)* — record a justification to sign off a failed gate. This is **additive**: the original `FAIL` is preserved on the immutable record; the gate then shows as `OVERRIDDEN` with your identity, timestamp, and reason.
 
 This ledger is fed by the CI integration — see **CI/CD integration** below.
@@ -93,9 +95,13 @@ This ledger is fed by the CI integration — see **CI/CD integration** below.
 
 The register of AI/ML/LLM models in the active project — the "AI inventory" regulators expect you to maintain.
 
+**Asset-kind filter.** The header chips — **All · LLM · ML · Agents · MCP** — narrow the compliance matrix (and the KPI band, gaps queue and calendar with it) to one kind of asset, so in a mixed estate you can look at just the tool-calling agents or just the MCP servers.
+
+**Discovery review — detection evidence.** When a scan finds AI components, the review modal lists each candidate; expanding a row shows the **detection evidence** behind it — every static/AST signal with its line number and the matched code (e.g. `L8  LLM_API_CALL  openai.chat.completions.create(`), plus any embedded prompts or hardcoded secrets. This is the "how do you know it's an LLM?" answer, in source.
+
 **+ Register Model** captures: Model Name; **Model Type** (Machine Learning, Deep Learning, NLP, Generative AI, Rules-Based, Hybrid); Functional Area (e.g. `credit_underwriting`, `fraud_detection`); Owner Team; Use Case Description; Developed By; Board Policy Reference; Target Customer Segments; Human Oversight Required; Autonomous Scope; and **Sutras Declared** (the seven principle checkboxes).
 
-Each model shows its type, **risk level**, **lifecycle stage**, and a **compliance check** across the frameworks. Close gaps by editing the model's governance fields; lifecycle promotion is **gated on governance completeness** (a model can't advance until its required controls are satisfied).
+Each model shows its type, **risk level**, **lifecycle stage**, and a **compliance check** across the frameworks. Close gaps by editing the model's governance fields; lifecycle promotion is **gated on governance completeness** (a model can't advance until its required controls are satisfied). The *Close Governance Gaps* drawer also shows the model's **board-approval status inline** — the latest review-board decision, its target stage, who requested it and who decided it — so the sign-off lives with the model, not only on the Alignment page.
 
 **🔄 Re-scan Models** re-evaluates every model against the current SentRAI logic and re-reads the codebase for models linked to a source file — updating risk levels where they changed. **Your governance edits (owner, policy, sutras, lifecycle) are preserved.**
 
@@ -124,7 +130,7 @@ Formal, three-dimensional audits plus the platform's activity log.
 - **Audit History** — past audits per model.
 - **Test Decision Explainability** — record and review per-decision explainability evidence (SHAP/LIME-style), for the "understandable by design" requirement.
 
-Separately, **every mutating action** in the platform is written to an immutable, PII-masked audit-event log.
+Separately, **every mutating action** in the platform is written to an immutable, PII-masked audit-event log — and that log is **tamper-evident**: each event records a SHA-256 over its own content plus the previous event's hash, chain-linked from a genesis marker. The activity log shows each event's **Hash** column; expanding an event reveals its full `sha256` and `prev_hash`. **Verify chain** walks the whole chain end to end, recomputing every hash — an edited, deleted, or re-ordered record breaks every link after it, and the verdict names where. "Append-only" stops being a promise you take on trust and becomes a property you can check.
 
 ### 8. Incidents
 *Visible to: everyone, once a project is active.*
@@ -133,6 +139,7 @@ Report and track AI incidents, with sectoral risk intelligence.
 
 - **Report AI Incident** — choose a model, an incident type (Bias / Discrimination, Model Drift, Data Privacy Breach, Explainability Failure, Adversarial Attack, Unintended Autonomous Action), and a severity. Severity sets a reporting deadline: **P1 Critical 6h**, **P2 High 24h**, **P3 Medium 72h**, **P4 Low 7d**.
 - The **sectoral risk** dashboard aggregates by category and severity, and flags overdue reports and active circuit breakers.
+- Reporting an incident and resolving it are both written to the affected model's **immutable ledger** (`INCIDENT_REPORTED` / `INCIDENT_RESOLVED`), so an incident and its resolution appear in the model's **cross-ledger timeline** alongside its approval, CI gates, deployment and runtime — the full lifecycle in one column.
 
 ### 9. Lineage Graph
 *Visible to: everyone, once a project is active.*
