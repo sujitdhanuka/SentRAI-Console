@@ -37,12 +37,18 @@ export class AppController {
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  /** Serves the public marketing landing page (product, pricing, responsible-AI story). */
+  /** Serves the public marketing landing page (product, pricing, responsible-AI story).
+   *  NOTE: must be `@Get()`, not `@Get('/')` — under Nest 11 / Express 5 the
+   *  explicit '/' path no longer matches the root and 404s. */
   @Public()
-  @Get('/')
+  @Get()
   @ApiExcludeEndpoint()
   async landing(@Res() res: Response): Promise<void> {
-    res.sendFile(LANDING_HTML);
+    // Read-and-send rather than res.sendFile: under Express 5 the bundled
+    // `send` throws NotFound on an absolute path, and the /console route
+    // already proves readFile+send is reliable here.
+    const html = await readFile(LANDING_HTML, 'utf-8');
+    res.type('html').send(html);
   }
 
   /** Serves the CLASSIC console UI — a single-page dashboard with no build step.

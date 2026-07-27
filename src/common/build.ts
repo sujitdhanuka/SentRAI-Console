@@ -13,6 +13,9 @@
  *         SARIF + in-console viewer, hash-chained audit ledger, incident
  *         ledger events, public grievance form, board governance report,
  *         Google Analytics.
+ * 1.2.1 — Security: migrate to NestJS 11 (+ Express 5), clearing the last
+ *         Hostinger-flagged CVE (@nestjs/core CVE-2026-35515). Landing route
+ *         adapted to Express 5 (readFile+send; @Get() root).
  */
-export const APP_VERSION = '1.2.0';
-export const BUILD_TAG = '1.2.0';
+export const APP_VERSION = '1.2.1';
+export const BUILD_TAG = '1.2.1';
