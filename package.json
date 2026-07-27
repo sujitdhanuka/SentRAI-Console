@@ -1,6 +1,6 @@
 {
   "name": "sentrai-console-node",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "SentrAI Compliance Console — NestJS port of the RBI SentrAI Framework compliance backend",
   "author": "",
   "private": true,
@@ -84,10 +84,12 @@
     "uuid": "$uuid",
     "qs": "^6.15.2",
     "lodash": "^4.18.0",
+    "js-yaml@^5": "^5.2.2",
     "js-yaml@^4": "^4.3.0",
     "js-yaml@^3": "^4.3.0",
     "picomatch@^4": "^4.0.4",
     "glob@^10": "^11.1.0",
+    "minimatch@^3": "^10.0.1",
     "typeorm": {
       "glob": "^11.1.0"
     },

@@ -16,6 +16,10 @@
  * 1.2.1 — Security: migrate to NestJS 11 (+ Express 5), clearing the last
  *         Hostinger-flagged CVE (@nestjs/core CVE-2026-35515). Landing route
  *         adapted to Express 5 (readFile+send; @Get() root).
+ * 1.2.2 — Security: purge the last two lockfile advisories —
+ *         brace-expansion@1.1.16 (dev-only, via minimatch@3) by overriding
+ *         minimatch→^10; js-yaml@5.2.1 (via @nestjs/swagger) by overriding
+ *         js-yaml@^5→^5.2.2. Lockfile now reports 0 vulnerabilities.
  */
-export const APP_VERSION = '1.2.1';
-export const BUILD_TAG = '1.2.1';
+export const APP_VERSION = '1.2.2';
+export const BUILD_TAG = '1.2.2';
