@@ -19,11 +19,9 @@
  *
  * Requires the `zip` CLI (used to package scripts/demo/repo for upload).
  */
-import { execSync } from 'node:child_process';
-import { readFileSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import AdmZip from 'adm-zip';
 
 const BASE = (process.env.SENTRAI_URL ?? 'http://localhost:8002').replace(/\/$/, '');
 const ADMIN_EMAIL = process.env.SENTRAI_ADMIN_EMAIL ?? 'admin@sentrai.local';
@@ -112,11 +110,13 @@ async function main() {
   step('Codebase upload + scan + import');
   let models = await api(`/inventory/models?project_id=${projectId}`, { token: ciso });
   if (models.length === 0) {
-    const tmp = mkdtempSync(join(tmpdir(), 'meridian-'));
-    const zipPath = join(tmp, 'repo.zip');
-    execSync(`cd ${JSON.stringify(join(here, 'demo', 'repo'))} && zip -qr ${JSON.stringify(zipPath)} .`);
+    // Package the demo repo with adm-zip (bundled) rather than the `zip` CLI,
+    // so this runs on any host (incl. the server itself on boot) with no
+    // external tooling.
+    const zip = new AdmZip();
+    zip.addLocalFolder(join(here, 'demo', 'repo'));
     const form = new FormData();
-    form.append('file', new Blob([readFileSync(zipPath)]), 'meridian.zip');
+    form.append('file', new Blob([zip.toBuffer()]), 'meridian.zip');
     await api(`/projects/${projectId}/codebase`, { method: 'POST', token: ciso, raw: form });
     log('codebase uploaded');
 

@@ -20,6 +20,11 @@
  *         brace-expansion@1.1.16 (dev-only, via minimatch@3) by overriding
  *         minimatch→^10; js-yaml@5.2.1 (via @nestjs/swagger) by overriding
  *         js-yaml@^5→^5.2.2. Lockfile now reports 0 vulnerabilities.
+ * 1.2.3 — Read-only evaluation access: a SEED_DEMO_TENANT boot toggle that
+ *         self-provisions the Meridian demo tenant + a read-only "judge"
+ *         (VIEWER) account on the host, and a global ViewerReadOnlyGuard that
+ *         makes the VIEWER tier read-only across every controller (closing the
+ *         gap where projects/inventory/compliance had no @Roles guard).
  */
-export const APP_VERSION = '1.2.2';
-export const BUILD_TAG = '1.2.2';
+export const APP_VERSION = '1.2.3';
+export const BUILD_TAG = '1.2.3';

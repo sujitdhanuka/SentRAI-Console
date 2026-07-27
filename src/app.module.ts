@@ -12,6 +12,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { ViewerReadOnlyGuard } from './common/guards/viewer-readonly.guard';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { UsersModule } from './users/users.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -77,10 +78,12 @@ import { CardsModule } from './cards/cards.module';
   ],
   controllers: [AppController],
   providers: [
-    // Rate limit first, then authenticate, then check roles.
+    // Rate limit first, then authenticate, then check roles, then enforce that
+    // the VIEWER tier is read-only across every controller.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: ViewerReadOnlyGuard },
   ],
 })
 export class AppModule {}

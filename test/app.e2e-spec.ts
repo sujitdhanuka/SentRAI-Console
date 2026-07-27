@@ -155,6 +155,40 @@ describe('SentrAI Console (e2e)', () => {
     await request(http).get('/api/v1/users').set('Authorization', `Bearer ${token}`).expect(403);
   });
 
+  it('SECURITY: the VIEWER tier is read-only across the API', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+
+    // A plain viewer — the role every public self-registration collapses to.
+    await request(http).post('/api/v1/auth/register')
+      .send({ email: 'readonly@x.test', full_name: 'RO', password: 'pw12345678', role: 'VIEWER' })
+      .expect(201);
+    const viewer = await login('readonly@x.test', 'pw12345678');
+
+    // Admin seeds a project for the viewer to look at.
+    const project = await request(http).post('/api/v1/projects')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'RO Demo', description: 'read-only target' })
+      .expect(201);
+    const projectId = project.body.project_id;
+
+    // Reads succeed …
+    await request(http).get('/api/v1/projects').set('Authorization', `Bearer ${viewer}`).expect(200);
+    await request(http).get(`/api/v1/projects/${projectId}`).set('Authorization', `Bearer ${viewer}`).expect(200);
+
+    // … but every mutation is refused, even on controllers that carry no @Roles
+    // guard (projects/inventory/compliance only require authentication).
+    await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${viewer}`)
+      .send({ name: 'nope', description: 'x' }).expect(403);
+    await request(http).patch(`/api/v1/projects/${projectId}`).set('Authorization', `Bearer ${viewer}`)
+      .send({ description: 'edited by viewer' }).expect(403);
+    await request(http).delete(`/api/v1/projects/${projectId}`).set('Authorization', `Bearer ${viewer}`).expect(403);
+
+    // The seeded project is untouched.
+    const after = await request(http).get(`/api/v1/projects/${projectId}`)
+      .set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(after.body.description).toBe('read-only target');
+  });
+
   it('SECURITY: public registration cannot self-assign a privileged role', async () => {
     // Attacker attempts to register directly as ADMIN.
     const reg = await request(http)
