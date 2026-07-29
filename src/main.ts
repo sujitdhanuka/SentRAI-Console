@@ -81,7 +81,7 @@ async function bootstrap() {
         'RBI SentrAI Framework Compliance Backend. Implements Recommendations 16, 21–26: ' +
           'AI Inventory Ledger, Drift Monitoring, Audit Framework, and Incident Reporting.',
       )
-      .setVersion('1.0.0')
+      .setVersion('1.2.2')
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);

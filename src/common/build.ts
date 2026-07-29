@@ -37,6 +37,11 @@
  *         derived from the triggering request (x-forwarded-proto/host), so it
  *         round-trips back in through the proxy. DEMO_SEED_BASE_URL / PUBLIC_URL
  *         override it (and enable the boot toggle on such hosts).
+ *
+ * NOTE: the displayed version is intentionally PINNED to 1.2.2 (by request) so
+ * the dashboard, /health and the award evidence pack all report the same
+ * number. The 1.2.3–1.2.5 changes above ARE included in this build; only the
+ * label is held at 1.2.2. Do not bump until instructed.
  */
-export const APP_VERSION = '1.2.5';
-export const BUILD_TAG = '1.2.5';
+export const APP_VERSION = '1.2.2';
+export const BUILD_TAG = '1.2.2';
