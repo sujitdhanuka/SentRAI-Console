@@ -40,6 +40,8 @@ export interface AIComponent {
   /** Files this record covers; more than one means duplicate hits were merged. */
   sourceRefs?: string[];
   mergeHistory?: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
+  /** Every file the model appears in, with line numbers (empty when not yet known). */
+  sourceLocations?: Array<{ file: string; lines: number[] }>;
   /** Exact sutra enum values when known (HTTP mode); count-only in the mock. */
   sutras?: string[];
   frameworks: {

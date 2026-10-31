@@ -23,6 +23,7 @@ import { expandAndResolve } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
 import { candidateAsDict, candidateFromDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
 import { TreeSitterService } from './tree-sitter-parser';
+import { locationOfCandidate, sourceLocationsOf, upsertLocation } from './source-locations';
 import { GenerationQueueService } from '../inventory/generation-queue.service';
 import { Neo4jClient } from './neo4j-client';
 import { SupervisorCoordinator } from './agents/supervisor';
@@ -248,6 +249,17 @@ export class DiscoveryService {
     const known = new Set(orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []));
     const isNewFile = !known.has(cand.filePath);
 
+    // Record (or refresh) the line numbers for this file. Seeded from what the
+    // record already lists, so files imported before line tracking keep their place.
+    const locations = upsertLocation(sourceLocationsOf(orm), locationOfCandidate(cand));
+    const locationsChanged = JSON.stringify(locations) !== JSON.stringify(orm.sourceLocations ?? null);
+    orm.sourceLocations = locations;
+
+    if (!isNewFile && locationsChanged) {
+      orm.updatedAt = new Date();
+      await this.models.save(orm);
+    }
+
     if (isNewFile) {
       known.add(cand.filePath);
       orm.sourceRefs = [...known];
@@ -435,6 +447,7 @@ export class DiscoveryService {
         sourceRef: entry.sourceRef,
         // Seeded with the discovering file; later hits for the same model append here.
         sourceRefs: entry.sourceRef ? [entry.sourceRef] : null,
+        sourceLocations: [locationOfCandidate(cand)],
         securityFindings: cand.secrets.length ? cand.secrets : null,
         // Unique signal categories — evidence for AI summaries / risk rationale.
         detectionSignals: [...new Set(cand.signals.map((s) => s.category))],

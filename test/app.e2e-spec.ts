@@ -1952,6 +1952,13 @@ describe('SentrAI Console (e2e)', () => {
     expect(model.security_findings.length).toBeGreaterThan(0);
     expect(model.merge_history).toHaveLength(1);
 
+    // Source: every file the model appears in, each with the lines where the
+    // scanner found it (the openai call; the leaked key at line 3 in jobs/).
+    const locs = new Map<string, number[]>(model.source_locations.map((l: any) => [l.file, l.lines]));
+    expect([...locs.keys()].sort()).toEqual(['jobs/fraud_scorer.py', 'svc/fraud_scorer.py']);
+    for (const lines of locs.values()) expect(lines.length).toBeGreaterThan(0);
+    expect(locs.get('jobs/fraud_scorer.py')).toContain(3);
+
     // The merge is on the immutable ledger, naming the file that was folded in.
     const audit = await request(http).get(`/api/v1/inventory/models/${modelId}/ledger`)
       .set('Authorization', `Bearer ${admin}`).expect(200);

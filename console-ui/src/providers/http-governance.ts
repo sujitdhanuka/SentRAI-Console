@@ -52,6 +52,7 @@ interface MatrixRow {
   gap_remediation: string | null; gap_remediation_source: string | null;
   source_refs: string[];
   merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
+  source_locations?: Array<{ file: string; lines: number[] }>;
   frameworks: Record<'rbi' | 'nist' | 'eu' | 'iso', { status: CheckStatus }>;
 }
 
@@ -127,6 +128,7 @@ export class HttpGovernanceProvider implements GovernanceProvider {
         gapRemediationSource: r.gap_remediation_source,
         sourceRefs: r.source_refs ?? [],
         mergeHistory: r.merge_history ?? [],
+        sourceLocations: r.source_locations ?? (r.source_refs ?? []).map((file) => ({ file, lines: [] })),
         frameworks: {
           rbi: { status: r.frameworks.rbi.status, evidenceUrl: evidence(r.frameworks.rbi.status) },
           nist: { status: r.frameworks.nist.status, evidenceUrl: evidence(r.frameworks.nist.status) },
