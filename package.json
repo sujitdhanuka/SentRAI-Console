@@ -35,15 +35,15 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^10.0.2",
     "@types/js-yaml": "^4.0.9",
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.8.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^17.4.2",
     "helmet": "^8.3.0",
-    "js-yaml": "^5.2.1",
-    "mysql2": "^3.12.0",
+    "js-yaml": "^5.5.0",
+    "mysql2": "^3.24.6",
     "neo4j-driver": "^6.2.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -51,7 +51,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "tree-sitter-wasms": "^0.1.13",
-    "typeorm": "^0.3.20",
+    "typeorm": "^0.3.31",
     "uuid": "^11.1.1",
     "web-tree-sitter": "^0.24.4"
   },
@@ -79,18 +79,35 @@
     "typescript": "^5.7.3"
   },
   "overrides": {
-    "multer": "^2.2.0",
+    "multer": "^2.5.0",
     "uuid": "$uuid",
-    "qs": "^6.15.2",
+    "qs": "^6.17.1",
     "lodash": "^4.18.0",
-    "js-yaml@^4": "^4.3.0",
+    "js-yaml@^3": "^3.15.2",
+    "js-yaml@^4": "^4.3.2",
     "picomatch@^4": "^4.0.4",
-    "glob@^10": "^10.5.0",
     "tmp": "^0.2.6",
-    "body-parser": "^1.20.6",
+    "body-parser@^1": "^1.20.9",
+    "proxy-addr": "^2.0.8",
+    "handlebars": "^4.7.10",
+    "fast-uri@^3": "^3.1.9",
+    "file-type@^20": "^21.3.2",
+    "brace-expansion@^1": "^1.1.21",
+    "brace-expansion@^2": "^2.1.7",
+    "brace-expansion@^5": "^5.0.12",
+    "browserslist": "^4.29.5",
+    "baseline-browser-mapping": "^2.11.34",
     "ajv": "^8.18.0",
     "webpack": "^5.104.1",
-    "path-to-regexp@^0.2": "^1.9.0"
+    "path-to-regexp@^0.2": "^1.9.0",
+    "typeorm": {
+      ".": "$typeorm",
+      "glob": "^14.0.3"
+    },
+    "@nestjs/cli": {
+      ".": "$@nestjs/cli",
+      "glob": "^14.0.3"
+    }
   },
   "jest": {
     "moduleFileExtensions": [
