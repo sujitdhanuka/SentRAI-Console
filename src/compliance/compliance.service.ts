@@ -17,6 +17,7 @@ import { Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
 import { SummarizerService } from '../summarizer/summarizer.service';
 import { FRAMEWORK_NAMES, frameworkReadiness, gapStatement } from './control-plain-english';
+import { sourceLocationsOf } from '../discovery/source-locations';
 
 const FRAMEWORK_IDS = ['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001'] as const;
 const HIGH_RISK = new Set(['HIGH', 'CRITICAL', 'PROHIBITED']);
@@ -146,6 +147,7 @@ export class ComplianceService {
         // Every file this record covers — more than one means hits were merged.
         source_refs: m.sourceRefs ?? (m.sourceRef ? [m.sourceRef] : []),
         merge_history: m.mergeHistory ?? [],
+        source_locations: sourceLocationsOf(m),
         frameworks,
       });
     }

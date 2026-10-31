@@ -155,6 +155,11 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   sourceRefs!: string[] | null;
 
+  /** Every file this model was discovered in, with the line numbers of the
+   *  evidence found there (signals, tool calls, secrets). Refreshed on scan. */
+  @Column('simple-json', { nullable: true })
+  sourceLocations!: Array<{ file: string; lines: number[] }> | null;
+
   /** Audit trail of merges: which file was folded in, when, and by what match. */
   @Column('simple-json', { nullable: true })
   mergeHistory!: Array<{ source_ref: string; merged_at: string; matched_on: string }> | null;

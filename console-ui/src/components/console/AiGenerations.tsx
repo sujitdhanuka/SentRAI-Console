@@ -1,4 +1,4 @@
-import { FileStack, PenLine } from 'lucide-react';
+import { PenLine } from 'lucide-react';
 import { useState } from 'react';
 
 import { api } from '../../api/client';
@@ -94,8 +94,6 @@ export function AiGenerations({ component, onChanged }: { component: AIComponent
     </div>
   );
 
-  const merged = (component.sourceRefs?.length ?? 0) > 1;
-
   return (
     <div className="border-t border-border">
       <div className="flex items-center gap-1.5 bg-bg-elevated px-3 py-1.5">
@@ -109,25 +107,6 @@ export function AiGenerations({ component, onChanged }: { component: AIComponent
           {busy === 'all' ? 'Queued…' : 'Regenerate all'}
         </button>
       </div>
-
-      {merged && (
-        <div className="flex flex-wrap items-start gap-1.5 border-t border-border bg-surface px-3 py-1.5">
-          <FileStack size={11} className="mt-0.5 shrink-0 text-accent" />
-          <div>
-            <div className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">
-              Merged from {component.sourceRefs!.length} files
-            </div>
-            <ul className="mt-0.5">
-              {component.sourceRefs!.map((f) => (
-                <li key={f} className="break-all font-mono text-[9.5px] text-text-secondary">{f}</li>
-              ))}
-            </ul>
-            <p className="mt-0.5 text-[9px] text-text-tertiary">
-              The scan found this model in several places; they are governed as one record.
-            </p>
-          </div>
-        </div>
-      )}
 
       <Block kind="summary" title="Use-case summary" body={component.description} source={component.descriptionSource} />
       <Block kind="risk_rationale" title="Risk rationale" body={component.riskRationale} source={component.riskRationaleSource} />

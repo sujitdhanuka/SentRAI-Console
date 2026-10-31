@@ -145,6 +145,8 @@ export interface ModelResponse {
   gap_remediation_model: string | null;
   source_refs: string[];
   merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
+  /** Every file the model appears in, with line numbers (empty when not yet known). */
+  source_locations: Array<{ file: string; lines: number[] }>;
   /** Static tool authorization (Pillar 2 — Control). */
   detected_tools: string[];
   permitted_tools: string[];

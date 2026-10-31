@@ -63,6 +63,7 @@ import {
   ModelResponse,
   RescanSummary,
 } from './inventory.dto';
+import { sourceLocationsOf } from '../discovery/source-locations';
 
 function parseDate(s?: string | null): Date | null {
   return s ? new Date(s) : null;
@@ -196,6 +197,8 @@ export class InventoryService implements OnModuleInit {
       // Every file this record covers, plus how the extra ones got here.
       source_refs: orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []),
       merge_history: orm.mergeHistory ?? [],
+      // The same files with the line numbers where the model appears in each.
+      source_locations: sourceLocationsOf(orm),
       // Static tool authorization (Pillar 2 — Control).
       detected_tools: orm.detectedTools ?? [],
       permitted_tools: orm.permittedTools ?? [],
