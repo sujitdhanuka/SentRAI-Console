@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AIModelEntity, DeploymentGateEventEntity, ProjectEntity } from '../database/entities';
 import { NotifierService } from '../common/notifier.service';
 import { DiscoveryModule } from '../discovery/discovery.module';
+import { IncidentsModule } from '../incidents/incidents.module';
 import { CiController } from './ci.controller';
 import { CiEvaluationService } from './ci.service';
 import { CiTokenService } from './ci-token.service';
@@ -15,6 +16,7 @@ import { CiServiceTokenGuard } from './ci-token.guard';
   imports: [
     TypeOrmModule.forFeature([AIModelEntity, DeploymentGateEventEntity, ProjectEntity]),
     DiscoveryModule, // provides the shared TreeSitterService
+    IncidentsModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

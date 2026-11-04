@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -21,6 +21,7 @@ import { toolLabel } from '../discovery/tool-detector';
 import { modelEntityToEntry } from '../inventory/model.mapper';
 import { hasEvidence } from '../domain/model-inventory';
 import { authorizeTools } from '../domain/tool-authorization';
+import { IncidentsService } from '../incidents/incidents.service';
 import { CiScanDto, CiFileDto } from './ci.dto';
 import { parsePolicy, PolicyContract } from './policy';
 
@@ -28,6 +29,8 @@ const POLICY_PATH = '.sentrai/policy.yaml';
 const JUNK_RE = /(^|\/)(node_modules|\.git|__MACOSX|\.venv|venv)(\/|$)/;
 const MAX_EVIDENCE_PER_GAP = 6;
 const MAX_SNIPPET_CHARS = 240;
+/** Risk tiers in ascending order, with the EU AI Act tiers at their nearest equivalent. */
+const RISK_RANK: Record<string, number> = { MINIMAL: 0, LOW: 1, LIMITED: 2, MEDIUM: 2, HIGH: 3, CRITICAL: 4, PROHIBITED: 5 };
 
 export interface GapEvidence {
   line: number;
@@ -43,7 +46,7 @@ export interface BlockingGap {
   reason: string;
   shadow: boolean;
   /** What kind of violation — governance completeness or tool authorization. */
-  kind?: 'governance' | 'tool_authorization';
+  kind?: 'governance' | 'tool_authorization' | 'risk_escalation';
   /** Detected tools used outside the permitted set (Pillar 2 — Control). */
   unauthorized_tools?: string[];
   /** Exact flagged lines (for the auditor's inline code viewer). */
@@ -60,6 +63,7 @@ export class CiEvaluationService {
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     private readonly treeSitter: TreeSitterService,
     private readonly notifier: NotifierService,
+    private readonly incidents: IncidentsService,
   ) {}
 
   /** Materialize the payload into a throwaway workspace and run the real scanner. */
@@ -161,6 +165,28 @@ export class CiEvaluationService {
         }
       }
 
+      // Risk escalation: only the blocking tiers count, matching the default
+      // policy. Re-triaging the model at the new tier clears this.
+      if (policy.gates.risk_escalation?.enforce && matched) {
+        const registeredRank = RISK_RANK[String(matched.riskLevel).toUpperCase()];
+        if (RISK_RANK[severity] >= RISK_RANK.HIGH && registeredRank !== undefined && RISK_RANK[severity] > registeredRank) {
+          gaps.push({
+            model_name: candidate.suggestedName,
+            severity,
+            file_location: candidate.filePath,
+            missing: ['risk_reassessment'],
+            kind: 'risk_escalation',
+            shadow: false,
+            reason: `Risk escalation: code now scans as ${severity} but the model is registered as ${matched.riskLevel}. Re-assess its risk tier and governance.`,
+            evidence: candidate.signals.slice(0, MAX_EVIDENCE_PER_GAP).map((s) => ({
+              line: s.lineNumber,
+              snippet: (s.snippet ?? '').slice(0, MAX_SNIPPET_CHARS),
+              category: s.category,
+            })),
+          });
+        }
+      }
+
       // Static tool authorization (Pillar 2 — Control): an agent that invokes a
       // tool/capability outside its declared permitted set fails the gate. Only
       // meaningful once a governed model backs the asset (shadow AI is already
@@ -199,6 +225,7 @@ export class CiEvaluationService {
   }
 
   private sarifRuleId(g: BlockingGap): string {
+    if (g.kind === 'risk_escalation') return 'SENTRAI-RISK-ESCALATION';
     return g.kind === 'tool_authorization' ? 'SENTRAI-TOOL-AUTHZ' : `SENTRAI-GATE-${g.severity}`;
   }
 
@@ -207,14 +234,15 @@ export class CiEvaluationService {
     for (const g of gaps) {
       const id = this.sarifRuleId(g);
       if (!ids.has(id)) {
+        const rule = g.kind === 'risk_escalation'
+          ? { name: 'RiskAboveRegisteredTier', text: 'AI model scans above its registered risk tier' }
+          : g.kind === 'tool_authorization'
+            ? { name: 'UnauthorizedToolUse', text: 'AI agent invokes a tool outside its authorized set' }
+            : { name: `Ungoverned${g.severity}RiskModel`, text: `${g.severity}-risk AI model missing required governance` };
         ids.set(id, {
           id,
-          name: g.kind === 'tool_authorization' ? 'UnauthorizedToolUse' : `Ungoverned${g.severity}RiskModel`,
-          shortDescription: {
-            text: g.kind === 'tool_authorization'
-              ? 'AI agent invokes a tool outside its authorized set'
-              : `${g.severity}-risk AI model missing required governance`,
-          },
+          name: rule.name,
+          shortDescription: { text: rule.text },
           defaultConfiguration: { level: 'error' },
           helpUri: 'https://sentraiconsole.com',
         });
@@ -241,6 +269,55 @@ export class CiEvaluationService {
         },
       ],
     };
+  }
+
+  /**
+   * A blocked PR is the control working; a failed gate on the default branch means
+   * the code landed anyway. Raise one incident per model with findings new since
+   * the previous default-branch run. The first run only sets the baseline.
+   * Best-effort: an incident hiccup must not change the gate's verdict.
+   */
+  private async raiseIncidentsForLandedFindings(
+    projectId: string,
+    eventId: string,
+    commitSha: string,
+    gaps: BlockingGap[],
+    registered: AIModelEntity[],
+  ): Promise<void> {
+    try {
+      const previous = await this.gates.findOne({
+        where: { projectId, prNumber: IsNull(), id: Not(eventId) },
+        order: { occurredAt: 'DESC' },
+      });
+      if (!previous) return;
+
+      const key = (g: { model_name: string; kind?: string }) => `${g.model_name}|${g.kind ?? 'governance'}`;
+      const known = new Set((previous.blockingGaps ?? []).map(key));
+      const byModel = new Map<string, BlockingGap[]>();
+      for (const g of gaps) {
+        if (!known.has(key(g))) byModel.set(g.model_name, [...(byModel.get(g.model_name) ?? []), g]);
+      }
+      if (byModel.size === 0) return;
+
+      const project = await this.projects.findOne({ where: { id: projectId } });
+      for (const [modelName, modelGaps] of byModel) {
+        const matched =
+          registered.find((m) => m.sourceRef && modelGaps.some((g) => g.file_location === m.sourceRef)) ??
+          registered.find((m) => m.name.toLowerCase() === modelName.toLowerCase());
+        await this.incidents.raiseFromGate({
+          projectId,
+          projectName: project?.name ?? projectId,
+          model: matched ?? null,
+          modelName,
+          riskLevel: matched?.riskLevel ?? modelGaps[0].severity,
+          reasons: [...new Set(modelGaps.map((g) => `${g.file_location}: ${g.reason}`))],
+          commitSha,
+          gateEventId: eventId,
+        });
+      }
+    } catch (e) {
+      this.logger.error(`failed to raise incidents for gate event ${eventId}: ${String(e)}`);
+    }
   }
 
   async runScanAndEvaluate(projectId: string, actor: string, dto: CiScanDto) {
@@ -276,6 +353,10 @@ export class CiEvaluationService {
         shadow_assets: blockingGaps.filter((g) => g.shadow).length,
         gate_event_id: event.id,
       });
+    }
+
+    if (verdict === 'fail' && dto.default_branch_push) {
+      await this.raiseIncidentsForLandedFindings(projectId, event.id, dto.commit_sha, blockingGaps, registered);
     }
 
     this.logger.log(

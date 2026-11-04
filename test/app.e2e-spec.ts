@@ -1369,6 +1369,47 @@ describe('SentrAI Console (e2e)', () => {
     expect(history.body[1].verdict).toBe('fail');
   });
 
+  it('RISK ESCALATION: CI gate blocks code scanning above the registered risk tier', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const proj = await request(http).post('/api/v1/projects').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Risk Escalation App', description: 'risk escalation test' });
+    const tok = await request(http).post('/api/v1/ci/tokens').set('Authorization', `Bearer ${admin}`)
+      .send({ project_id: proj.body.project_id, label: 'risk-escalation' });
+    const scan = (files: Array<{ path: string; content: string }>) => request(http).post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${tok.body.token}`).send({ commit_sha: 'abc123', files }).expect(200);
+
+    // Registered with an owner and board policy, at a tier below HIGH.
+    const model = await request(http).post('/api/v1/inventory/models').set('Authorization', `Bearer ${admin}`).send({
+      name: 'Retail Scorer',
+      model_type: 'MACHINE_LEARNING',
+      functional_area: 'customer_support',
+      use_case_description: 'Ranks support tickets for the service desk.',
+      human_oversight_required: true,
+      owner_team: 'Risk Analytics',
+      board_policy_ref: 'BOARD-AI-POLICY-2026',
+      source_ref: 'svc/credit/retail_scorer.py',
+      project_id: proj.body.project_id,
+    }).expect(201);
+    expect(model.body.risk_level).not.toBe('HIGH');
+
+    const files = [{
+      path: 'svc/credit/retail_scorer.py',
+      content: 'import openai\n\ndef score(applicant):\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n',
+    }];
+
+    const fail = await scan(files);
+    expect(fail.body.verdict).toBe('fail');
+    const gap = fail.body.blocking_violations.find((g: any) => g.kind === 'risk_escalation');
+    expect(gap.model_name).toBe('Retail Scorer');
+    expect(gap.severity).toBe('HIGH');
+    expect(fail.body.sarif.runs[0].results.map((r: any) => r.ruleId)).toContain('SENTRAI-RISK-ESCALATION');
+
+    // A repository policy can opt out.
+    const policy = 'gates:\n  block_on:\n    - severity: HIGH\n      missing: [registered]\n  risk_escalation:\n    enforce: false\n';
+    const optedOut = await scan([...files, { path: '.sentrai/policy.yaml', content: policy }]);
+    expect(optedOut.body.verdict).toBe('pass');
+  });
+
   it('TOOL AUTHORIZATION: CI gate blocks a tool used outside the permitted set (Pillar 2)', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
 
@@ -2190,5 +2231,50 @@ describe('SentrAI Console (e2e)', () => {
       b.projectId,
     );
     expect(board.incidents.total).toBe(0);
+  });
+
+  it('raises one incident per model when new gate findings land on the default branch', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = { Authorization: `Bearer ${admin}` };
+    const proj = await request(http).post('/api/v1/projects').set(auth).send({ name: 'Landed Findings App', description: 'gate incidents' });
+    const projectId = proj.body.project_id;
+    const tok = await request(http).post('/api/v1/ci/tokens').set(auth).send({ project_id: projectId, label: 'landed' });
+
+    const llm = 'import openai\n\ndef run(x):\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n';
+    const oldFile = { path: 'svc/credit/old_helper.py', content: llm };
+    const newFile = { path: 'svc/fraud/new_helper.py', content: llm };
+    const scan = (body: Record<string, unknown>) => request(http).post('/api/v1/ci/scan')
+      .set('Authorization', `Bearer ${tok.body.token}`).send({ commit_sha: 'abc123', ...body }).expect(200);
+    const incidents = async () => (await request(http).get(`/api/v1/compliance/incident?project_id=${projectId}`).set(auth).expect(200)).body;
+
+    // The first default-branch run only sets the baseline, and repeating it adds nothing.
+    await scan({ default_branch_push: true, files: [oldFile] });
+    await scan({ default_branch_push: true, files: [oldFile] });
+    expect(await incidents()).toEqual([]);
+
+    // A blocked PR is the control working, so a new finding there raises nothing.
+    const pr = await scan({ pr_number: '9', files: [oldFile, newFile] });
+    expect(pr.body.verdict).toBe('fail');
+    expect(await incidents()).toEqual([]);
+
+    // Landing it raises one P3 incident, for the new finding only.
+    await scan({ default_branch_push: true, files: [oldFile, newFile] });
+    const raised = await incidents();
+    expect(raised).toHaveLength(1);
+    expect(raised[0].model_name).toBe('New Helper');
+    expect(raised[0].severity).toBe('P3_MEDIUM');
+    expect(raised[0].description).toContain('svc/fraud/new_helper.py');
+
+    // Later pushes with the same finding don't add a duplicate.
+    await scan({ default_branch_push: true, files: [oldFile, newFile] });
+    expect(await incidents()).toHaveLength(1);
+
+    // It belongs to the project's organization: visible to ADMIN, hidden from others.
+    const org = await request(http).post('/api/v1/organizations').set(auth).send({ name: 'Landed Other Org', description: 'test' }).expect(201);
+    await request(http).post('/api/v1/users').set(auth)
+      .send({ email: 'ciso@landed-other.test', full_name: 'Other', password: 'pw123456', role: 'CISO', organization_id: org.body.organization_id }).expect(201);
+    const other = await login('ciso@landed-other.test', 'pw123456');
+    await request(http).get(`/api/v1/compliance/incident/${raised[0].incident_id}`).set('Authorization', `Bearer ${other}`).expect(404);
+    await request(http).get(`/api/v1/compliance/incident/${raised[0].incident_id}`).set(auth).expect(200);
   });
 });

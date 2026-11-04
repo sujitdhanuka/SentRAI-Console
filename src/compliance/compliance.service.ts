@@ -267,15 +267,20 @@ export class ComplianceService {
     const report = await this.portfolio(user, projectId);
 
     // Which models are in scope for this tenant/project — bound the sub-queries.
-    const mq = this.models.createQueryBuilder('m').select('m.id', 'id').where('m.isActive = 1');
+    const mq = this.models.createQueryBuilder('m').select('m.id', 'id').addSelect('m.projectId', 'projectId').where('m.isActive = 1');
     if (projectId) mq.andWhere('m.projectId = :pid', { pid: projectId });
     if (user.role !== Role.ADMIN && user.tenantId) {
       mq.innerJoin(ProjectEntity, 'p', 'p.id = m.projectId').andWhere('p.tenantId = :tid', { tid: user.tenantId });
     }
-    const modelIds = (await mq.getRawMany<{ id: string }>()).map((r) => r.id);
+    const scoped = await mq.getRawMany<{ id: string; projectId: string | null }>();
+    const modelIds = scoped.map((r) => r.id);
+    const projectIds = new Set(scoped.map((r) => r.projectId));
     const inScope = <T extends { modelId: string }>(rows: T[]) => rows.filter((r) => modelIds.includes(r.modelId));
 
-    const incidents = modelIds.length ? inScope(await this.incidents.find()) : [];
+    // Gate-raised incidents on shadow assets belong to a project rather than a model.
+    const incidents = modelIds.length
+      ? (await this.incidents.find()).filter((i) => modelIds.includes(i.modelId) || (i.projectId && projectIds.has(i.projectId)))
+      : [];
     const bySeverity: Record<string, number> = {};
     let incidentsOpen = 0;
     for (const i of incidents) {

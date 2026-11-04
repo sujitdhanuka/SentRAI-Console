@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsOptional,
   IsString,
   MaxLength,
@@ -32,6 +33,11 @@ export class CiScanDto {
   @IsOptional()
   @IsString()
   pipeline_run_id?: string | null;
+
+  /** This run is a push to the repository's default branch, i.e. the code has landed. */
+  @IsOptional()
+  @IsBoolean()
+  default_branch_push?: boolean;
 
   @IsArray()
   @ArrayNotEmpty()
