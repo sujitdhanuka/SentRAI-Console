@@ -2269,6 +2269,11 @@ describe('SentrAI Console (e2e)', () => {
     await scan({ default_branch_push: true, files: [oldFile, newFile] });
     expect(await incidents()).toHaveLength(1);
 
+    // The same model name landing in a new file is a new finding.
+    await scan({ default_branch_push: true, files: [oldFile, newFile, { path: 'svc/fraud/old_helper.py', content: llm }] });
+    const afterNewFile = await incidents();
+    expect(afterNewFile.map((i: any) => i.model_name).sort()).toEqual(['New Helper', 'Old Helper']);
+
     // It belongs to the project's organization: visible to ADMIN, hidden from others.
     const org = await request(http).post('/api/v1/organizations').set(auth).send({ name: 'Landed Other Org', description: 'test' }).expect(201);
     await request(http).post('/api/v1/users').set(auth)
