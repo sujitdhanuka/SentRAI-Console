@@ -291,7 +291,9 @@ export class CiEvaluationService {
       });
       if (!previous) return;
 
-      const key = (g: { model_name: string; kind?: string }) => `${g.model_name}|${g.kind ?? 'governance'}`;
+      // Per file: the same model appearing in a new file is a new finding.
+      const key = (g: { model_name: string; kind?: string; file_location: string }) =>
+        `${g.model_name}|${g.kind ?? 'governance'}|${g.file_location}`;
       const known = new Set((previous.blockingGaps ?? []).map(key));
       const byModel = new Map<string, BlockingGap[]>();
       for (const g of gaps) {
