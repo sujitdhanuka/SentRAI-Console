@@ -269,7 +269,7 @@ export class ComplianceService {
     // Which models are in scope for this tenant/project — bound the sub-queries.
     const mq = this.models.createQueryBuilder('m').select('m.id', 'id').where('m.isActive = 1');
     if (projectId) mq.andWhere('m.projectId = :pid', { pid: projectId });
-    else if (user.role !== Role.ADMIN && user.tenantId) {
+    if (user.role !== Role.ADMIN && user.tenantId) {
       mq.innerJoin(ProjectEntity, 'p', 'p.id = m.projectId').andWhere('p.tenantId = :tid', { tid: user.tenantId });
     }
     const modelIds = (await mq.getRawMany<{ id: string }>()).map((r) => r.id);

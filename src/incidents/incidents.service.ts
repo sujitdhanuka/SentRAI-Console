@@ -3,8 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AIIncidentEntity, ModelLedgerEventEntity } from '../database/entities';
-import { IncidentSeverity, IncidentStatus } from '../common/enums';
+import { AIIncidentEntity, AIModelEntity, ModelLedgerEventEntity, ProjectEntity } from '../database/entities';
+import { IncidentSeverity, IncidentStatus, Role } from '../common/enums';
+import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { computeReportingDeadline, hoursUntilDeadline, isOverdue } from '../domain/incident';
 import { maskDict } from '../common/dpdp';
 import {
@@ -21,7 +22,41 @@ export class IncidentsService {
   constructor(
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
     @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
+    @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
+    @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
   ) {}
+
+  /** Incidents visible to this user. An incident belongs to the organization of
+   *  its model's project; ADMIN is a global superuser. Incidents whose model no
+   *  longer exists stay ADMIN-only. */
+  private scopedQuery(user: CurrentUser, projectId?: string) {
+    const qb = this.incidents.createQueryBuilder('i')
+      .leftJoin(AIModelEntity, 'm', 'm.id = i.modelId')
+      .leftJoin(ProjectEntity, 'p', 'p.id = m.projectId');
+    if (projectId) qb.andWhere('m.projectId = :pid', { pid: projectId });
+    if (user.role !== Role.ADMIN) {
+      if (user.tenantId) qb.andWhere('p.tenantId = :tid', { tid: user.tenantId });
+      else qb.andWhere('m.id IS NOT NULL AND p.tenantId IS NULL');
+    }
+    return qb;
+  }
+
+  private async ownsModel(user: CurrentUser, model: AIModelEntity): Promise<boolean> {
+    if (user.role === Role.ADMIN) return true;
+    const project = model.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+    return (project?.tenantId ?? null) === (user.tenantId ?? null);
+  }
+
+  /** Load an incident the user may access. Another organization's incident is a
+   *  404, so its existence isn't disclosed. */
+  private async getOrThrow(user: CurrentUser, incidentId: string): Promise<AIIncidentEntity> {
+    const inc = await this.incidents.findOne({ where: { id: incidentId } });
+    if (!inc) throw new NotFoundException('Incident not found');
+    if (user.role === Role.ADMIN) return inc;
+    const model = await this.models.findOne({ where: { id: inc.modelId } });
+    if (!model || !(await this.ownsModel(user, model))) throw new NotFoundException('Incident not found');
+    return inc;
+  }
 
   /** Append an event to a model's immutable ledger (feeds the cross-ledger
    *  timeline). Best-effort: a ledger hiccup must not fail the incident write. */
@@ -35,8 +70,12 @@ export class IncidentsService {
     }
   }
 
-  async list(severity?: IncidentSeverity, statusFilter?: IncidentStatus, limit = 100): Promise<any[]> {
-    const qb = this.incidents.createQueryBuilder('i').orderBy('i.createdAt', 'DESC').take(limit);
+  async list(
+    user: CurrentUser,
+    opts: { severity?: IncidentSeverity; statusFilter?: IncidentStatus; projectId?: string; limit?: number } = {},
+  ): Promise<any[]> {
+    const { severity, statusFilter, projectId, limit = 100 } = opts;
+    const qb = this.scopedQuery(user, projectId).orderBy('i.createdAt', 'DESC').take(limit);
     if (severity) qb.andWhere('i.severity = :s', { s: severity });
     if (statusFilter) qb.andWhere('i.status = :st', { st: statusFilter });
     const rows = await qb.getMany();
@@ -59,7 +98,10 @@ export class IncidentsService {
     }));
   }
 
-  async report(dto: IncidentReportDto): Promise<IncidentResponse> {
+  async report(user: CurrentUser, dto: IncidentReportDto): Promise<IncidentResponse> {
+    const model = await this.models.findOne({ where: { id: dto.model_id } });
+    if (!model || !(await this.ownsModel(user, model))) throw new NotFoundException('Model not found');
+
     const observedAt = new Date(dto.observed_at);
     const deadline = computeReportingDeadline(observedAt, dto.severity);
     const now = new Date();
@@ -127,9 +169,8 @@ export class IncidentsService {
     };
   }
 
-  async updateStatus(incidentId: string, dto: IncidentStatusUpdateDto) {
-    const inc = await this.incidents.findOne({ where: { id: incidentId } });
-    if (!inc) throw new NotFoundException('Incident not found');
+  async updateStatus(user: CurrentUser, incidentId: string, dto: IncidentStatusUpdateDto) {
+    const inc = await this.getOrThrow(user, incidentId);
 
     inc.status = dto.status;
     inc.updatedAt = new Date();
@@ -151,8 +192,8 @@ export class IncidentsService {
     return { incident_id: incidentId, status: dto.status };
   }
 
-  async sectoralRisk(): Promise<SectoralRiskSummary> {
-    const incidents = await this.incidents.find();
+  async sectoralRisk(user: CurrentUser, projectId?: string): Promise<SectoralRiskSummary> {
+    const incidents = await this.scopedQuery(user, projectId).getMany();
     const byCategory: Record<string, number> = {};
     const bySeverity: Record<string, number> = {};
     let overdue = 0;
@@ -181,9 +222,8 @@ export class IncidentsService {
     };
   }
 
-  async get(incidentId: string): Promise<Record<string, any>> {
-    const inc = await this.incidents.findOne({ where: { id: incidentId } });
-    if (!inc) throw new NotFoundException('Incident not found');
+  async get(user: CurrentUser, incidentId: string): Promise<Record<string, any>> {
+    const inc = await this.getOrThrow(user, incidentId);
     return {
       incident_id: inc.id,
       model_id: inc.modelId,

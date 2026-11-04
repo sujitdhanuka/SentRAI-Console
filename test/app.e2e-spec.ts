@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
 import { AppModule } from '../src/app.module';
+import { Role } from '../src/common/enums';
+import { ComplianceService } from '../src/compliance/compliance.service';
 
 describe('SentrAI Console (e2e)', () => {
   let app: INestApplication;
@@ -2128,5 +2130,65 @@ describe('SentrAI Console (e2e)', () => {
       .set('Authorization', `Bearer ${admin}`).expect(200);
     expect(short.body.window_days).toBe(7);
     expect(short.body.daily).toHaveLength(7);
+  });
+
+  it('keeps incidents inside the organization that owns the model', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    // Two organizations, each with a CISO, a project, a model and an incident.
+    const setup = async (name: string) => {
+      const org = await request(http).post('/api/v1/organizations').set(auth(admin)).send({ name, description: 'test' }).expect(201);
+      const email = `ciso@${name.toLowerCase()}.test`;
+      await request(http).post('/api/v1/users').set(auth(admin))
+        .send({ email, full_name: name, password: 'pw123456', role: 'CISO', organization_id: org.body.organization_id }).expect(201);
+      const token = await login(email, 'pw123456');
+      const project = await request(http).post('/api/v1/projects').set(auth(token))
+        .send({ name: `${name} App`, root_directory: process.cwd() }).expect(201);
+      const model = await request(http).post('/api/v1/inventory/models').set(auth(token)).send({
+        name: `${name} Scorer`, model_type: 'MACHINE_LEARNING', functional_area: 'collections', use_case_description: 'Scores collections accounts for prioritisation',
+        human_oversight_required: true, board_policy_ref: 'BP-1', project_id: project.body.project_id,
+      }).expect(201);
+      return { token, orgId: org.body.organization_id, projectId: project.body.project_id, modelId: model.body.model_id };
+    };
+    const report = (token: string, modelId: string) => request(http).post('/api/v1/compliance/incident/report').set(auth(token)).send({
+      model_id: modelId, model_name: 'Scorer', re_name: 'RE', functional_area: 'collections', incident_category: 'MODEL_DRIFT',
+      severity: 'P4_LOW', description: 'Mild population-stability shift flagged in the routine drift review',
+      observed_at: '2026-07-11T06:00:00Z', detected_at: '2026-07-11T06:30:00Z', model_risk_level: 'LOW', immediate_action_taken: 'Retrained on the extended window and revalidated',
+    });
+
+    const a = await setup('IncidentOrgA');
+    const b = await setup('IncidentOrgB');
+    const incA = (await report(a.token, a.modelId).expect(201)).body.incident_id;
+    const incB = (await report(b.token, b.modelId).expect(201)).body.incident_id;
+
+    // Lists and aggregates only cover the caller's organization, even when
+    // asking for the other organization's project.
+    const ids = (r: any) => r.body.map((i: any) => i.incident_id);
+    const listA = await request(http).get('/api/v1/compliance/incident').set(auth(a.token)).expect(200);
+    expect(ids(listA)).toEqual([incA]);
+    const peek = await request(http).get(`/api/v1/compliance/incident?project_id=${b.projectId}`).set(auth(a.token)).expect(200);
+    expect(ids(peek)).toEqual([]);
+    const risk = await request(http).get('/api/v1/compliance/incident/sectoral-risk').set(auth(a.token)).expect(200);
+    expect(risk.body.total_incidents).toBe(1);
+
+    // Another organization's incident or model looks like it doesn't exist.
+    await request(http).get(`/api/v1/compliance/incident/${incA}`).set(auth(a.token)).expect(200);
+    await request(http).get(`/api/v1/compliance/incident/${incB}`).set(auth(a.token)).expect(404);
+    await request(http).patch(`/api/v1/compliance/incident/${incB}/status`).set(auth(a.token)).send({ status: 'RESOLVED' }).expect(404);
+    await report(a.token, b.modelId).expect(404);
+
+    // A global ADMIN sees both, and the project filter narrows to one.
+    const all = await request(http).get('/api/v1/compliance/incident').set(auth(admin)).expect(200);
+    expect(ids(all)).toEqual(expect.arrayContaining([incA, incB]));
+    const scoped = await request(http).get(`/api/v1/compliance/incident?project_id=${a.projectId}`).set(auth(admin)).expect(200);
+    expect(ids(scoped)).toEqual([incA]);
+
+    // The board pack can't be pointed at another organization's project either.
+    const board = await app.get(ComplianceService).boardReport(
+      { userId: 'u', email: 'ciso@a.test', fullName: 'A', role: Role.CISO, tenantId: a.orgId },
+      b.projectId,
+    );
+    expect(board.incidents.total).toBe(0);
   });
 });
