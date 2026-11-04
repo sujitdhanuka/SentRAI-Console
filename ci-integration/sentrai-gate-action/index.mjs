@@ -106,6 +106,9 @@ async function main() {
   setOutput('blocking-violations', String(violations.length));
   setOutput('sarif-file', sarifOut);
 
+  console.log(`   project: ${body.project_name ?? '?'} | default-branch push: ${body.default_branch_push ? 'yes' : 'no'}`);
+  for (const i of body.incidents_raised ?? []) console.log(`   incident raised: ${i.model_name} (${i.incident_id})`);
+  if (body.incident_error) console.error(`   could not raise incidents: ${body.incident_error}`);
   console.log(`   models detected: ${s.models_detected ?? '?'} | shadow: ${s.shadow_assets ?? 0} | AST: ${body.ast_coverage} | policy: ${body.policy_source}`);
 
   if (body.verdict === 'fail') {

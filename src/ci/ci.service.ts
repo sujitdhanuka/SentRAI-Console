@@ -283,13 +283,14 @@ export class CiEvaluationService {
     commitSha: string,
     gaps: BlockingGap[],
     registered: AIModelEntity[],
-  ): Promise<void> {
+  ): Promise<{ raised: Array<{ incident_id: string; model_name: string }>; error?: string }> {
+    const raised: Array<{ incident_id: string; model_name: string }> = [];
     try {
       const previous = await this.gates.findOne({
         where: { projectId, prNumber: IsNull(), id: Not(eventId) },
         order: { occurredAt: 'DESC' },
       });
-      if (!previous) return;
+      if (!previous) return { raised };
 
       // Per file: the same model appearing in a new file is a new finding.
       const key = (g: { model_name: string; kind?: string; file_location: string }) =>
@@ -299,14 +300,14 @@ export class CiEvaluationService {
       for (const g of gaps) {
         if (!known.has(key(g))) byModel.set(g.model_name, [...(byModel.get(g.model_name) ?? []), g]);
       }
-      if (byModel.size === 0) return;
+      if (byModel.size === 0) return { raised };
 
       const project = await this.projects.findOne({ where: { id: projectId } });
       for (const [modelName, modelGaps] of byModel) {
         const matched =
           registered.find((m) => m.sourceRef && modelGaps.some((g) => g.file_location === m.sourceRef)) ??
           registered.find((m) => m.name.toLowerCase() === modelName.toLowerCase());
-        await this.incidents.raiseFromGate({
+        const incidentId = await this.incidents.raiseFromGate({
           projectId,
           projectName: project?.name ?? projectId,
           model: matched ?? null,
@@ -316,9 +317,12 @@ export class CiEvaluationService {
           commitSha,
           gateEventId: eventId,
         });
+        if (incidentId) raised.push({ incident_id: incidentId, model_name: modelName });
       }
+      return { raised };
     } catch (e) {
       this.logger.error(`failed to raise incidents for gate event ${eventId}: ${String(e)}`);
+      return { raised, error: String(e).slice(0, 200) };
     }
   }
 
@@ -357,9 +361,10 @@ export class CiEvaluationService {
       });
     }
 
-    if (verdict === 'fail' && dto.default_branch_push) {
-      await this.raiseIncidentsForLandedFindings(projectId, event.id, dto.commit_sha, blockingGaps, registered);
-    }
+    const landed = verdict === 'fail' && dto.default_branch_push
+      ? await this.raiseIncidentsForLandedFindings(projectId, event.id, dto.commit_sha, blockingGaps, registered)
+      : { raised: [] };
+    const project = await this.projects.findOne({ where: { id: projectId }, select: ['id', 'name'] });
 
     this.logger.log(
       `ci_gate project=${projectId} commit=${dto.commit_sha} verdict=${verdict} ` +
@@ -368,6 +373,10 @@ export class CiEvaluationService {
 
     return {
       gate_event_id: event.id,
+      project_name: project?.name ?? null,
+      default_branch_push: dto.default_branch_push === true,
+      incidents_raised: landed.raised,
+      incident_error: landed.error ?? null,
       verdict,
       policy_source: usedDefault ? 'default' : 'repository',
       ast_coverage: this.treeSitter.ready ? 'full' : 'regex_only',
@@ -439,10 +448,11 @@ export class CiEvaluationService {
    * rest of the platform enforces, and closes the cross-tenant read on the
    * per-project history route.
    */
-  async listEvents(user: CurrentUser, opts: { limit?: number; verdict?: 'pass' | 'fail' } = {}) {
+  async listEvents(user: CurrentUser, opts: { limit?: number; verdict?: 'pass' | 'fail'; projectId?: string } = {}) {
     const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
     const qb = this.gates.createQueryBuilder('g').orderBy('g.occurredAt', 'DESC').take(limit);
     if (opts.verdict) qb.andWhere('g.verdict = :v', { v: opts.verdict });
+    if (opts.projectId) qb.andWhere('g.projectId = :pid', { pid: opts.projectId });
 
     if (user.role !== Role.ADMIN) {
       const owned = await this.projects.find({

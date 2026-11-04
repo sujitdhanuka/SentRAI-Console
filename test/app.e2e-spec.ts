@@ -2258,12 +2258,20 @@ describe('SentrAI Console (e2e)', () => {
     expect(await incidents()).toEqual([]);
 
     // Landing it raises one P3 incident, for the new finding only.
-    await scan({ default_branch_push: true, files: [oldFile, newFile] });
+    const landed = await scan({ default_branch_push: true, files: [oldFile, newFile] });
+    expect(landed.body.project_name).toBe('Landed Findings App');
+    expect(landed.body.incidents_raised.map((i: any) => i.model_name)).toEqual(['New Helper']);
+    expect(landed.body.incident_error).toBeNull();
     const raised = await incidents();
     expect(raised).toHaveLength(1);
     expect(raised[0].model_name).toBe('New Helper');
     expect(raised[0].severity).toBe('P3_MEDIUM');
     expect(raised[0].description).toContain('svc/fraud/new_helper.py');
+
+    // The ledger's project filter only returns this project's events.
+    const ledger = await request(http).get(`/api/v1/ci/events?project_id=${projectId}`).set(auth).expect(200);
+    expect(ledger.body.length).toBeGreaterThan(0);
+    expect(ledger.body.every((e: any) => e.project_id === projectId)).toBe(true);
 
     // Later pushes with the same finding don't add a duplicate.
     await scan({ default_branch_push: true, files: [oldFile, newFile] });
