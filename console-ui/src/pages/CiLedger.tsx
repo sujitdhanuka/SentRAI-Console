@@ -72,6 +72,7 @@ const TOKEN_ROLES = ['ADMIN', 'CISO'];
 export function CiLedger() {
   const toast = useConsoleUi((s) => s.toast);
   const role = useSession((s) => s.user?.role ?? 'VIEWER');
+  const activeProjectId = useSession((s) => s.activeProjectId);
   const [events, setEvents] = useState<GateEvent[]>([]);
   const [filter, setFilter] = useState<'all' | 'pass' | 'fail'>('all');
   const [selected, setSelected] = useState<GateEvent | null>(null);
@@ -83,8 +84,11 @@ export function CiLedger() {
     setLoading(true);
     setError(null);
     try {
-      const qs = filter === 'all' ? '' : `?verdict=${filter}`;
-      const rows = await api<GateEvent[]>(`/ci/events${qs}`);
+      const params = new URLSearchParams();
+      if (filter !== 'all') params.set('verdict', filter);
+      if (activeProjectId) params.set('project_id', activeProjectId);
+      const qs = params.toString();
+      const rows = await api<GateEvent[]>(`/ci/events${qs ? `?${qs}` : ''}`);
       setEvents(rows);
       setSelected((prev) => rows.find((r) => r.gate_event_id === prev?.gate_event_id) ?? rows[0] ?? null);
     } catch (e) {
@@ -92,7 +96,7 @@ export function CiLedger() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, activeProjectId]);
 
   useEffect(() => {
     void load();

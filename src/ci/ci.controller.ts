@@ -64,8 +64,10 @@ export class CiController {
     @CurrentUser() user: CurrentUserType,
     @Query('limit') limit?: string,
     @Query('verdict') verdict?: string,
+    @Query('project_id') projectId?: string,
   ) {
     return this.ci.listEvents(user, {
+      projectId,
       limit: limit ? parseInt(limit, 10) : undefined,
       verdict: verdict === 'pass' || verdict === 'fail' ? verdict : undefined,
     });

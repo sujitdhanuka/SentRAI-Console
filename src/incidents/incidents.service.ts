@@ -186,7 +186,7 @@ export class IncidentsService {
     reasons: string[];
     commitSha: string;
     gateEventId: string;
-  }): Promise<void> {
+  }): Promise<string | null> {
     const open = await this.incidents.findOne({
       where: {
         projectId: input.projectId,
@@ -194,7 +194,7 @@ export class IncidentsService {
         status: Not(In([IncidentStatus.RESOLVED, IncidentStatus.CLOSED])),
       },
     });
-    if (open) return;
+    if (open) return null;
 
     const now = new Date();
     const incidentId = uuidv4();
@@ -233,6 +233,7 @@ export class IncidentsService {
         incident_id: incidentId, category: IncidentCategory.OTHER, severity: IncidentSeverity.P3_MEDIUM,
       }, 'ci_gate');
     }
+    return incidentId;
   }
 
   async updateStatus(user: CurrentUser, incidentId: string, dto: IncidentStatusUpdateDto) {

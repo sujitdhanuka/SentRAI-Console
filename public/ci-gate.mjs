@@ -107,6 +107,9 @@ async function main() {
 
   const s = body.summary || {};
   console.log(`   models detected: ${s.models_detected ?? '?'} | ast coverage: ${body.ast_coverage} | policy: ${body.policy_source}`);
+  console.log(`   project: ${body.project_name ?? '?'} | default-branch push: ${body.default_branch_push ? 'yes' : 'no'}`);
+  for (const i of body.incidents_raised ?? []) console.log(`   incident raised: ${i.model_name} (${i.incident_id})`);
+  if (body.incident_error) console.error(`   could not raise incidents: ${body.incident_error}`);
 
   if (body.verdict === 'fail') {
     console.error('🚨 COMPLIANCE GATE FAILED — build blocked.');
