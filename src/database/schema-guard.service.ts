@@ -29,6 +29,8 @@ interface ColumnSpec {
 }
 
 const REQUIRED_COLUMNS: ColumnSpec[] = [
+  // ai-incident.entity.ts — owning project of gate-raised incidents.
+  { table: 'ai_incidents', column: 'projectId', definition: 'VARCHAR(36) NULL' },
   // ai-model.entity.ts — carried-over scan findings + description provenance.
   { table: 'ai_models', column: 'securityFindings', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'descriptionSource', definition: 'VARCHAR(20) NULL' },

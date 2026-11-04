@@ -27,6 +27,17 @@ const SKIP_DIR = new Set([
 ]);
 const MAX_FILE_BYTES = 512 * 1024;
 
+/** True on a push to the repository's default branch, i.e. the code has landed. */
+function isDefaultBranchPush() {
+  if (process.env.GITHUB_EVENT_NAME !== 'push') return false;
+  try {
+    const ev = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf-8'));
+    return ev.ref === `refs/heads/${ev.repository?.default_branch}`;
+  } catch {
+    return false;
+  }
+}
+
 function collectFiles(root, maxTotalBytes) {
   const out = [];
   let total = 0;
@@ -69,6 +80,7 @@ async function main() {
     commit_sha: process.env.GITHUB_SHA || 'local',
     pr_number: process.env.PR_NUMBER || null,
     pipeline_run_id: process.env.GITHUB_RUN_ID || null,
+    default_branch_push: isDefaultBranchPush(),
     files,
   };
 

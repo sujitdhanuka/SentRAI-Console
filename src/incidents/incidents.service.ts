@@ -1,10 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { AIIncidentEntity, AIModelEntity, ModelLedgerEventEntity, ProjectEntity } from '../database/entities';
-import { IncidentSeverity, IncidentStatus, Role } from '../common/enums';
+import { IncidentCategory, IncidentSeverity, IncidentStatus, Role } from '../common/enums';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { computeReportingDeadline, hoursUntilDeadline, isOverdue } from '../domain/incident';
 import { maskDict } from '../common/dpdp';
@@ -14,6 +14,9 @@ import {
   IncidentStatusUpdateDto,
   SectoralRiskSummary,
 } from './incidents.dto';
+
+/** modelId of an incident about a shadow asset, which has no model record. */
+const UNREGISTERED_MODEL_ID = 'unregistered';
 
 @Injectable()
 export class IncidentsService {
@@ -27,23 +30,23 @@ export class IncidentsService {
   ) {}
 
   /** Incidents visible to this user. An incident belongs to the organization of
-   *  its model's project; ADMIN is a global superuser. Incidents whose model no
-   *  longer exists stay ADMIN-only. */
+   *  its own project or else its model's project; ADMIN is a global superuser.
+   *  Incidents with neither stay ADMIN-only. */
   private scopedQuery(user: CurrentUser, projectId?: string) {
     const qb = this.incidents.createQueryBuilder('i')
       .leftJoin(AIModelEntity, 'm', 'm.id = i.modelId')
-      .leftJoin(ProjectEntity, 'p', 'p.id = m.projectId');
-    if (projectId) qb.andWhere('m.projectId = :pid', { pid: projectId });
+      .leftJoin(ProjectEntity, 'p', 'p.id = COALESCE(i.projectId, m.projectId)');
+    if (projectId) qb.andWhere('COALESCE(i.projectId, m.projectId) = :pid', { pid: projectId });
     if (user.role !== Role.ADMIN) {
       if (user.tenantId) qb.andWhere('p.tenantId = :tid', { tid: user.tenantId });
-      else qb.andWhere('m.id IS NOT NULL AND p.tenantId IS NULL');
+      else qb.andWhere('(m.id IS NOT NULL OR i.projectId IS NOT NULL) AND p.tenantId IS NULL');
     }
     return qb;
   }
 
-  private async ownsModel(user: CurrentUser, model: AIModelEntity): Promise<boolean> {
+  private async ownsProject(user: CurrentUser, projectId: string | null): Promise<boolean> {
     if (user.role === Role.ADMIN) return true;
-    const project = model.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+    const project = projectId ? await this.projects.findOne({ where: { id: projectId } }) : null;
     return (project?.tenantId ?? null) === (user.tenantId ?? null);
   }
 
@@ -53,8 +56,9 @@ export class IncidentsService {
     const inc = await this.incidents.findOne({ where: { id: incidentId } });
     if (!inc) throw new NotFoundException('Incident not found');
     if (user.role === Role.ADMIN) return inc;
-    const model = await this.models.findOne({ where: { id: inc.modelId } });
-    if (!model || !(await this.ownsModel(user, model))) throw new NotFoundException('Incident not found');
+    const model = inc.projectId ? null : await this.models.findOne({ where: { id: inc.modelId } });
+    if (!inc.projectId && !model) throw new NotFoundException('Incident not found');
+    if (!(await this.ownsProject(user, inc.projectId ?? model?.projectId ?? null))) throw new NotFoundException('Incident not found');
     return inc;
   }
 
@@ -100,7 +104,7 @@ export class IncidentsService {
 
   async report(user: CurrentUser, dto: IncidentReportDto): Promise<IncidentResponse> {
     const model = await this.models.findOne({ where: { id: dto.model_id } });
-    if (!model || !(await this.ownsModel(user, model))) throw new NotFoundException('Model not found');
+    if (!model || !(await this.ownsProject(user, model.projectId))) throw new NotFoundException('Model not found');
 
     const observedAt = new Date(dto.observed_at);
     const deadline = computeReportingDeadline(observedAt, dto.severity);
@@ -167,6 +171,68 @@ export class IncidentsService {
       is_overdue: isOverdue(deadline, null),
       created_at: now,
     };
+  }
+
+  /**
+   * Raise a P3 incident for gate findings that landed on the default branch.
+   * Skipped while this model already has an open gate-raised incident.
+   */
+  async raiseFromGate(input: {
+    projectId: string;
+    projectName: string;
+    model: AIModelEntity | null;
+    modelName: string;
+    riskLevel: string;
+    reasons: string[];
+    commitSha: string;
+    gateEventId: string;
+  }): Promise<void> {
+    const open = await this.incidents.findOne({
+      where: {
+        projectId: input.projectId,
+        modelName: input.modelName,
+        status: Not(In([IncidentStatus.RESOLVED, IncidentStatus.CLOSED])),
+      },
+    });
+    if (open) return;
+
+    const now = new Date();
+    const incidentId = uuidv4();
+    await this.incidents.save(this.incidents.create({
+      id: incidentId,
+      projectId: input.projectId,
+      modelId: input.model?.id ?? UNREGISTERED_MODEL_ID,
+      modelName: input.modelName,
+      reName: input.projectName,
+      functionalArea: input.model?.functionalArea ?? 'unregistered',
+      incidentCategory: IncidentCategory.OTHER,
+      severity: IncidentSeverity.P3_MEDIUM,
+      status: IncidentStatus.REPORTED,
+      description: `Code that failed the CI compliance gate landed on the default branch (commit ${input.commitSha}). ${input.reasons.join(' ')}`,
+      observedAt: now,
+      detectedAt: now,
+      reportedAt: null,
+      reportingDeadline: computeReportingDeadline(now, IncidentSeverity.P3_MEDIUM),
+      affectedConsumers: null,
+      modelRiskLevel: input.riskLevel,
+      autonomousSystemInvolved: false,
+      immediateActionTaken: 'None recorded. Raised automatically from the CI compliance gate.',
+      systemSuspended: false,
+      fallbackActivated: false,
+      rca: { source: 'ci_gate', gate_event_id: input.gateEventId },
+      repeatIncident: false,
+      priorIncidentRefs: [],
+      regulatorNotified: false,
+      boardInformed: false,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    if (input.model) {
+      await this.recordLedger(input.model.id, 'INCIDENT_REPORTED', {
+        incident_id: incidentId, category: IncidentCategory.OTHER, severity: IncidentSeverity.P3_MEDIUM,
+      }, 'ci_gate');
+    }
   }
 
   async updateStatus(user: CurrentUser, incidentId: string, dto: IncidentStatusUpdateDto) {

@@ -10,6 +10,10 @@ export class AIIncidentEntity {
   @Column('varchar', { length: 36 })
   modelId!: string;
 
+  /** Set on gate-raised incidents, which can concern a shadow asset with no model record. */
+  @Column('varchar', { length: 36, nullable: true })
+  projectId!: string | null;
+
   @Column('varchar', { length: 255 })
   modelName!: string;
 

@@ -66,11 +66,12 @@ async function main() {
   }
 
   // Commit / PR context (PR head sha + number come from the event payload).
-  let prNumber = null, headSha = null;
+  let prNumber = null, headSha = null, defaultBranchPush = false;
   try {
     const ev = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf-8'));
     prNumber = ev.pull_request?.number ?? null;
     headSha = ev.pull_request?.head?.sha ?? null;
+    defaultBranchPush = process.env.GITHUB_EVENT_NAME === 'push' && ev.ref === `refs/heads/${ev.repository?.default_branch}`;
   } catch { /* not a PR event */ }
   const commitSha = headSha || process.env.GITHUB_SHA || 'ci';
 
@@ -83,7 +84,7 @@ async function main() {
     res = await fetch(`${base}/api/v1/ci/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ commit_sha: commitSha, pr_number: prNumber ? String(prNumber) : null, pipeline_run_id: process.env.GITHUB_RUN_ID || null, files }),
+      body: JSON.stringify({ commit_sha: commitSha, pr_number: prNumber ? String(prNumber) : null, pipeline_run_id: process.env.GITHUB_RUN_ID || null, default_branch_push: defaultBranchPush, files }),
     });
   } catch (e) {
     fail(`Could not reach SentRAI (${String(e)}). Failing closed.`);

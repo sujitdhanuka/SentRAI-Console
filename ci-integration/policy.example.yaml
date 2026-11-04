@@ -21,6 +21,11 @@ gates:
         - human_oversight     # human-in-the-loop is enabled
         - red_team_evidence
 
+  # Fail when code scans as HIGH/CRITICAL but its model is registered lower.
+  # On by default; set enforce: false to turn it off.
+  risk_escalation:
+    enforce: true
+
   # Frameworks the compliance dashboard maps these gates against.
   frameworks:
     - eu_ai_act

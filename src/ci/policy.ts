@@ -22,6 +22,12 @@ export interface PolicyContract {
       /** Fail when tools are detected but the model declares no permitted set. */
       require_declaration: boolean;
     };
+    /**
+     * Fail when the code now scans as HIGH/CRITICAL but the governed model is
+     * registered at a lower tier — e.g. an LLM replaced a human review step, so
+     * its existing sign-offs no longer cover what ships.
+     */
+    risk_escalation?: { enforce: boolean };
   };
 }
 
@@ -46,6 +52,7 @@ export function defaultPolicy(): PolicyContract {
       // On by default: unauthorized tool use is a hard blocker; not declaring a
       // permitted set is surfaced but doesn't fail the build on its own.
       tool_authorization: { enforce: true, require_declaration: false },
+      risk_escalation: { enforce: true },
     },
   };
 }
@@ -89,6 +96,7 @@ export function parsePolicy(raw: string | undefined): { policy: PolicyContract; 
           block_on,
           frameworks: Array.isArray(parsed.gates.frameworks) ? parsed.gates.frameworks.map(String) : [],
           tool_authorization: parseToolAuthorization(parsed.gates),
+          risk_escalation: { enforce: parsed.gates.risk_escalation?.enforce !== false }, // default on
         },
       },
       usedDefault: false,

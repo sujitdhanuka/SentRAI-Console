@@ -9,5 +9,6 @@ import { IncidentsService } from './incidents.service';
   imports: [TypeOrmModule.forFeature([AIIncidentEntity, ModelLedgerEventEntity, AIModelEntity, ProjectEntity])],
   controllers: [IncidentsController],
   providers: [IncidentsService],
+  exports: [IncidentsService],
 })
 export class IncidentsModule {}
