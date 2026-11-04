@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
+import { useSession } from '../stores/session';
 
 interface Incident {
   incident_id: string;
@@ -61,6 +62,7 @@ const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60
 
 export function Incidents() {
   const toast = useConsoleUi((s) => s.toast);
+  const activeProjectId = useSession((s) => s.activeProjectId);
   const { models } = useModels();
   const [rows, setRows] = useState<Incident[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
@@ -80,15 +82,18 @@ export function Incidents() {
     setLoading(true);
     setError(null);
     try {
-      const qs = statusFilter ? `?status_filter=${statusFilter}` : '';
-      const res = await api<Incident[]>(`/compliance/incident${qs}`);
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status_filter', statusFilter);
+      if (activeProjectId) params.set('project_id', activeProjectId);
+      const qs = params.toString();
+      const res = await api<Incident[]>(`/compliance/incident${qs ? `?${qs}` : ''}`);
       setRows(Array.isArray(res) ? res : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load incidents');
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, activeProjectId]);
 
   useEffect(() => {
     void load();
