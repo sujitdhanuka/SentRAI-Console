@@ -32,6 +32,17 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  /** Move the user to another organization; null makes them a global user.
+   *  Only a global (organization-less) administrator may change this. */
+  @IsOptional()
+  @IsString()
+  organization_id?: string | null;
+}
+
+export interface AssignableOrganization {
+  organization_id: string;
+  name: string;
 }
 
 export class ResetPasswordDto {

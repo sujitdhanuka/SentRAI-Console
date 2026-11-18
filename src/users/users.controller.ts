@@ -6,7 +6,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CurrentUser as CurrentUserType } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { UsersService } from './users.service';
-import { AddUserDto, ResetPasswordDto, UpdateUserDto, UserResponse } from './users.dto';
+import { AddUserDto, AssignableOrganization, ResetPasswordDto, UpdateUserDto, UserResponse } from './users.dto';
 
 // ADMIN is a global user administrator; OWNER administers users within their
 // own organization. All tenant-scoping and the role ceiling (no OWNER-minted
@@ -23,6 +23,12 @@ export class UsersController {
     return this.users.list(admin);
   }
 
+  /** Organizations the caller may place users in (all for a global admin, own org otherwise). */
+  @Get('organizations')
+  organizations(@CurrentUser() admin: CurrentUserType): Promise<AssignableOrganization[]> {
+    return this.users.assignableOrganizations(admin);
+  }
+
   @Post()
   add(@CurrentUser() admin: CurrentUserType, @Body() dto: AddUserDto): Promise<UserResponse> {
     return this.users.add(admin, dto);
@@ -37,7 +43,7 @@ export class UsersController {
     return this.users.resetPassword(admin, userId, dto);
   }
 
-  /** Change a user's role, name, or active status. */
+  /** Change a user's name, role, organization, or active status. */
   @Patch(':userId')
   update(
     @CurrentUser() admin: CurrentUserType,

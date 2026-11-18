@@ -673,7 +673,18 @@ export function Governance() {
         ) : !features.governanceSettings ? (
           <Panel title="Governance"><p className="p-3 text-[11px] text-text-secondary">Governance settings are not switched on for this deployment.</p></Panel>
         ) : !orgId ? (
-          <Panel title="Governance"><p className="p-3 text-[11px] text-text-secondary">Governance settings belong to an organization. Sign in as a member of one.</p></Panel>
+          <Panel title="Governance">
+            <div className="space-y-2 p-3 text-[11px] text-text-secondary">
+              <p>Governance is kept per organization, and your account is not assigned to one yet.</p>
+              {(user?.role === 'ADMIN' || user?.role === 'OWNER') ? (
+                <p>
+                  Open <a href="#/users" className="text-accent underline">Users</a>, choose Edit on your account (or another user), pick the organization, then sign out and back in.
+                </p>
+              ) : (
+                <p>Ask an administrator to assign your account to an organization.</p>
+              )}
+            </div>
+          </Panel>
         ) : active === 'risks' ? (
           <RiskRegisterTab />
         ) : active === 'impact' ? (

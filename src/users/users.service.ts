@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,7 +7,7 @@ import { OrganizationEntity, UserEntity } from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { hashPassword } from '../common/password';
-import { AddUserDto, ResetPasswordDto, UpdateUserDto, UserResponse } from './users.dto';
+import { AddUserDto, AssignableOrganization, ResetPasswordDto, UpdateUserDto, UserResponse } from './users.dto';
 
 @Injectable()
 export class UsersService {
@@ -64,13 +64,34 @@ export class UsersService {
     }
   }
 
+  async assignableOrganizations(admin: CurrentUser): Promise<AssignableOrganization[]> {
+    const rows =
+      admin.tenantId !== null
+        ? await this.orgs.find({ where: { id: admin.tenantId } })
+        : await this.orgs.find({ order: { name: 'ASC' } });
+    return rows.map((o) => ({ organization_id: o.id, name: o.name }));
+  }
+
+  /**
+   * Resolve the organization a user should belong to. Org-scoped admins always
+   * create in their own organization (any other id is ignored, as before); a
+   * global admin may name any existing one (or none, for a global user).
+   */
+  private async resolveOrganization(admin: CurrentUser, requested: string | null | undefined): Promise<string | null> {
+    if (admin.tenantId !== null) return admin.tenantId;
+    if (!requested) return null;
+    const org = await this.orgs.findOne({ where: { id: requested } });
+    if (!org) throw new BadRequestException('Organization not found');
+    return org.id;
+  }
+
   async add(admin: CurrentUser, dto: AddUserDto): Promise<UserResponse> {
     const existing = await this.users.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('User already exists');
     this.assertCanAssignRole(admin, dto.role);
 
     // Org admins can only create users in their own organization.
-    const tenantId = admin.tenantId !== null ? admin.tenantId : (dto.organization_id ?? null);
+    const tenantId = await this.resolveOrganization(admin, dto.organization_id);
 
     const now = new Date();
     const user = await this.users.save(
@@ -116,7 +137,7 @@ export class UsersService {
     return { status: 'success', message: 'Password updated' };
   }
 
-  /** Change a user's role, name, or active status. */
+  /** Change a user's name, role, organization, or active status. */
   async update(admin: CurrentUser, userId: string, dto: UpdateUserDto): Promise<UserResponse> {
     const user = await this.getManageable(admin, userId);
     const isSelf = user.email === admin.email;
@@ -132,14 +153,28 @@ export class UsersService {
     // Last-admin / last-owner guards: demoting or deactivating.
     const demoting = dto.role !== undefined && dto.role !== user.role;
     const deactivating = dto.is_active === false;
+    let tenantId = user.tenantId ?? null;
+    if (dto.organization_id !== undefined) {
+      if (admin.tenantId !== null) {
+        if ((dto.organization_id ?? null) !== admin.tenantId) {
+          throw new ForbiddenException('Only a global administrator can move users between organizations.');
+        }
+      } else {
+        tenantId = await this.resolveOrganization(admin, dto.organization_id);
+      }
+    }
+    const moving = tenantId !== (user.tenantId ?? null);
     if (demoting || deactivating) {
       await this.assertNotLastActiveAdmin(user);
+    }
+    if (demoting || deactivating || moving) {
       await this.assertNotLastActiveOwner(user);
     }
 
     if (dto.full_name !== undefined) user.fullName = dto.full_name;
     if (dto.role !== undefined) user.role = dto.role;
     if (dto.is_active !== undefined) user.isActive = dto.is_active;
+    user.tenantId = tenantId;
     user.updatedAt = new Date();
     await this.users.save(user);
     return this.toResponse(user);

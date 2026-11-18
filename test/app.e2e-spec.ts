@@ -256,6 +256,59 @@ describe('SentrAI Console (e2e)', () => {
     expect(after.body.find((u: any) => u.email === 'crud@x.test')).toBeUndefined();
   });
 
+  it('USERS: global admin assigns and moves users between organizations; org owners cannot', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const mkOrg = async (name: string) =>
+      (await request(http).post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`).send({ name })).body.organization_id;
+    const orgA = await mkOrg('Move Org A');
+    const orgB = await mkOrg('Move Org B');
+
+    // The org picker lists every organization for a global admin.
+    const assignable = await request(http).get('/api/v1/users/organizations').set('Authorization', `Bearer ${admin}`).expect(200);
+    expect(assignable.body.map((o: any) => o.organization_id)).toEqual(expect.arrayContaining([orgA, orgB]));
+
+    // Unknown organization is rejected on create.
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'ghost@move.test', full_name: 'G', password: 'pw12345678', role: 'VIEWER', organization_id: 'nope' }).expect(400);
+
+    const created = await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'mover@move.test', full_name: 'Mover', password: 'pw12345678', role: 'VIEWER', organization_id: orgA }).expect(201);
+    expect(created.body.organization_id).toBe(orgA);
+    expect(created.body.organization_name).toBe('Move Org A');
+    const uid = created.body.user_id;
+
+    // Edit name, role and organization in one call.
+    const moved = await request(http).patch(`/api/v1/users/${uid}`).set('Authorization', `Bearer ${admin}`)
+      .send({ full_name: 'Mover Renamed', role: 'CISO', organization_id: orgB }).expect(200);
+    expect(moved.body).toMatchObject({ full_name: 'Mover Renamed', role: 'CISO', organization_id: orgB, organization_name: 'Move Org B' });
+
+    // null makes the user global again.
+    const cleared = await request(http).patch(`/api/v1/users/${uid}`).set('Authorization', `Bearer ${admin}`)
+      .send({ organization_id: null }).expect(200);
+    expect(cleared.body.organization_id).toBeNull();
+
+    // An org-scoped OWNER sees only their own org and cannot move users out of it.
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'owner@move.test', full_name: 'Owner', password: 'pw12345678', role: 'OWNER', organization_id: orgA }).expect(201);
+    const owner = await login('owner@move.test', 'pw12345678');
+    const ownOrgs = await request(http).get('/api/v1/users/organizations').set('Authorization', `Bearer ${owner}`).expect(200);
+    expect(ownOrgs.body.map((o: any) => o.organization_id)).toEqual([orgA]);
+    // Naming another org on create is ignored: the user lands in the owner's org.
+    const okMember = await request(http).post('/api/v1/users').set('Authorization', `Bearer ${owner}`)
+      .send({ email: 'member@move.test', full_name: 'Member', password: 'pw12345678', role: 'VIEWER', organization_id: orgB }).expect(201);
+    expect(okMember.body.organization_id).toBe(orgA);
+    await request(http).patch(`/api/v1/users/${okMember.body.user_id}`).set('Authorization', `Bearer ${owner}`)
+      .send({ organization_id: orgB }).expect(403);
+    await request(http).patch(`/api/v1/users/${okMember.body.user_id}`).set('Authorization', `Bearer ${owner}`)
+      .send({ full_name: 'Member Renamed' }).expect(200);
+
+    // The last active OWNER cannot be moved out of their organization.
+    const ownerRow = (await request(http).get('/api/v1/users').set('Authorization', `Bearer ${admin}`)).body
+      .find((u: any) => u.email === 'owner@move.test');
+    await request(http).patch(`/api/v1/users/${ownerRow.user_id}`).set('Authorization', `Bearer ${admin}`)
+      .send({ organization_id: orgB }).expect(403);
+  });
+
   it('SECURITY: rejects weak registration passwords', async () => {
     await request(http)
       .post('/api/v1/auth/register')
