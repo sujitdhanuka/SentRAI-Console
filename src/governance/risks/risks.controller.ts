@@ -41,8 +41,8 @@ export class RisksController {
 
   @Patch('risks/:id')
   @Roles(...RISK_WRITERS)
-  update(@CurrentUser() user: CurrentUserType, @Param('id') id: string, @Body() body: Record<string, any>) {
-    return this.risks.update(user, id, body);
+  update(@CurrentUser() user: CurrentUserType, @Param('id') id: string, @Body() body: Record<string, any>, @Req() req: any) {
+    return this.risks.update(user, id, body, req);
   }
 
   @Post('risks/:id/assess')

@@ -7,6 +7,7 @@ import { Role } from '../src/common/enums';
 import { ComplianceService } from '../src/compliance/compliance.service';
 import { NotifierService } from '../src/common/notifier.service';
 import { ScheduledTasksService } from '../src/tasks/scheduled-tasks.service';
+import { RisksService } from '../src/governance/risks/risks.service';
 
 describe('SentrAI Console (e2e)', () => {
   let app: INestApplication;
@@ -2853,6 +2854,76 @@ describe('SentrAI Console (e2e)', () => {
     });
   });
 
+  it('RISK REVIEW FIXES (E1.3): close needs the approver, no self-acceptance, owners in org, public titles, third-party audit, lapsed acceptances', async () => {
+    const a = await govOrg('RfxOrgA');
+    const b = await govOrg('RfxOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const R = '/api/v1/governance/risks';
+      const users = (await request(http).get('/api/v1/users').set(auth(a.admin)).expect(200)).body;
+      const list = Array.isArray(users) ? users : users.users ?? users.items;
+      const idOf = (email: string) => { const u = list.find((x: any) => x.email === email); return u.user_id ?? u.id; };
+
+      // L1: owners must belong to the org.
+      await request(http).post(R).set(auth(a.owner)).send({ scope_type: 'MODEL', scope_id: a.modelId, category: 'PRIVACY', title: 'Foreign owner', owner_user_id: idOf('owner@rfxorgb.test') }).expect(400);
+      const manual = (await request(http).post(R).set(auth(a.owner)).send({
+        scope_type: 'MODEL', scope_id: a.modelId, category: 'PRIVACY', title: 'Vendor X leaked the Q3 applicant file', owner_user_id: idOf('ciso@rfxorga.test'),
+      }).expect(201)).body;
+      expect(manual.owner_user_id).toBe(idOf('ciso@rfxorga.test'));
+
+      // M5: the CISO rates a HIGH residual and cannot also accept it.
+      const assess = (t: string, l: number) => request(http).post(`${R}/${manual.risk_id}/assess`).set(auth(t))
+        .send({ inherent_likelihood: 4, inherent_impact: 4, residual_likelihood: l, residual_impact: 4, rationale: 'Vendor controls only partly remediated' });
+      await assess(a.ciso, 3).expect(200);
+      expect((await request(http).post(`${R}/${manual.risk_id}/accept`).set(auth(a.ciso)).send({}).expect(403)).body.message).toMatch(/different approver/);
+
+      // H2: the Owner cannot close an above-appetite, unaccepted HIGH risk; the CISO (band approver) can, with a reason.
+      await request(http).patch(`${R}/${manual.risk_id}`).set(auth(a.owner)).send({ status: 'CLOSED', reason: 'Vendor offboarded' }).expect(403);
+      let gate = (await request(http).get(`/api/v1/governance/models/${a.modelId}/gate`).set(auth(a.owner)).expect(200)).body;
+      expect(gate.warn.map((f: any) => f.code)).toContain('residual_risk_unaccepted');
+      await request(http).patch(`${R}/${manual.risk_id}`).set(auth(a.ciso)).send({ status: 'CLOSED' }).expect(400);
+      const closed = (await request(http).patch(`${R}/${manual.risk_id}`).set(auth(a.ciso)).send({ status: 'CLOSED', reason: 'Vendor offboarded and data deleted' }).expect(200)).body;
+      expect(closed.status).toBe('CLOSED');
+      await new Promise((r) => setTimeout(r, 50));
+      const events = (await request(http).get('/api/v1/audit/events?limit=200').set(auth(a.admin)).expect(200)).body;
+      const rows = Array.isArray(events) ? events : events.events ?? events.items ?? [];
+      expect(rows.some((e: any) => JSON.stringify(e).includes('risk_closed') && JSON.stringify(e).includes('Vendor offboarded and data deleted'))).toBe(true);
+
+      // M3: a non-catalogue risk shows on the public card by category only.
+      const second = (await request(http).post(R).set(auth(a.owner)).send({ scope_type: 'MODEL', scope_id: a.modelId, category: 'PRIVACY', title: 'Internal: CFO spreadsheet shared with vendor' }).expect(201)).body;
+      await request(http).post(`${R}/${second.risk_id}/assess`).set(auth(a.owner))
+        .send({ inherent_likelihood: 2, inherent_impact: 2, residual_likelihood: 1, residual_impact: 2, rationale: 'Access revoked, low residual' }).expect(200);
+      const card = (await request(http).get(`/api/v1/cards/${a.modelId}`).expect(200)).body;
+      expect(card.residual_risks.map((r: any) => r.title)).toEqual(['Privacy risk']);
+      expect(JSON.stringify(card)).not.toContain('CFO');
+
+      // L1: action owners and due dates are validated on update too.
+      const act = (await request(http).post(`${R}/${second.risk_id}/actions`).set(auth(a.owner)).send({ treatment: 'MITIGATE', action: 'Rotate shared links' }).expect(201)).body;
+      await request(http).patch(`${R}/${second.risk_id}/actions/${act.action_id}`).set(auth(a.owner)).send({ due_at: 'not-a-date' }).expect(400);
+      await request(http).patch(`${R}/${second.risk_id}/actions/${act.action_id}`).set(auth(a.owner)).send({ owner_user_id: idOf('viewer@rfxorgb.test') }).expect(400);
+
+      // L2: an accepted risk whose acceptance lapses moves to REVIEW_DUE in the daily job.
+      const third = (await request(http).post(R).set(auth(a.owner)).send({ scope_type: 'MODEL', scope_id: a.modelId, category: 'SECURITY', title: 'Prompt injection via notes field' }).expect(201)).body;
+      await request(http).post(`${R}/${third.risk_id}/assess`).set(auth(a.owner))
+        .send({ inherent_likelihood: 4, inherent_impact: 4, residual_likelihood: 3, residual_impact: 4, rationale: 'Input filter in place, residual above ceiling' }).expect(200);
+      await request(http).post(`${R}/${third.risk_id}/accept`).set(auth(a.ciso)).send({ expires_at: new Date(Date.now() + 2 * 86_400_000).toISOString() }).expect(200);
+      await app.get(RisksService).reviewDates(new Date(Date.now() + 3 * 86_400_000));
+      const lapsed = (await request(http).get(`${R}/${third.risk_id}`).set(auth(a.owner)).expect(200)).body;
+      expect(lapsed).toMatchObject({ status: 'REVIEW_DUE', review_reason: 'risk acceptance expired' });
+
+      // M1: with RBI enabled, a HIGH model needs a third-party audit on record.
+      gate = (await request(http).get(`/api/v1/governance/models/${a.modelId}/gate`).set(auth(a.owner)).expect(200)).body;
+      expect(gate.warn.map((f: any) => f.code)).not.toContain('third_party_audit_required');
+      await request(http).put('/api/v1/governance/settings').set(auth(a.ciso)).send({ settings: { enabledPacks: ['rbi-free-ai'] }, reason: 'Indian lending book in scope' }).expect(200);
+      gate = (await request(http).get(`/api/v1/governance/models/${a.modelId}/gate`).set(auth(a.owner)).expect(200)).body;
+      expect(gate.warn.map((f: any) => f.code)).toContain('third_party_audit_required');
+      await request(http).post(`/api/v1/audit/models/${a.modelId}/initiate`).set(auth(a.ciso)).send({ auditor_ref: 'Big4 LLP', audit_type: 'THIRD_PARTY' }).expect(201);
+      gate = (await request(http).get(`/api/v1/governance/models/${a.modelId}/gate`).set(auth(a.owner)).expect(200)).body;
+      expect(gate.warn.map((f: any) => f.code)).not.toContain('third_party_audit_required');
+      expect((await request(http).get(`/api/v1/governance/models/${b.modelId}/gate`).set(auth(b.owner)).expect(200)).body.warn.map((f: any) => f.code)).not.toContain('third_party_audit_required');
+    });
+  });
+
   it('IMPACT + CONTEXT (E1.4, E1.5): context profile, draft → final (signed, immutable) → revalidation; reports; gate clears', async () => {
     const a = await govOrg('IaOrgA');
     const b = await govOrg('IaOrgB');
@@ -2900,6 +2971,7 @@ describe('SentrAI Console (e2e)', () => {
       const fin = (await request(http).post(`${ia}/${draft.assessment_id}/finalise`).set(auth(a.ciso)).expect(200)).body;
       expect(fin).toMatchObject({ status: 'FINAL', signed_by: 'ciso@iaorga.test', materiality: 'HIGH' });
       expect(fin.content_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect((await request(http).get(`${ia}/${draft.assessment_id}`).set(auth(a.viewer)).expect(200)).body.hash_verified).toBe(true);
       expect(fin.context_snapshot.profile.known_limitations).toEqual(['Not validated for loans above 5 crore']);
       // Immutable once signed.
       await request(http).patch(`${ia}/${draft.assessment_id}`).set(auth(a.owner)).send({ answers: full }).expect(409);
@@ -2926,7 +2998,9 @@ describe('SentrAI Console (e2e)', () => {
       expect(gate.warn.find((f: any) => f.code === 'impact_assessment_required').message).toMatch(/needs revalidation/);
       const v2 = (await request(http).post(`${ia}/${draft.assessment_id}/new-version`).set(auth(a.owner)).expect(201)).body;
       expect(v2).toMatchObject({ version: 2, status: 'DRAFT' });
-      await request(http).post(`${ia}/${v2.assessment_id}/finalise`).set(auth(a.owner)).expect(200);
+      // Separation of duties: the Owner drafted v2 for a HIGH model, so the CISO signs it.
+      expect((await request(http).post(`${ia}/${v2.assessment_id}/finalise`).set(auth(a.owner)).expect(403)).body.message).toMatch(/different/);
+      await request(http).post(`${ia}/${v2.assessment_id}/finalise`).set(auth(a.ciso)).expect(200);
       const list = (await request(http).get(`${ia}?model_id=${a.modelId}`).set(auth(a.owner)).expect(200)).body;
       expect(list.assessments.map((x: any) => [x.version, x.status]).sort()).toEqual([[1, 'SUPERSEDED'], [2, 'FINAL']]);
       expect((await request(http).get(ia).set(auth(b.owner)).expect(200)).body.assessments).toEqual([]);

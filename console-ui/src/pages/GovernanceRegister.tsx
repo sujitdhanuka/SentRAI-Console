@@ -277,7 +277,7 @@ interface Templates { questionnaires: Array<{ id: string; title: string; questio
 interface IA {
   assessment_id: string; version: number; status: string; questionnaires: string[]; answers: Record<string, Record<string, any>>;
   in_scope: boolean | null; high_impact: boolean | null; materiality: string | null; signed_by: string | null; signed_at: string | null;
-  revalidation_reason: string | null; content_hash: string | null;
+  revalidation_reason: string | null; content_hash: string | null; hash_verified?: boolean | null;
 }
 
 export function ImpactTab() {
@@ -376,6 +376,7 @@ export function ImpactTab() {
                 <span>Signed</span><span className="text-text">{current.signed_by ? `${current.signed_by}, ${new Date(current.signed_at!).toLocaleDateString()}` : 'not yet'}</span>
               </div>
               {current.content_hash && <div className="break-all font-mono text-[9px] text-text-tertiary">sha256 {current.content_hash}</div>}
+              {current.hash_verified === false && <div className="text-[10px] text-negative">The stored content no longer matches its signed hash</div>}
               <div className="flex gap-1">
                 <select aria-label="Report layout" className={FIELD} value={layout} onChange={(e) => setLayout(e.target.value)}>
                   {tpl.layouts.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}

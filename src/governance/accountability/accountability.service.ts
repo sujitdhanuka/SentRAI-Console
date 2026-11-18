@@ -65,6 +65,13 @@ export class AccountabilityService {
     return Boolean(org?.accountableOfficialUserId) && org!.accountableOfficialUserId === userId;
   }
 
+  /** Is this user id an active member of the organisation? */
+  async isMember(orgId: string | null, userId: string): Promise<boolean> {
+    if (!orgId || !userId) return false;
+    const u = await this.users.findOne({ where: { id: userId } });
+    return Boolean(u && u.isActive && u.tenantId === orgId);
+  }
+
   /** Same check by email (the JWT's userId is the email in this codebase). */
   async isAccountableOfficialEmail(orgId: string | null, email: string): Promise<boolean> {
     if (!orgId) return false;

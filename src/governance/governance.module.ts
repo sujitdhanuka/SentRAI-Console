@@ -18,6 +18,7 @@ import {
   ImpactAssessmentEntity,
   AIIncidentEntity,
   DriftReportEntity,
+  AIAuditTrailEntity,
 } from '../database/entities';
 import { InventoryModule } from '../inventory/inventory.module';
 import { PacksController } from './packs/packs.controller';
@@ -45,7 +46,7 @@ import { ContextProfileService } from './context/context.service';
     TypeOrmModule.forFeature([
       PackVersionEntity, ControlResultEntity, GovernanceSettingsEntity, AIModelEntity, ProjectEntity,
       OrganizationEntity, UserEntity, ModelLedgerEventEntity, RiskEntity, RiskAssessmentEntity, RiskActionEntity,
-      RiskAcceptanceEntity, ImpactAssessmentEntity, AIIncidentEntity, DriftReportEntity,
+      RiskAcceptanceEntity, ImpactAssessmentEntity, AIIncidentEntity, DriftReportEntity, AIAuditTrailEntity,
     ]),
     InventoryModule,
   ],
