@@ -286,6 +286,37 @@ const REQUIRED_TABLES: TableSpec[] = [
       INDEX \`IDX_bcp_drills_conducted\` (\`conductedAt\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
+  {
+    table: 'pack_versions', // pack-version.entity.ts (governance E1.1)
+    createSql: `CREATE TABLE IF NOT EXISTS \`pack_versions\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`packId\` VARCHAR(60) NOT NULL,
+      \`version\` VARCHAR(30) NOT NULL,
+      \`effectiveFrom\` DATETIME NOT NULL,
+      \`contentHash\` VARCHAR(64) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`loadedAt\` DATETIME NOT NULL,
+      UNIQUE INDEX \`IDX_pack_versions_pack_version\` (\`packId\`, \`version\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'control_results', // control-result.entity.ts (governance E1.1)
+    createSql: `CREATE TABLE IF NOT EXISTS \`control_results\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NULL,
+      \`modelId\` VARCHAR(36) NULL,
+      \`controlId\` VARCHAR(40) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`evidenceRefs\` TEXT NULL,
+      \`clauses\` TEXT NULL,
+      \`packVersionSet\` TEXT NOT NULL,
+      \`evaluatedBy\` VARCHAR(255) NOT NULL,
+      \`evaluatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_control_results_org\` (\`orgId\`),
+      INDEX \`IDX_control_results_model\` (\`modelId\`),
+      INDEX \`IDX_control_results_evaluated\` (\`evaluatedAt\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 @Injectable()

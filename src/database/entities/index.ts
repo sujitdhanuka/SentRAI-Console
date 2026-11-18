@@ -21,6 +21,8 @@ import { AttestationCampaignEntity } from './attestation-campaign.entity';
 import { AttestationItemEntity } from './attestation-item.entity';
 import { AgentActionEventEntity } from './agent-action-event.entity';
 import { GrievanceEntity } from './grievance.entity';
+import { PackVersionEntity } from './pack-version.entity';
+import { ControlResultEntity } from './control-result.entity';
 
 export {
   OrganizationEntity,
@@ -46,6 +48,8 @@ export {
   AttestationItemEntity,
   AgentActionEventEntity,
   GrievanceEntity,
+  PackVersionEntity,
+  ControlResultEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -72,4 +76,6 @@ export const ALL_ENTITIES = [
   AttestationItemEntity,
   AgentActionEventEntity,
   GrievanceEntity,
+  PackVersionEntity,
+  ControlResultEntity,
 ];

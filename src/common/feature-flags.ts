@@ -20,6 +20,8 @@ export const EPIC_FLAGS = {
   bcpDrills: 'GOV_E0_4_BCP_DRILLS',
   /** E0.5: NIST MEASURE 2.10 privacy check. */
   nistPrivacy: 'GOV_E0_5_NIST_PRIVACY',
+  /** E1.1: common control library + framework pack engine behind the validators. */
+  packEngine: 'GOV_E1_1_PACKS',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -29,6 +31,7 @@ export interface FeatureFlags {
   redTeamIntervals: boolean;
   bcpDrills: boolean;
   nistPrivacy: boolean;
+  packEngine: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -44,6 +47,7 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     redTeamIntervals: epic(EPIC_FLAGS.redTeamIntervals),
     bcpDrills: epic(EPIC_FLAGS.bcpDrills),
     nistPrivacy: epic(EPIC_FLAGS.nistPrivacy),
+    packEngine: epic(EPIC_FLAGS.packEngine),
   };
 }
 

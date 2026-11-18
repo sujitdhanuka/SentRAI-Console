@@ -18,6 +18,8 @@ import { InventoryService } from '../inventory/inventory.service';
 import { SummarizerService } from '../summarizer/summarizer.service';
 import { FRAMEWORK_NAMES, frameworkReadiness, gapStatement } from './control-plain-english';
 import { sourceLocationsOf } from '../discovery/source-locations';
+import { getFeatureFlags } from '../common/feature-flags';
+import { packRegistry } from '../governance/packs/pack-loader';
 
 const FRAMEWORK_IDS = ['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001'] as const;
 const HIGH_RISK = new Set(['HIGH', 'CRITICAL', 'PROHIBITED']);
@@ -45,6 +47,8 @@ export interface PortfolioReport {
   }>;
   top_gaps: Array<{ framework: string; control: string; count: number; statement: string }>;
   /** Shift-left signal from the CI pre-deployment gate ledger. */
+  /** Packs in force and which are selected (E1.1, only with the pack engine on). */
+  packs?: Array<{ pack_id: string; name: string; version: string; legacy_framework_id: string; baseline: boolean; region: string | null; selected: boolean }>;
   ci_gate: {
     events_recorded: number;
     gate_readiness_score: number | null; // effective pass ratio (override counts as pass)
@@ -159,7 +163,15 @@ export class ComplianceService {
    * (optionally project-scoped) model and aggregates pass rates, risk-tier
    * distribution, and the most common blocking gaps — in plain language.
    */
-  async portfolio(user: CurrentUser, projectId?: string | null): Promise<PortfolioReport> {
+  async portfolio(user: CurrentUser, projectId?: string | null, packIds?: string[] | null): Promise<PortfolioReport> {
+    // E1.1 pack selector: with the pack engine on, the rollup can be narrowed to
+    // chosen packs. Flag off (or no selection) keeps all four frameworks.
+    const packsOn = getFeatureFlags().packEngine;
+    const inForce = packsOn ? packRegistry().activeAt() : [];
+    const selected = packsOn && packIds?.length ? inForce.filter((p) => packIds.includes(p.definition.id)) : inForce;
+    const fwIds: readonly string[] = packsOn && packIds?.length
+      ? FRAMEWORK_IDS.filter((id) => selected.some((p) => p.definition.legacyId === id))
+      : FRAMEWORK_IDS;
     const qb = this.models.createQueryBuilder('m').where('m.isActive = 1');
     if (user.role !== Role.ADMIN && user.tenantId) {
       qb.innerJoin(ProjectEntity, 'p', 'p.id = m.projectId').andWhere('p.tenantId = :tid', { tid: user.tenantId });
@@ -168,7 +180,7 @@ export class ComplianceService {
     const models = await qb.getMany();
 
     const fw: Record<string, { assessed: number; passing: number; open_gaps: number }> = {};
-    for (const id of FRAMEWORK_IDS) fw[id] = { assessed: 0, passing: 0, open_gaps: 0 };
+    for (const id of fwIds) fw[id] = { assessed: 0, passing: 0, open_gaps: 0 };
     const riskTiers: Record<string, number> = {};
     const gapCounts = new Map<string, { framework: string; control: string; name: string; count: number; models: Set<string> }>();
     let fullyCompliant = 0;
@@ -185,7 +197,7 @@ export class ComplianceService {
         ['nist_ai_rmf', report.nist_rmf],
         ['eu_ai_act', report.eu_ai_act],
         ['iso_42001', report.iso_42001],
-      ];
+      ].filter(([id]) => fwIds.includes(id as string)) as Array<[string, any]>;
 
       let allPass = true;
       for (const [fwId, r] of perFw) {
@@ -234,7 +246,7 @@ export class ComplianceService {
     const headline =
       total === 0
         ? 'No AI models registered yet — add models to assess portfolio compliance.'
-        : `${fullyCompliant} of ${total} models (${Math.round(rate * 100)}%) fully compliant across all four frameworks; ` +
+        : `${fullyCompliant} of ${total} models (${Math.round(rate * 100)}%) fully compliant across ${fwIds.length === FRAMEWORK_IDS.length ? 'all four frameworks' : `the ${fwIds.length} selected framework${fwIds.length === 1 ? '' : 's'}`}; ` +
           `${highRisk} high-risk, ${totalGaps} blocking control gap${totalGaps === 1 ? '' : 's'} open.`;
 
     return {
@@ -249,7 +261,7 @@ export class ComplianceService {
         headline,
       },
       risk_tiers: riskTiers,
-      frameworks: FRAMEWORK_IDS.map((id) => ({
+      frameworks: fwIds.map((id) => ({
         id,
         name: FRAMEWORK_NAMES[id],
         models_assessed: fw[id].assessed,
@@ -260,6 +272,19 @@ export class ComplianceService {
       })),
       top_gaps: topGaps,
       ci_gate: ciGate,
+      ...(packsOn
+        ? {
+            packs: inForce.map((p) => ({
+              pack_id: p.definition.id,
+              name: p.definition.name,
+              version: p.definition.version,
+              legacy_framework_id: p.definition.legacyId,
+              baseline: p.definition.baseline,
+              region: p.definition.region,
+              selected: selected.includes(p),
+            })),
+          }
+        : {}),
     };
   }
 

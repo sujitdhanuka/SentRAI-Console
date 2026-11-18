@@ -171,6 +171,14 @@ export function isHighOrAbove(risk: RiskLevel): boolean {
   return (RISK_SEVERITY[risk] ?? 0) >= RISK_SEVERITY[RiskLevel.HIGH];
 }
 
+/** The interval band a risk level falls in (LIMITED counts as MEDIUM, MINIMAL as LOW). */
+export function intervalBand(risk: RiskLevel): 'HIGH' | 'MEDIUM' | 'LOW' {
+  const sev = RISK_SEVERITY[risk] ?? 0;
+  if (sev >= RISK_SEVERITY[RiskLevel.HIGH]) return 'HIGH';
+  if (sev >= RISK_SEVERITY[RiskLevel.MEDIUM]) return 'MEDIUM';
+  return 'LOW';
+}
+
 export function redTeamIntervalDays(risk: RiskLevel): number {
   const sev = RISK_SEVERITY[risk] ?? 0;
   if (sev >= RISK_SEVERITY[RiskLevel.HIGH]) return RED_TEAM_INTERVAL_DAYS.HIGH;

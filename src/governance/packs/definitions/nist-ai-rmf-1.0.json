@@ -1,0 +1,117 @@
+{
+  "id": "nist-ai-rmf",
+  "version": "1.0.0",
+  "effectiveFrom": "2023-01-26",
+  "name": "NIST AI RMF 1.0",
+  "jurisdiction": "United States",
+  "baseline": true,
+  "region": null,
+  "reportFormat": "framework",
+  "reportName": "NIST AI RMF",
+  "responseKey": "nist_rmf",
+  "legacyId": "nist_ai_rmf",
+  "tierClassifier": "nist",
+  "source": "NIST AI 100-1 (AI RMF 1.0) and the NIST AI RMF Playbook",
+  "changelog": [
+    "1.0.0: migrated from frameworks.validator.ts with the Phase 0 corrected codes; results unchanged."
+  ],
+  "parameters": {},
+  "clauses": [
+    {
+      "code": "GOVERN-2.1", "clause": "GOVERN 2.1", "name": "Organizational Ownership & Responsibility",
+      "control": "CTL-ACC-01", "opts": { "rule": "contains" }, "mandatory": true,
+      "evidence": { "pass": "Owner team: {ownerTeam}", "fail": "No owner team assigned" },
+      "gap": "Organizational governance requires a designated owner team."
+    },
+    {
+      "code": "GOVERN-1.2", "clause": "GOVERN 1.2", "name": "Board Policy Alignment",
+      "control": "CTL-POL-01", "opts": { "match": "trimmed" }, "mandatory": true,
+      "evidence": { "pass": "Board policy reference: {boardPolicyRef}", "fail": "No board policy reference provided" },
+      "gap": "Governance requires alignment with a board-approved AI policy reference."
+    },
+    {
+      "code": "GOVERN-1.5", "clause": "GOVERN 1.5", "name": "Audit Cadence Defined",
+      "control": "CTL-AUD-01", "opts": { "requireFuture": false }, "mandatory": true,
+      "evidence": { "pass": "Next audit due: {nextAuditDue}", "fail": "No audit schedule recorded" },
+      "gap": "A recurring audit schedule must be defined for each model."
+    },
+    {
+      "code": "MAP-1.1", "clause": "MAP 1.1", "name": "Purpose & Use-Case Documentation",
+      "control": "CTL-CTX-01", "opts": { "minLength": 20 }, "mandatory": true,
+      "evidence": { "pass": "Use case documented ({descLength} chars)", "fail": "Use case missing or too thin to review" },
+      "gap": "Map stage requires a substantive documented purpose for the system."
+    },
+    {
+      "code": "MAP-1.1", "clause": "MAP 1.1", "name": "Deployment Context & Affected Users",
+      "control": "CTL-CTX-02", "mandatory": false,
+      "evidence": {
+        "pass": "Functional area '{functionalArea}' affecting segments: {segments}",
+        "fail": "Functional area or affected customer segments not documented"
+      },
+      "gap": "Document the functional area and the customer segments the model affects."
+    },
+    {
+      "code": "MAP-4.1", "clause": "MAP 4.1", "name": "Source & Dependency Provenance",
+      "control": "CTL-PROV-01", "mandatory": false,
+      "evidence": { "pass": "Provenance: {provenance}", "fail": "No source reference or dependencies recorded" },
+      "gap": "Track the source repository or third-party dependencies behind the model."
+    },
+    {
+      "code": "MEASURE-2.7", "clause": "MEASURE 2.7", "name": "Security Red Teaming",
+      "control": "CTL-SEC-01", "mandatory": true,
+      "gap": {
+        "legacy": "Measure stage requires a red-team review within the last 12 months (date or attached report).",
+        "tiered": "Measure stage requires a red-team review within {interval} days for {tier} risk (date or attached report)."
+      }
+    },
+    {
+      "code": "MEASURE-2.4", "clause": "MEASURE 2.4", "name": "Performance Drift Measurement",
+      "control": "CTL-MON-01", "mandatory": true,
+      "gap": "Measure stage requires recent drift evaluation over live inference scores (push windows to /monitoring/scores)."
+    },
+    {
+      "code": "MEASURE-2.3", "clause": "MEASURE 2.3", "name": "Performance Benchmarks Recorded",
+      "control": "CTL-PERF-01", "mandatory": false,
+      "evidence": { "pass": "{benchmarkCount} benchmark(s) recorded", "fail": "No performance benchmarks recorded" },
+      "gap": "Record baseline performance benchmarks for comparison over time."
+    },
+    {
+      "code": "GOVERN-3.2", "clause": "GOVERN 3.2", "name": "Human Oversight Controls",
+      "control": "CTL-HUM-01", "opts": { "mode": "highRequires" }, "mandatory": true, "alsoEvidences": ["MAP 3.5"],
+      "gap": "High-risk decisions require a human-in-the-loop oversight control."
+    },
+    {
+      "code": "MANAGE-2.4", "clause": "MANAGE 2.4", "name": "Fallback / Business-Continuity Plan",
+      "control": "CTL-BCP-01", "mandatory": { "riskIn": ["HIGH", "CRITICAL"] },
+      "evidence": { "pass": "BCP fallback state configured for this model", "fail": "No BCP fallback configured" },
+      "gap": "High-risk models need a configured business-continuity fallback (activate via /monitoring/bcp)."
+    },
+    {
+      "code": "MANAGE-4.3", "clause": "MANAGE 4.3", "name": "Incident Reporting Hygiene",
+      "control": "CTL-INC-01", "mandatory": true,
+      "evidence": { "pass": "No overdue incident reports", "fail": "{overdue} incident(s) past their reporting deadline" },
+      "gap": "Report incidents within their severity SLA before deadlines lapse."
+    },
+    {
+      "code": "MANAGE-2.1", "clause": "MANAGE 2.1", "name": "Risk Response Resourcing",
+      "control": "CTL-ACC-01", "opts": { "rule": "prefix" }, "mandatory": true,
+      "evidence": { "pass": "Risk response owned by {ownerTeam}", "fail": "No team resourced to respond to this model’s risks" },
+      "gap": "A named, resourced owner must be accountable for responding to the model’s risks."
+    },
+    {
+      "code": "MEASURE-3.1", "clause": "MEASURE 3.1", "name": "Risk Tracking Mechanisms",
+      "control": "CTL-TRK-01", "mandatory": true,
+      "evidence": {
+        "pass": "{ledgerEventCount} ledger event(s) tracking this model over time",
+        "fail": "No risk-tracking history recorded for this model"
+      },
+      "gap": "Identified risks must be tracked over time (an append-only ledger history for the model)."
+    },
+    {
+      "code": "MEASURE-2.10", "clause": "MEASURE 2.10", "name": "Privacy Risk Examined (DPIA / Privacy Review)",
+      "control": "CTL-PRIV-01", "mandatory": true, "flag": "nistPrivacy",
+      "evidence": { "pass": "DPIA / privacy-review artifact attached", "fail": "No DPIA or privacy-review artifact attached" },
+      "gap": "Measure stage requires the system’s privacy risk to be examined and documented (attach a dpia artifact)."
+    }
+  ]
+}

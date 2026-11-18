@@ -19,6 +19,8 @@ import {
   lastRedTeamEvidenceAt,
   redTeamIntervalDays,
 } from '../domain/model-inventory';
+import { evaluatePackById, toFrameworkReport } from '../governance/packs/pack-engine';
+import type { ResolvedParameters } from '../governance/packs/pack.types';
 
 /** Operational evidence gathered from the platform's own records. */
 export interface ValidationContext {
@@ -33,6 +35,18 @@ export interface ValidationContext {
   bcpDrillLastConducted?: Date | null;
   /** Governance feature flags; read from the environment when omitted. */
   flags?: FeatureFlags;
+  /** Register-backed facts (impact assessments, risk register) once those epics are on. */
+  governance?: Record<string, any>;
+  /** Parameters resolved for the model's organisation (settings + enabled packs); defaults when omitted. */
+  packParams?: ResolvedParameters;
+}
+
+/** E1.1: with GOV_E1_1_PACKS on, the validators are thin adapters over the pack engine. */
+function viaPack(packId: string, entry: AIModelEntry, ctx: ValidationContext): FrameworkComplianceReport | null {
+  const flags = ctx.flags ?? getFeatureFlags();
+  if (!flags.packEngine) return null;
+  const ev = evaluatePackById(packId, entry, ctx, { flags, params: ctx.packParams });
+  return toFrameworkReport(ev.definition, ev, entry);
 }
 
 export interface FrameworkCheck {
@@ -119,6 +133,8 @@ function ownerAssigned(entry: AIModelEntry): boolean {
 /* ------------------------------- NIST AI RMF ------------------------------ */
 
 export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}): FrameworkComplianceReport {
+  const packed = viaPack('nist-ai-rmf', entry, ctx);
+  if (packed) return packed;
   const checks: FrameworkCheck[] = [];
   const isHigh = entry.riskLevel === RiskLevel.HIGH || entry.riskLevel === RiskLevel.CRITICAL;
 
@@ -324,6 +340,8 @@ const DEFAULT_EU_HIGH_RISK_DOMAINS = [
 ];
 
 export function validateEuAiAct(entry: AIModelEntry, ctx: ValidationContext = {}): FrameworkComplianceReport {
+  const packed = viaPack('eu-ai-act', entry, ctx);
+  if (packed) return packed;
   const checks: FrameworkCheck[] = [];
   const fa = (entry.functionalArea || '').toLowerCase();
   const highRiskDomains = ctx.euHighRiskDomains ?? DEFAULT_EU_HIGH_RISK_DOMAINS;
@@ -488,6 +506,8 @@ export function validateEuAiAct(entry: AIModelEntry, ctx: ValidationContext = {}
 /* ------------------------------- ISO/IEC 42001 ---------------------------- */
 
 export function validateIso42001(entry: AIModelEntry, ctx: ValidationContext = {}): FrameworkComplianceReport {
+  const packed = viaPack('iso-42001', entry, ctx);
+  if (packed) return packed;
   const checks: FrameworkCheck[] = [];
   const isMedOrHigh = [RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL].includes(entry.riskLevel);
 
