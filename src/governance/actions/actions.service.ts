@@ -5,7 +5,7 @@
  * root cause and an effectiveness review; overdue actions surface in the
  * console's gap queue.
  */
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Not, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -139,7 +139,7 @@ export class CorrectiveActionsService {
     return this.view(await this.load(user, id));
   }
 
-  async update(user: CurrentUser, id: string, body: Record<string, any>) {
+  async update(user: CurrentUser, id: string, body: Record<string, any>, req?: any) {
     this.assert();
     const r = await this.load(user, id);
     if (['CLOSED', 'CANCELLED'].includes(r.status)) throw new BadRequestException(`A ${r.status.toLowerCase()} action cannot be changed`);
@@ -149,8 +149,14 @@ export class CorrectiveActionsService {
     if (body.due_at !== undefined) r.dueAt = parseDate(body.due_at);
     if (body.status !== undefined) {
       if (!['OPEN', 'IN_PROGRESS', 'AWAITING_EFFECTIVENESS', 'CANCELLED'].includes(body.status)) throw new BadRequestException('Use /close to close an action');
-      if (body.status === 'CANCELLED' && !(body.reason ?? '').trim()) throw new BadRequestException('A reason is required to cancel');
-      if (body.status === 'CANCELLED') r.effectivenessReview = `Cancelled: ${String(body.reason).trim()}`;
+      if (body.status === 'CANCELLED') {
+        // L4: cancelling drops the action from the overdue count CTL-ORG-CA reads,
+        // so it is limited to the Owner, CISO or Admin and needs a real reason.
+        if (![Role.OWNER, Role.CISO, Role.ADMIN].includes(user.role)) throw new ForbiddenException('Only the Owner, CISO or an Admin can cancel a corrective action');
+        if (String(body.reason ?? '').trim().length < 10) throw new BadRequestException('A reason (at least 10 characters) is required to cancel');
+        r.effectivenessReview = `Cancelled by ${user.email}: ${String(body.reason).trim().slice(0, 1000)}`;
+        if (req) req.auditSummary = { corrective_action_cancelled: { action_id: r.id, reason: String(body.reason).trim().slice(0, 500), cancelled_by: user.email } };
+      }
       r.status = body.status;
     }
     r.updatedAt = new Date();

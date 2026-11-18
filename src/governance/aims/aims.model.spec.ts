@@ -16,12 +16,23 @@ describe('AIMS record content', () => {
     const p = checkContent('AUDIT_PROGRAMME', { period: '2027', audits: [{ area: 'a', planned_date: '2027-01-01', auditor: 'me', auditor_independent: false }] });
     expect(p.join()).toMatch(/cannot audit their own work/);
   });
+  it('a management review cannot be dated in the future (review L4)', () => {
+    expect(checkContent('MGMT_REVIEW', { review_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) }).join()).toMatch(/future/);
+    expect(checkContent('MGMT_REVIEW', { review_date: new Date().toISOString().slice(0, 10) })).toEqual([]);
+  });
   it('lists missing RBI Rec 14 policy sections', () => {
     expect(missingRec14({ sections: { accountability: 'x' } })).toEqual(REC14_SECTIONS.filter((s) => s !== 'accountability'));
   });
 });
 
 describe('ORG controls', () => {
+  it('internal audit: a programme with a non-independent auditor fails with its own key (review M6)', () => {
+    const mixed = run('CTL-ORG-AUDIT', { auditProgramme: { planned: 3, independent: 2 } });
+    expect(mixed).toMatchObject({ passed: false, key: 'not_independent' });
+    expect(mixed.facts).toMatchObject({ planned: 3, not_independent: 1 });
+    expect(run('CTL-ORG-AUDIT', { auditProgramme: { planned: 2, independent: 2 } })).toMatchObject({ passed: true, key: 'pass' });
+    expect(run('CTL-ORG-AUDIT', { auditProgramme: { planned: 0, independent: 0 } })).toMatchObject({ passed: false, key: 'missing' });
+  });
   it('a record control fails when missing or past review', () => {
     expect(run('CTL-ORG-SCOPE', { records: { SCOPE: { approved: 0, overdue: 0 } } }).key).toBe('missing');
     expect(run('CTL-ORG-SCOPE', { records: { SCOPE: { approved: 1, overdue: 1 } } }).key).toBe('review_overdue');

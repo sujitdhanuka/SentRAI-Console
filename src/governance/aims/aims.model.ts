@@ -67,6 +67,8 @@ export function checkContent(type: string, content: Record<string, any>): string
   }
   if (type === 'MGMT_REVIEW') {
     if (Number.isNaN(Date.parse(content?.review_date))) problems.push('content.review_date must be a date');
+    // L4: a review is recorded after it happens; a future date would keep 9.3 passing.
+    else if (Date.parse(content.review_date) > Date.now() + 86_400_000) problems.push('content.review_date cannot be in the future');
     for (const [i, a] of (content?.actions ?? []).entries()) if (!a?.action) problems.push(`content.actions[${i}].action is required`);
   }
   if (type === 'CONTEXT' && content?.climate_change_relevant !== undefined && typeof content.climate_change_relevant !== 'boolean') {

@@ -78,7 +78,9 @@ export const ORG_CONTROLS: ControlDefinition[] = [
     evaluate: (i) => {
       const a = i.ctx.org?.auditProgramme;
       if (!a) return out(false, {}, 'missing');
-      return out(a.planned > 0 && a.independent === a.planned, { planned: a.planned }, a.planned > 0 ? 'pass' : 'missing');
+      if (a.planned === 0) return out(false, { planned: 0 }, 'missing');
+      const ok = a.independent === a.planned;
+      return out(ok, { planned: a.planned, not_independent: a.planned - a.independent }, ok ? 'pass' : 'not_independent');
     },
   },
   peopleControl('CTL-ORG-COMPETENCE', 'Competence of people doing AI work evidenced', 'COMPETENCE', 'competence'),

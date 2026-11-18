@@ -67,10 +67,11 @@ export class DocumentsService implements OnModuleInit {
     return d;
   }
 
-  /** A document an evidence artifact or AIMS record may point to (same org). */
+  /** A document an evidence artifact or AIMS record may point to: same org and APPROVED (L6). */
   async assertUsable(orgId: string | null, id: string): Promise<ControlledDocumentEntity> {
     const d = await this.docs.findOne({ where: { id } });
     if (!d || d.orgId !== orgId) throw new BadRequestException('document_id is not a controlled document of this organization');
+    if (d.status !== 'APPROVED') throw new BadRequestException(`document_id points to a ${d.status.toLowerCase()} document; link the approved version`);
     return d;
   }
 
@@ -162,6 +163,8 @@ export class DocumentsService implements OnModuleInit {
     const d = await this.load(user, id);
     if (!DOC_APPROVERS.includes(user.role) || user.tenantId !== d.orgId) throw new ForbiddenException('Only the Owner, CISO or an Approver of the organization can approve documents');
     if (d.status !== 'DRAFT') throw new ConflictException(`Only a draft can be approved (this one is ${d.status})`);
+    // M5 separation of duties: a policy is approved by someone other than its author.
+    if (d.docType === 'POLICY' && d.createdBy === user.email) throw new ForbiddenException('You drafted this policy; a different Owner, CISO or Approver must approve it');
     const now = new Date();
     if (body.review_due_at !== undefined) d.reviewDueAt = parseDate(body.review_due_at, 'review_due_at');
     if (!d.reviewDueAt) d.reviewDueAt = new Date(now.getTime() + 365 * 86_400_000);

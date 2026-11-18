@@ -33,8 +33,8 @@ export class CorrectiveActionsController {
 
   @Patch(':id')
   @Roles(...RISK_WRITERS)
-  update(@CurrentUser() user: CurrentUserType, @Param('id') id: string, @Body() body: Record<string, any>) {
-    return this.ca.update(user, id, body);
+  update(@CurrentUser() user: CurrentUserType, @Param('id') id: string, @Body() body: Record<string, any>, @Req() req: any) {
+    return this.ca.update(user, id, body, req);
   }
 
   @Post(':id/close')

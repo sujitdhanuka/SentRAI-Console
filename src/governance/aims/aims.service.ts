@@ -170,6 +170,8 @@ export class AimsService {
     this.canEdit(user, r.orgId);
     if (r.type === 'POLICY' && user.role === Role.ADMIN) throw new ForbiddenException('The AI policy is approved by the Owner or CISO');
     if (r.status !== 'DRAFT') throw new ConflictException(`Only a draft can be approved (this one is ${r.status})`);
+    // M5 separation of duties: the AI policy is approved by someone other than its author.
+    if (r.type === 'POLICY' && r.createdBy === user.email) throw new ForbiddenException('You drafted this AI policy; a different Owner or CISO must approve it');
     const now = new Date();
     const s = (await this.settings.inForce(r.orgId)).settings;
     const months = r.type === 'POLICY' ? s.appetite?.reviewCycleMonths ?? 12 : aimsType(r.type)?.reviewMonths;
@@ -206,7 +208,9 @@ export class AimsService {
   async mgmtReviewInputs(user: CurrentUser) {
     this.assert();
     const orgId = this.orgOf(user);
-    const board = await this.compliance.boardReport(user, null);
+    // L5: the inputs cover this organisation only, also for a platform Admin
+    // (boardReport scopes by tenant for every role except ADMIN).
+    const board = await this.compliance.boardReport({ ...user, role: user.role === Role.ADMIN ? Role.OWNER : user.role, tenantId: orgId }, null);
     const ca = this.flags.isEnabled('correctiveActions') ? await this.actions.orgFacts(orgId) : null;
     const prev = await this.rows.findOne({ where: { orgId, type: 'MGMT_REVIEW', status: 'APPROVED' }, order: { approvedAt: 'DESC' } });
     return {
@@ -235,7 +239,7 @@ export class AimsService {
       records[t.type] = { approved: list.length, overdue: list.filter((r) => r.reviewDueAt && r.reviewDueAt.getTime() < now).length };
     }
     const policy = rows.find((r) => r.type === 'POLICY');
-    const mgmt = rows.filter((r) => r.type === 'MGMT_REVIEW').map((r) => Date.parse(r.content.review_date)).filter((x) => !Number.isNaN(x));
+    const mgmt = rows.filter((r) => r.type === 'MGMT_REVIEW').map((r) => Date.parse(r.content.review_date)).filter((x) => !Number.isNaN(x) && x <= now + 86_400_000);
     const audit = rows.find((r) => r.type === 'AUDIT_PROGRAMME');
     const s = (await this.settings.inForce(orgId)).settings;
     return {

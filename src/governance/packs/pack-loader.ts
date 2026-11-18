@@ -85,6 +85,8 @@ function statusOf(def: PackDefinition, all: PackDefinition[], now: Date): PackSt
 
 export class PackRegistry {
   private readonly defs: PackDefinition[];
+  /** L10: definitions are fixed once loaded, so each content hash is computed once. */
+  private readonly hashes = new WeakMap<PackDefinition, string>();
 
   constructor(defs: PackDefinition[] = BUILT_IN_PACKS) {
     const problems = defs.flatMap(validatePack);
@@ -107,7 +109,13 @@ export class PackRegistry {
     return this.defs
       .filter((d) => d.id === id)
       .sort((a, b) => Date.parse(a.effectiveFrom) - Date.parse(b.effectiveFrom))
-      .map((d) => ({ definition: d, contentHash: packContentHash(d), status: statusOf(d, this.defs, now) }));
+      .map((d) => ({ definition: d, contentHash: this.hashOf(d), status: statusOf(d, this.defs, now) }));
+  }
+
+  private hashOf(d: PackDefinition): string {
+    let h = this.hashes.get(d);
+    if (!h) { h = packContentHash(d); this.hashes.set(d, h); }
+    return h;
   }
 
   /** The version in force on `at` (the newest whose effectiveFrom ≤ at); null before the first. */

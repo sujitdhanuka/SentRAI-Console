@@ -3031,7 +3031,9 @@ describe('SentrAI Console (e2e)', () => {
       const v2 = (await request(http).post(`${D}/${v1.document_id}/new-version`).set(auth(a.owner)).send({ uri: 'sharepoint://ai-policy-v2', content: 'Policy text v2', review_due_at: '2020-01-01' }).expect(201)).body;
       expect(v2).toMatchObject({ version: 2, status: 'DRAFT', supersedes_id: v1.document_id });
       await request(http).post(`${D}/${v1.document_id}/new-version`).set(auth(a.owner)).send({ content: 'v3' }).expect(409);
-      await request(http).post(`${D}/${v2.document_id}/approve`).set(auth(a.owner)).send({}).expect(200);
+      // Separation of duties: the Owner wrote v2 of the policy, so another approver signs it off.
+      expect((await request(http).post(`${D}/${v2.document_id}/approve`).set(auth(a.owner)).send({}).expect(403)).body.message).toMatch(/different/);
+      await request(http).post(`${D}/${v2.document_id}/approve`).set(auth(a.ciso)).send({}).expect(200);
       const hist = (await request(http).get(`${D}/${v2.document_id}`).set(auth(a.viewer)).expect(200)).body;
       expect(hist.versions.map((x: any) => [x.version, x.status])).toEqual([[2, 'APPROVED'], [1, 'SUPERSEDED']]);
       expect(hist.review_overdue).toBe(true);
@@ -3045,6 +3047,10 @@ describe('SentrAI Console (e2e)', () => {
       expect(ev.artifact).toMatchObject({ document_id: v2.document_id, document_version: 2, document_hash: v2.hash });
       const bDoc = (await request(http).post(D).set(auth(b.owner)).send({ doc_type: 'EVIDENCE', title: 'B evidence', uri: 'x://b', content: 'b' }).expect(201)).body;
       await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'model_card', ref: 'doc://card', document_id: bDoc.document_id }).expect(400);
+      // Evidence may only point to an approved document, not a draft or a superseded version.
+      const draftDoc = (await request(http).post(D).set(auth(a.owner)).send({ doc_type: 'EVIDENCE', title: 'Draft evidence', uri: 'x://d', content: 'd' }).expect(201)).body;
+      expect((await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'model_card', ref: 'doc://card', document_id: draftDoc.document_id }).expect(400)).body.message).toMatch(/draft/);
+      await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'model_card', ref: 'doc://card', document_id: v1.document_id }).expect(400);
 
       // Daily reminder: one notification per organisation.
       const notify = jest.spyOn(NotifierService.prototype, 'notify').mockResolvedValue(undefined);
@@ -3095,6 +3101,8 @@ describe('SentrAI Console (e2e)', () => {
       const closed = (await request(http).post(`${C}/${fromInc.action_id}/close`).set(auth(a.owner)).send({ root_cause: 'No scheduled drift job', effectiveness_review: 'Two clean weekly runs; drift alerts now raised', effective: true }).expect(200)).body;
       expect(closed).toMatchObject({ closed: true, status: 'CLOSED', closed_by: 'owner@caorga.test' });
       await request(http).patch(`${C}/${fromInc.action_id}`).set(auth(a.owner)).send({ action: 'x' }).expect(400);
+      // Cancelling needs a substantive reason.
+      await request(http).patch(`${C}/${fromInc.action_id}`).set(auth(a.owner)).send({ status: 'CANCELLED', reason: 'dup' }).expect(400);
     });
   });
 
@@ -3131,7 +3139,8 @@ describe('SentrAI Console (e2e)', () => {
       const isoSections = { purpose_alignment: 'Supports lending strategy', objectives_framework: 'See objectives', requirements_commitment: 'Meets RBI and ISO', continual_improvement: 'Annual review' };
       const pol = (await request(http).post(`${A}/POLICY`).set(auth(a.owner)).send({ title: 'AI policy', content: { sections: isoSections } }).expect(201)).body;
       await request(http).post(`${A}/records/${pol.record_id}/approve`).set(auth(a.orgAdmin)).expect(403);
-      await request(http).post(`${A}/records/${pol.record_id}/approve`).set(auth(a.owner)).expect(200);
+      expect((await request(http).post(`${A}/records/${pol.record_id}/approve`).set(auth(a.owner)).expect(403)).body.message).toMatch(/different/);
+      await request(http).post(`${A}/records/${pol.record_id}/approve`).set(auth(a.ciso)).expect(200);
       ctl = (await request(http).get(`${A}/controls`).set(auth(a.owner)).expect(200)).body;
       expect(iso().find((c: any) => c.code === 'AIMS-5.2').passed).toBe(true);
       const rec14 = ctl.packs.find((p: any) => p.pack_id === 'rbi-free-ai').clauses.find((c: any) => c.code === 'REC-14');
@@ -3152,6 +3161,12 @@ describe('SentrAI Console (e2e)', () => {
       // Management review: inputs pre-filled from the board pack; approved actions land in the corrective-action register.
       const inputs = (await request(http).get(`${A}/mgmt-review/inputs`).set(auth(a.owner)).expect(200)).body;
       expect(inputs.inputs.compliance.total_models).toBe(1);
+      // An org Admin gets this organisation's inputs only, not the whole platform.
+      expect((await request(http).get(`${A}/mgmt-review/inputs`).set(auth(a.orgAdmin)).expect(200)).body.inputs.compliance.total_models).toBe(1);
+      // A management review is recorded after it happens.
+      await request(http).post(`${A}/MGMT_REVIEW`).set(auth(a.owner)).send({
+        title: 'Next year review', content: { review_date: new Date(Date.now() + 200 * 86_400_000).toISOString().slice(0, 10), attendees: ['CEO'] },
+      }).expect(400);
       const mr = (await request(http).post(`${A}/MGMT_REVIEW`).set(auth(a.owner)).send({
         title: 'Q4 management review', content: { review_date: new Date().toISOString().slice(0, 10), attendees: ['CEO', 'CISO'], inputs: inputs.inputs,
           decisions: ['Fund a fairness re-test'], actions: [{ action: 'Commission fairness re-test of the credit model', due_at: new Date(Date.now() + 60 * 86_400_000).toISOString() }] },
