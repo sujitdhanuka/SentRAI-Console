@@ -4,7 +4,7 @@
  * evidence reuse across packs, and the plugin adapter.
  */
 import { RiskLevel, SutraAlignment } from '../../common/enums';
-import { FeatureFlags } from '../../common/feature-flags';
+import { FeatureFlags, flagSet } from '../../common/feature-flags';
 import { COMPLIANCE_FIXTURES } from '../../../test/fixtures/compliance-fixtures';
 import { getControl, listControls } from '../controls/control-library';
 import { diffPacks } from './pack-diff';
@@ -14,7 +14,7 @@ import { PackDefinition } from './pack.types';
 import { atLeastAsStrict, packFloors, PLATFORM_DEFAULTS, resolveParameters } from './parameter-resolver';
 import { evaluatePluginViaPack } from './plugin-adapter';
 
-const ON: FeatureFlags = { governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true, packEngine: true };
+const ON: FeatureFlags = flagSet(true);
 const nist = BUILT_IN_PACKS.find((p) => p.id === 'nist-ai-rmf')!;
 const clone = (p: PackDefinition): PackDefinition => JSON.parse(JSON.stringify(p));
 

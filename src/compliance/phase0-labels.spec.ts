@@ -7,7 +7,7 @@
 import golden from '../../test/fixtures/compliance-golden.json';
 import { COMPLIANCE_FIXTURES } from '../../test/fixtures/compliance-fixtures';
 import { ModelLifecycleStage, ModelType, RiskLevel, SutraAlignment } from '../common/enums';
-import { FeatureFlags } from '../common/feature-flags';
+import { FeatureFlags, flagSet } from '../common/feature-flags';
 import { AIModelEntry, redTeamIntervalDays } from '../domain/model-inventory';
 import { COVERAGE, getCoverage } from './coverage.data';
 import { isoCodeExists, nistCodeExists, RBI_FREE_AI_RECOMMENDATIONS } from './framework-codes';
@@ -22,8 +22,9 @@ import {
 import { ISO42001Plugin } from './plugins/iso-42001.plugin';
 import { validateSutrasCompliance } from './sutras.validator';
 
-const OFF: FeatureFlags = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false, packEngine: false };
-const ON: FeatureFlags = { governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true, packEngine: false };
+const OFF: FeatureFlags = flagSet(false);
+// Phase 0 flags on, later epics off: these tests pin the legacy validators.
+const ON: FeatureFlags = flagSet(false, { governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true });
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
 

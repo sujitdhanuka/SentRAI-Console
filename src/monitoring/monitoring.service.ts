@@ -25,6 +25,7 @@ import {
   evaluateDrift,
 } from '../domain/monitoring';
 import { latestSuccessfulDrill, latestSuccessfulDrills } from './bcp-drills';
+import { governanceHooks } from '../governance/hooks';
 import { BcpStateStore } from './bcp-state.store';
 import { getGpuUtilization } from './gpu-monitor';
 import { BcpActivateDto, BcpDrillDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
@@ -49,12 +50,21 @@ export class MonitoringService {
     const model = await this.models.findOne({ where: { id: dto.model_id } });
     if (!model) throw new NotFoundException('Model not found');
 
+    // Governance E1.2: the organisation's PSI alert threshold, when settings are on.
+    let psiAlert: number | undefined;
+    if (governanceHooks.orgPackParams) {
+      const project = model.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+      const params = await governanceHooks.orgPackParams(project?.tenantId ?? null);
+      const v = Number(params?.values.psiAlertThreshold);
+      if (params?.sources.psiAlertThreshold && !params.sources.psiAlertThreshold.setBy.includes('platform-default') && v > 0) psiAlert = v;
+    }
     const report = evaluateDrift(
       dto.model_id,
       dto.training_scores,
       dto.live_scores,
       dto.baseline_accuracy,
       dto.current_accuracy,
+      psiAlert,
     );
 
     await this.drifts.save(this.drifts.create({

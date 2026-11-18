@@ -55,6 +55,12 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'operationalState', definition: "VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'" },
   { table: 'ai_models', column: 'operationalStateReason', definition: 'VARCHAR(500) NULL' },
   { table: 'ai_models', column: 'operationalStateSince', definition: 'DATETIME NULL' },
+  // organization.entity.ts — accountable official, governance board (governance E1.9).
+  { table: 'organizations', column: 'accountableOfficialUserId', definition: 'VARCHAR(36) NULL' },
+  { table: 'organizations', column: 'governanceBoard', definition: 'TEXT NULL' },
+  { table: 'organizations', column: 'accountabilityHistory', definition: 'TEXT NULL' },
+  // ai-model.entity.ts — named model owner (governance E1.9).
+  { table: 'ai_models', column: 'ownerUserId', definition: 'VARCHAR(36) NULL' },
   // project.entity.ts — codebase origin ('zip'/'folder'/'github:owner/repo@branch').
   { table: 'projects', column: 'codebaseSource', definition: 'VARCHAR(300) NULL' },
   // project.entity.ts — board-facing executive narrative (Phase 5).
@@ -297,6 +303,24 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`status\` VARCHAR(20) NOT NULL,
       \`loadedAt\` DATETIME NOT NULL,
       UNIQUE INDEX \`IDX_pack_versions_pack_version\` (\`packId\`, \`version\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'governance_settings', // governance-settings.entity.ts (governance E1.2)
+    createSql: `CREATE TABLE IF NOT EXISTS \`governance_settings\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`effectiveFrom\` DATETIME NOT NULL,
+      \`settings\` TEXT NOT NULL,
+      \`changes\` TEXT NULL,
+      \`changedBy\` VARCHAR(255) NOT NULL,
+      \`changedByRole\` VARCHAR(30) NOT NULL,
+      \`reason\` VARCHAR(1000) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      UNIQUE INDEX \`IDX_governance_settings_org_version\` (\`orgId\`, \`version\`),
+      INDEX \`IDX_governance_settings_org\` (\`orgId\`),
+      INDEX \`IDX_governance_settings_effective\` (\`effectiveFrom\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {

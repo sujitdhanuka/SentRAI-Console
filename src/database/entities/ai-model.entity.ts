@@ -164,6 +164,10 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   mergeHistory!: Array<{ source_ref: string; merged_at: string; matched_on: string }> | null;
 
+  /** Named accountable owner (a user) in addition to ownerTeam — governance E1.9. */
+  @Column('varchar', { length: 36, nullable: true })
+  ownerUserId!: string | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

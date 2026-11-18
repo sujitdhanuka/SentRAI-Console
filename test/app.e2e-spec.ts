@@ -2522,8 +2522,9 @@ describe('SentrAI Console (e2e)', () => {
 
     const cc = async () => (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
     let legacy: any;
-    await withEnv({ GOVERNANCE_V2: 'true', GOV_E1_1_PACKS: 'false' }, async () => { legacy = await cc(); });
-    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E1_1_PACKS: 'false', GOV_E1_2_SETTINGS: 'false' }, async () => { legacy = await cc(); });
+    // E1.1 on its own: without settings (E1.2) every pack in force applies, as today.
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E1_2_SETTINGS: 'false' }, async () => {
       // Golden compatibility through the API: the engine reproduces the validators exactly.
       expect(await cc()).toEqual(legacy);
 
@@ -2576,6 +2577,128 @@ describe('SentrAI Console (e2e)', () => {
       expect(base.frameworks.map((f: any) => f.id)).toEqual(['nist_ai_rmf', 'iso_42001']);
       expect(base.packs.filter((p: any) => p.selected).map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001']);
       expect(base.summary.headline).toContain('2 selected frameworks');
+    });
+  });
+
+  it('SETTINGS (E1.2): Owner/CISO only, reason required, effective-dated, pack floors enforced, ledger entry written, parameters applied', async () => {
+    const a = await govOrg('SetOrgA');
+    const b = await govOrg('SetOrgB');
+    const { auth } = a;
+    const put = (t: string, body: any, qs = '') => request(http).put(`/api/v1/governance/settings${qs}`).set(auth(t)).send(body);
+    await request(http).get('/api/v1/governance/settings').set(auth(a.owner)).expect(404);
+    await put(a.owner, { settings: { gateMode: { HIGH: 'BLOCK' } }, reason: 'Board asked for stricter gate' }).expect(404);
+    const features = (await request(http).get('/api/v1/governance/features').set(auth(a.viewer)).expect(200)).body;
+    expect(features.governanceSettings).toBe(false);
+    const ccBody = async () => (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
+    let legacy: any;
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E1_1_PACKS: 'false', GOV_E1_2_SETTINGS: 'false' }, async () => { legacy = await ccBody(); });
+
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      // Default settings (baseline packs, no appetite parameters) leave every verdict unchanged.
+      expect(await ccBody()).toEqual(legacy);
+      const def = (await request(http).get('/api/v1/governance/settings').set(auth(a.viewer)).expect(200)).body;
+      expect(def).toMatchObject({ version: 0, is_default: true, can_edit: false });
+      expect(def.settings.gateMode).toEqual({ LOW: 'OFF', MEDIUM: 'OFF', HIGH: 'WARN', CRITICAL: 'BLOCK' });
+      expect(def.settings.scoringMatrix).toBe('5x5');
+
+      // RBAC: viewer, platform admin and the org's own ADMIN get 403; another org's owner cannot target this org.
+      const change = { settings: { gateMode: { HIGH: 'BLOCK' } }, reason: 'Board asked for a stricter HIGH gate' };
+      await put(a.viewer, change).expect(403);
+      await put(a.admin, change).expect(403);
+      await put(a.orgAdmin, change).expect(403);
+      await put(b.owner, change, `?org_id=${a.orgId}`).expect(403);
+      await put(a.owner, { ...change, reason: '' }).expect(400);
+      await put(a.owner, { ...change, effective_from: '2020-01-01T00:00:00Z' }).expect(400);
+
+      const v1 = (await put(a.owner, change).expect(200)).body;
+      expect(v1).toMatchObject({ saved_version: 1, version: 1, is_default: false });
+      expect(v1.changes).toEqual([{ field: 'gateMode.HIGH', from: 'WARN', to: 'BLOCK' }]);
+      // Org B is untouched.
+      expect((await request(http).get('/api/v1/governance/settings').set(auth(b.owner)).expect(200)).body.version).toBe(0);
+
+      // Pack floors: enabling RBI forces third-party audits for HIGH/CRITICAL; a looser deadline is refused, naming the pack.
+      const rbi = (await put(a.ciso, { settings: { enabledPacks: ['rbi-free-ai'] }, reason: 'Indian lending book in scope' }).expect(200)).body;
+      expect(rbi.settings.appetite.requiredAuditType.HIGH).toBe('THIRD_PARTY');
+      expect(rbi.floors).toEqual(expect.arrayContaining([{ name: 'incidentReportHours', value: 24, packs: ['rbi-free-ai'] }]));
+      const floor = await put(a.ciso, { settings: { appetite: { parameters: { incidentReportHours: 48 } } }, reason: 'Try a looser deadline' }).expect(422);
+      expect(JSON.stringify(floor.body)).toContain('rbi-free-ai');
+      await put(a.ciso, { settings: { appetite: { requiredAuditType: { HIGH: 'INTERNAL' } } }, reason: 'Try internal audit only' }).expect(422);
+
+      // Appetite parameters reach the checks: a 5-day red-team interval fails a model red teamed 10 days ago.
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/governance`).set(auth(a.owner))
+        .send({ last_red_team_date: new Date(Date.now() - 10 * 86_400_000).toISOString() });
+      const rt = async () => (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200))
+        .body.nist_rmf.checks.find((c: any) => c.control_code === 'MEASURE-2.7');
+      const before = await rt();
+      await put(a.ciso, { settings: { appetite: { parameters: { 'redTeamIntervalDays.HIGH': 5 } } }, reason: 'Quarterly is too slow for credit models' }).expect(200);
+      const after = await rt();
+      expect(after.gap).toContain('within 5 days');
+      if (before.passed) expect(after.passed).toBe(false);
+      const params = (await request(http).get('/api/v1/governance/parameters').set(auth(a.owner)).expect(200)).body;
+      expect(params.packs.map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001', 'rbi-free-ai']);
+      expect(params.parameters.find((p: any) => p.name === 'redTeamIntervalDays.HIGH')).toMatchObject({ value: 5, set_by: ['settings'] });
+
+      // Effective dating: a future change is listed as upcoming and not yet in force.
+      const future = new Date(Date.now() + 7 * 86_400_000).toISOString();
+      await put(a.owner, { settings: { scoringMatrix: '3x3' }, reason: 'Move to 3x3 next quarter', effective_from: future }).expect(200);
+      const now = (await request(http).get('/api/v1/governance/settings').set(auth(a.owner)).expect(200)).body;
+      expect(now.settings.scoringMatrix).toBe('5x5');
+      expect(now.upcoming).toHaveLength(1);
+      const later = (await request(http).get(`/api/v1/governance/settings?as_of=${future}`).set(auth(a.owner)).expect(200)).body;
+      expect(later.settings.scoringMatrix).toBe('3x3');
+      expect(later.settings.bands.map((x: any) => x.name)).toEqual(['LOW', 'MEDIUM', 'HIGH']);
+
+      const hist = (await request(http).get('/api/v1/governance/settings/history').set(auth(a.viewer)).expect(200)).body;
+      expect(hist.versions.map((v: any) => v.version)).toEqual([4, 3, 2, 1]);
+      expect(hist.versions[3]).toMatchObject({ changed_by: 'owner@setorga.test', reason: 'Board asked for a stricter HIGH gate' });
+
+      // Ledger: the hash-chained audit event carries the reason and the diff.
+      await new Promise((r) => setTimeout(r, 50));
+      const events = (await request(http).get('/api/v1/audit/events?limit=200').set(auth(a.admin)).expect(200)).body;
+      const rows = Array.isArray(events) ? events : events.events ?? events.items ?? [];
+      const ledger = rows.find((e: any) => JSON.stringify(e).includes('Board asked for a stricter HIGH gate'));
+      expect(ledger).toBeDefined();
+      expect(JSON.stringify(ledger)).toContain('gateMode.HIGH');
+      const chain = (await request(http).get('/api/v1/audit/events/verify').set(auth(a.admin)).expect(200)).body;
+      expect(chain.intact).toBe(true);
+    });
+  });
+
+  it('ACCOUNTABILITY (E1.9): accountable official, board and named owners with history; org-scoped', async () => {
+    const a = await govOrg('AccOrgA');
+    const b = await govOrg('AccOrgB');
+    const { auth } = a;
+    await request(http).get(`/api/v1/organizations/${a.orgId}/accountability`).set(auth(a.owner)).expect(404);
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const users = (await request(http).get('/api/v1/users').set(auth(a.admin)).expect(200)).body;
+      const list = Array.isArray(users) ? users : users.users ?? users.items;
+      const ciso = list.find((u: any) => u.email === 'ciso@accorga.test');
+      const cisoId = ciso.user_id ?? ciso.id;
+      const bCiso = list.find((u: any) => u.email === 'ciso@accorgb.test');
+      const path = `/api/v1/organizations/${a.orgId}/accountability`;
+
+      await request(http).get(path).set(auth(b.owner)).expect(404);
+      await request(http).patch(path).set(auth(a.viewer)).send({ accountable_official_user_id: cisoId, reason: 'Board resolution 12' }).expect(403);
+      await request(http).patch(path).set(auth(a.owner)).send({ accountable_official_user_id: bCiso.user_id ?? bCiso.id, reason: 'Board resolution 12' }).expect(400);
+      await request(http).patch(path).set(auth(a.owner)).send({ accountable_official_user_id: cisoId }).expect(400);
+      const set = (await request(http).patch(path).set(auth(a.owner)).send({
+        accountable_official_user_id: cisoId,
+        governance_board: [{ name: 'Asha Rao', title: 'Chair, Risk Committee' }, { user_id: cisoId, name: 'CISO' }],
+        reason: 'Board resolution 12',
+      }).expect(200)).body;
+      expect(set.accountable_official.email).toBe('ciso@accorga.test');
+      expect(set.governance_board).toHaveLength(2);
+      expect(set.history[0]).toMatchObject({ changed_by: 'owner@accorga.test', reason: 'Board resolution 12' });
+
+      const reg = (await request(http).get(`/api/v1/organizations/${a.orgId}/owner-register`).set(auth(a.viewer)).expect(200)).body;
+      expect(reg.models.map((m: any) => m.model_id)).toEqual([a.modelId]);
+      expect(reg.unowned).toBe(1);
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/owner`).set(auth(b.owner)).send({ owner_user_id: cisoId }).expect(404);
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/owner`).set(auth(a.owner)).send({ owner_user_id: bCiso.user_id ?? bCiso.id }).expect(400);
+      const owned = (await request(http).patch(`/api/v1/inventory/models/${a.modelId}/owner`).set(auth(a.owner)).send({ owner_user_id: cisoId, reason: 'Named owner' }).expect(200)).body;
+      expect(owned.owner.email).toBe('ciso@accorga.test');
+      const reg2 = (await request(http).get(`/api/v1/organizations/${a.orgId}/owner-register`).set(auth(a.owner)).expect(200)).body;
+      expect(reg2.unowned).toBe(0);
     });
   });
 });

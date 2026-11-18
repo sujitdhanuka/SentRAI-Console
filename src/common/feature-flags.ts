@@ -22,6 +22,10 @@ export const EPIC_FLAGS = {
   nistPrivacy: 'GOV_E0_5_NIST_PRIVACY',
   /** E1.1: common control library + framework pack engine behind the validators. */
   packEngine: 'GOV_E1_1_PACKS',
+  /** E1.2: governance settings and risk appetite (Owner/CISO window). */
+  governanceSettings: 'GOV_E1_2_SETTINGS',
+  /** E1.9: accountable official, governance board, named model owners. */
+  accountability: 'GOV_E1_9_ACCOUNTABILITY',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -32,6 +36,8 @@ export interface FeatureFlags {
   bcpDrills: boolean;
   nistPrivacy: boolean;
   packEngine: boolean;
+  governanceSettings: boolean;
+  accountability: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -48,7 +54,15 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     bcpDrills: epic(EPIC_FLAGS.bcpDrills),
     nistPrivacy: epic(EPIC_FLAGS.nistPrivacy),
     packEngine: epic(EPIC_FLAGS.packEngine),
+    governanceSettings: epic(EPIC_FLAGS.governanceSettings),
+    accountability: epic(EPIC_FLAGS.accountability),
   };
+}
+
+/** Every flag set to `value`, with overrides — for tests and fixtures that pin flags. */
+export function flagSet(value: boolean, overrides: Partial<FeatureFlags> = {}): FeatureFlags {
+  const all = Object.fromEntries(['governanceV2', ...Object.keys(EPIC_FLAGS)].map((k) => [k, value])) as unknown as FeatureFlags;
+  return { ...all, ...overrides };
 }
 
 @Injectable()

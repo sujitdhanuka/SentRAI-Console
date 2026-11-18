@@ -23,6 +23,7 @@ import { AgentActionEventEntity } from './agent-action-event.entity';
 import { GrievanceEntity } from './grievance.entity';
 import { PackVersionEntity } from './pack-version.entity';
 import { ControlResultEntity } from './control-result.entity';
+import { GovernanceSettingsEntity } from './governance-settings.entity';
 
 export {
   OrganizationEntity,
@@ -50,6 +51,7 @@ export {
   GrievanceEntity,
   PackVersionEntity,
   ControlResultEntity,
+  GovernanceSettingsEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -78,4 +80,5 @@ export const ALL_ENTITIES = [
   GrievanceEntity,
   PackVersionEntity,
   ControlResultEntity,
+  GovernanceSettingsEntity,
 ];

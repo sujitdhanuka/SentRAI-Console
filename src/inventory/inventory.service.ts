@@ -6,6 +6,7 @@ import {
   OnModuleInit,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { governanceHooks } from '../governance/hooks';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -166,7 +167,24 @@ export class InventoryService implements OnModuleInit {
       bcpConfigured: Boolean(bcpState),
       bcpDrillLastConducted: lastDrill,
       euHighRiskDomains: this.config.get<string[]>('euAiActHighRiskDomains'),
+      // Governance E1.2: the organisation's enabled packs and risk appetite
+      // (strictest wins). Only while the governance hooks are registered and
+      // their flags are on; otherwise the validators use their defaults.
+      ...(await this.governanceContext(modelId)),
     };
+  }
+
+  private async governanceContext(modelId: string): Promise<Pick<ValidationContext, 'packParams' | 'governance'>> {
+    if (!governanceHooks.orgPackParams && !governanceHooks.modelGovernanceFacts) return {};
+    const model = await this.models.findOne({ where: { id: modelId }, select: ['id', 'projectId'] });
+    const project = model?.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+    const orgId = project?.tenantId ?? null;
+    const out: Pick<ValidationContext, 'packParams' | 'governance'> = {};
+    const params = await governanceHooks.orgPackParams?.(orgId);
+    if (params) out.packParams = params;
+    const facts = await governanceHooks.modelGovernanceFacts?.(modelId, orgId);
+    if (facts) out.governance = facts;
+    return out;
   }
 
   /** `lastDrill` is the model's latest successful BCP drill (E0.4); pass it from
