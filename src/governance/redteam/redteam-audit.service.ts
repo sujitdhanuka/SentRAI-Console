@@ -22,11 +22,11 @@ import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, addOrgFacts, emitModelEvent, governanceHooks } from '../hooks';
 import { phase2Param } from '../packs/parameter-resolver';
 import { PacksService } from '../packs/packs.service';
-import { addMonths, DAY_MS, MAINTAINERS, orgFor, orgModels, orgParams, packApplies, reqText, requireRole } from '../phase2-util';
+import { addMonths, DAY_MS, MAINTAINERS, orgFor, orgModels, orgParams, reqText, requireRole } from '../phase2-util';
+import { gateTierOf, GovernanceSettingsDoc } from '../settings/settings.model';
+import { GovernanceSettingsService } from '../settings/settings.service';
 import { RisksService } from '../risks/risks.service';
 
-/** RBI FREE-AI pack id: third-party audits for HIGH systems while it is in force. */
-const RBI_PACK_ID = 'rbi-free-ai';
 const isHigh = (r: string) => r === RiskLevel.HIGH || r === RiskLevel.CRITICAL;
 const LIVE: string[] = [ModelLifecycleStage.DEPLOYED, ModelLifecycleStage.MONITORING];
 /** Platform audit interval for HIGH systems when no pack sets one (matches PLATFORM_DEFAULTS). */
@@ -78,6 +78,7 @@ export class RedTeamAuditService implements OnModuleInit {
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
     private readonly risks: RisksService,
     private readonly packs: PacksService,
+    private readonly settings: GovernanceSettingsService,
     private readonly notifier: NotifierService,
     private readonly flags: FeatureFlagsService,
   ) {}
@@ -104,7 +105,7 @@ export class RedTeamAuditService implements OnModuleInit {
       return { redTeam: { requiredSince: s.requiredSince, reason: s.reason, satisfied: s.satisfied } };
     });
     addOrgFacts(async (orgId) => (this.on() ? { frameworkReview: await this.frameworkReview(orgId) } : undefined));
-    this.risks.addGateContributor(async (model, orgId) => {
+    this.risks.addGateContributor(async (model, orgId, settings) => {
       if (!this.on()) return [];
       const out: Array<{ code: 'red_team_required' | 'audit_overdue'; message: string }> = [];
       const params = await orgParams(this.packs, orgId);
@@ -117,7 +118,7 @@ export class RedTeamAuditService implements OnModuleInit {
             : 'A high-risk system needs a red-team exercise before it goes live',
         });
       }
-      const tp = await this.thirdPartyRequired(model, orgId);
+      const tp = await this.thirdPartyRequired(model, orgId, settings);
       const due = await this.auditDueFor(model, params, tp);
       if (due && due.getTime() < Date.now()) {
         out.push({ code: 'audit_overdue', message: `The periodic ${tp ? 'third-party ' : ''}audit for this ${model.riskLevel} system was due on ${due.toISOString().slice(0, 10)}` });
@@ -130,15 +131,21 @@ export class RedTeamAuditService implements OnModuleInit {
     return (await orgParams(this.packs, orgId))['redTeamPreDeployRequired.HIGH'] === true;
   }
 
-  /** RBI FREE-AI: with the RBI pack in force, the periodic audit of a HIGH / CRITICAL system must be a third-party audit. */
-  private async thirdPartyRequired(model: AIModelEntity, orgId: string | null): Promise<boolean> {
-    return isHigh(model.riskLevel) && (await packApplies(this.packs, orgId, RBI_PACK_ID));
+  /**
+   * When the organisation's appetite requires a THIRD_PARTY audit for the tier (the RBI FREE-AI pack
+   * floors HIGH at THIRD_PARTY), only a third-party or supervisory audit restarts the audit interval.
+   * Same rule and audit types as the Phase 1 third_party_audit_required gate.
+   */
+  private async thirdPartyRequired(model: AIModelEntity, orgId: string | null, settings?: GovernanceSettingsDoc): Promise<boolean> {
+    if (!isHigh(model.riskLevel) || !orgId) return false;
+    const s = settings ?? (await this.settings.inForce(orgId)).settings;
+    return s.appetite?.requiredAuditType?.[gateTierOf(model.riskLevel)] === 'THIRD_PARTY';
   }
 
   private async auditDueFor(model: AIModelEntity, params: Record<string, any>, thirdParty = false): Promise<Date | null> {
     const interval = Number(params['auditIntervalDays.HIGH']) > 0 ? Number(params['auditIntervalDays.HIGH']) : DEFAULT_AUDIT_DAYS;
     const where: Record<string, any> = { modelId: model.id };
-    if (thirdParty) where.auditType = AuditType.THIRD_PARTY;
+    if (thirdParty) where.auditType = In([AuditType.THIRD_PARTY, AuditType.SUPERVISORY]);
     const last = await this.audits.findOne({ where, order: { createdAt: 'DESC' } });
     // The model's own next-audit date says nothing about the audit's type, so a third-party requirement runs from the last third-party audit.
     return auditDue(thirdParty ? { ...model, nextAuditDue: null } : model, last, interval);
