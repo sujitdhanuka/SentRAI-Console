@@ -87,7 +87,7 @@ export const COVERAGE: FrameworkCoverage[] = [
       { code: 'MAP-4.1', name: 'Source & Dependency Provenance' },
       { code: 'MEASURE-2.3', name: 'Performance Benchmarks Recorded' },
       { code: 'MEASURE-2.4', name: 'Performance Drift Measurement' },
-      { code: 'MEASURE-2.7', name: 'Security Red Teaming & Bias Auditing (also evidences MEASURE 2.11)' },
+      { code: 'MEASURE-2.7', name: 'Security Red Teaming (red-team date or report on record)' },
       { code: 'MEASURE-2.10', name: 'Privacy Risk Examined (DPIA / Privacy Review)', flag: 'nistPrivacy' },
       { code: 'MEASURE-3.1', name: 'Risk Tracking Mechanisms (Ledger History)' },
       { code: 'MANAGE-2.1', name: 'Risk Response Resourcing (Named Owner)' },
@@ -161,7 +161,9 @@ export function getCoverage(flags: FeatureFlags = getFeatureFlags()): FrameworkC
   return COVERAGE.map((f) => {
     const evaluated = f.evaluated.filter((c) => !c.flag || flags[c.flag]);
     const recs = evaluated.filter((c) => c.code.startsWith('REC-')).map((c) => c.code.slice(4));
-    const subCount = new Set(evaluated.map((c) => c.code)).size + (evaluated.some((c) => c.code === 'MEASURE-2.7') ? 1 : 0);
+    // Distinct codes only: two checks sharing MAP-1.1 count once, and no check
+    // is credited with a subcategory it does not evidence.
+    const subCount = new Set(evaluated.map((c) => c.code)).size;
     const words = ['zero', 'one', 'two', 'three', 'four', 'five'];
     const statement = f.statement
       .replace('{recCount}', words[recs.length] ?? String(recs.length))

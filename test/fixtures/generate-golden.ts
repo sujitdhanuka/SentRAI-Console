@@ -10,12 +10,16 @@ import { validateEuAiAct, validateIso42001, validateNistRmf } from '../../src/co
 import { validateSutrasCompliance } from '../../src/compliance/sutras.validator';
 import { COMPLIANCE_FIXTURES } from './compliance-fixtures';
 
-const out = COMPLIANCE_FIXTURES.map(({ id, entry, ctx }) => {
+// Pinned: the baseline is the flags-off output, whatever the shell environment says.
+const OFF = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false };
+
+const out = COMPLIANCE_FIXTURES.map(({ id, entry, ctx: base }) => {
+  const ctx = { ...base, flags: OFF };
   const fw = (r: ReturnType<typeof validateNistRmf>) =>
     r.checks.map((c) => ({ code: c.controlCode, passed: c.passed, mandatory: c.mandatory }));
   return {
     id,
-    sutras: validateSutrasCompliance(entry).checks.map((c) => ({ code: c.sutra, passed: c.passed, mandatory: c.mandatory })),
+    sutras: validateSutrasCompliance(entry, { flags: OFF }).checks.map((c) => ({ code: c.sutra, passed: c.passed, mandatory: c.mandatory })),
     nist: fw(validateNistRmf(entry, ctx)),
     eu: fw(validateEuAiAct(entry, ctx)),
     iso: fw(validateIso42001(entry, ctx)),

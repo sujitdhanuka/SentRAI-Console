@@ -99,14 +99,19 @@ export class ScheduledTasksService {
     }
   }
 
-  /** REC 21 (E0.4): remind owners before a HIGH-risk model's BCP drill falls due,
-   *  and flag missing or overdue drills (daily). No-op unless GOV_E0_4_BCP_DRILLS is on. */
+  /** REC 21 (E0.4): flag HIGH/CRITICAL models whose BCP drill is missing, due
+   *  soon or overdue (daily). Sends one operator-webhook notification per
+   *  organization, so tenants are never mixed in a payload. The webhook goes to
+   *  the operator, not model owners (same channel as incidents_overdue).
+   *  No-op unless GOV_E0_4_BCP_DRILLS is on. */
   @Cron('30 0 * * *')
   async checkBcpDrills(): Promise<number> {
     const due = await this.monitoring.drillsNeedingAttention();
-    if (due.length > 0) {
-      this.logger.log(`bcp_drill_check needing_attention=${due.length}`);
-      await this.notifier.notify('bcp_drill_due', { count: due.length, models: due });
+    const byTenant = new Map<string | null, typeof due>();
+    for (const d of due) byTenant.set(d.tenant_id, [...(byTenant.get(d.tenant_id) ?? []), d]);
+    for (const [tenantId, models] of byTenant) {
+      this.logger.log(`bcp_drill_check tenant=${tenantId ?? 'none'} needing_attention=${models.length}`);
+      await this.notifier.notify('bcp_drill_due', { tenant_id: tenantId, count: models.length, models });
     }
     return due.length;
   }

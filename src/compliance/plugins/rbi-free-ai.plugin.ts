@@ -54,7 +54,12 @@ export class RBIFreeAIPlugin implements ComplianceFrameworkPlugin {
       projectId: null,
     };
 
-    const report = validateSutrasCompliance(entry);
+    // Operational evidence the caller can supply on the asset: the latest
+    // successful BCP drill (Sutra 7 / Rec 21 when GOV_E0_4_BCP_DRILLS is on).
+    const drill = asset.bcp_drill_last_conducted ? new Date(asset.bcp_drill_last_conducted) : null;
+    const report = validateSutrasCompliance(entry, {
+      bcpDrillLastConducted: drill && !Number.isNaN(drill.getTime()) ? drill : null,
+    });
     const gaps = sutrasBlockingGaps(report);
 
     const blocking: ControlResult[] = gaps.map((g, i) =>

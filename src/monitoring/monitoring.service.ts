@@ -12,6 +12,7 @@ import {
   ScoreWindowEntity,
 } from '../database/entities';
 import { DriftStatus, RiskLevel, Role } from '../common/enums';
+import { isHighOrAbove } from '../domain/model-inventory';
 import { FeatureFlagsService } from '../common/feature-flags';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { NotifierService } from '../common/notifier.service';
@@ -23,6 +24,7 @@ import {
   driftSummary,
   evaluateDrift,
 } from '../domain/monitoring';
+import { latestSuccessfulDrill, latestSuccessfulDrills } from './bcp-drills';
 import { BcpStateStore } from './bcp-state.store';
 import { getGpuUtilization } from './gpu-monitor';
 import { BcpActivateDto, BcpDrillDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
@@ -311,11 +313,14 @@ export class MonitoringService {
       recordedAt: now,
     }));
 
-    // drillLastConducted tracks the newest drill, so back-dating an older drill
-    // never moves it backwards.
-    const state = await this.bcp.getOrCreate(model.id);
-    if (!state.drillLastConducted || state.drillLastConducted.getTime() < conductedAt.getTime()) {
-      state.drillLastConducted = conductedAt;
+    // bcp_states.drillLastConducted mirrors the newest *passed* drill, so a
+    // failed drill or a back-dated older one never moves it. It is only updated
+    // on an existing BCP state row: creating one here would make the NIST
+    // MANAGE-2.4 "fallback configured" check pass with no fallback set up.
+    const lastPassed = await latestSuccessfulDrill(this.drills, model.id);
+    const state = await this.bcp.get(model.id);
+    if (state && lastPassed && state.drillLastConducted?.getTime() !== lastPassed.getTime()) {
+      state.drillLastConducted = lastPassed;
       await this.bcp.save(state);
     }
 
@@ -328,48 +333,63 @@ export class MonitoringService {
       occurredAt: now,
     }));
 
-    return { ...this.drillView(row), ...this.drillSummary(state.drillLastConducted) };
+    return { ...this.drillView(row), ...this.drillSummary(lastPassed, row.result) };
   }
 
   async listDrills(user: CurrentUser, modelId: string) {
     this.assertDrillsEnabled();
     const model = await this.modelForUser(user, modelId);
-    const [rows, state] = await Promise.all([
+    const [rows, lastPassed] = await Promise.all([
       this.drills.find({ where: { modelId: model.id }, order: { conductedAt: 'DESC' }, take: 100 }),
-      this.bcp.get(model.id),
+      latestSuccessfulDrill(this.drills, model.id),
     ]);
     return {
       model_id: model.id,
       risk_level: model.riskLevel,
-      ...this.drillSummary(state?.drillLastConducted ?? null),
+      drill_required: isHighOrAbove(model.riskLevel as RiskLevel),
+      ...this.drillSummary(lastPassed, rows[0]?.result ?? null),
       drills: rows.map((r) => this.drillView(r)),
     };
   }
 
-  private drillSummary(last: Date | null) {
+  /** Status is measured from the latest *passed* drill (Rec 21); the newest
+   *  drill's result is reported alongside so a recent failure is visible. */
+  private drillSummary(last: Date | null, latestResult: string | null) {
     const s = bcpDrillStatus(last);
     return {
       drill_last_conducted: last ? last.toISOString() : null,
+      latest_drill_result: latestResult,
       drill_interval_days: bcpDrillIntervalDays(),
       drill_status: s.status,
       next_drill_due: s.dueAt ? s.dueAt.toISOString() : null,
     };
   }
 
-  /** Active HIGH/CRITICAL models whose drill is missing, due soon or overdue
-   *  (the scheduled reminder job). Empty while the flag is off. */
+  /** Active HIGH/CRITICAL models whose passed drill is missing, due soon or
+   *  overdue (the scheduled reminder job), each tagged with its organization so
+   *  the notification can be split per tenant. Empty while the flag is off. */
   async drillsNeedingAttention(now: Date = new Date()) {
     if (!this.flags.isEnabled('bcpDrills')) return [];
     const models = await this.models.find({
       where: { isActive: true, riskLevel: In([RiskLevel.HIGH, RiskLevel.CRITICAL]) },
-      select: ['id', 'name', 'riskLevel'],
+      select: ['id', 'name', 'riskLevel', 'projectId'],
     });
-    const out: Array<{ model_id: string; model_name: string; status: string; next_drill_due: string | null }> = [];
+    const [passed, projects] = await Promise.all([
+      latestSuccessfulDrills(this.drills, models.map((m) => m.id)),
+      this.projects.find({ where: { id: In([...new Set(models.map((m) => m.projectId).filter((p): p is string => Boolean(p)))]) } }),
+    ]);
+    const tenantOf = new Map(projects.map((p) => [p.id, p.tenantId ?? null]));
+    const out: Array<{ model_id: string; model_name: string; tenant_id: string | null; status: string; next_drill_due: string | null }> = [];
     for (const m of models) {
-      const state = await this.bcp.get(m.id);
-      const s = bcpDrillStatus(state?.drillLastConducted ?? null, now);
+      const s = bcpDrillStatus(passed.get(m.id) ?? null, now);
       if (s.status !== 'CURRENT') {
-        out.push({ model_id: m.id, model_name: m.name, status: s.status, next_drill_due: s.dueAt ? s.dueAt.toISOString() : null });
+        out.push({
+          model_id: m.id,
+          model_name: m.name,
+          tenant_id: m.projectId ? tenantOf.get(m.projectId) ?? null : null,
+          status: s.status,
+          next_drill_due: s.dueAt ? s.dueAt.toISOString() : null,
+        });
       }
     }
     return out;
