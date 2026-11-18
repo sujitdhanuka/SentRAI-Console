@@ -27,7 +27,8 @@ export const REGIMES: Regime[] = [
   },
   {
     id: 'eu_ai_act', name: 'EU AI Act', jurisdiction: 'European Union', authority: 'European Commission / national authorities',
-    incidentReportHours: 72,
+    // Art. 73(2): 15 days for a serious incident (2 days for widespread infringement, 10 for a death).
+    incidentReportHours: 360,
     disclosureObligations: ['Transparency to affected persons', 'High-risk system registration', 'Serious-incident reporting', 'Human-oversight disclosure'],
     consumerRedress: true, reference: 'Regulation (EU) 2024/1689', status: 'operational',
   },

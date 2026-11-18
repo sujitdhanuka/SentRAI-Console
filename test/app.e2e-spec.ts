@@ -2547,7 +2547,9 @@ describe('SentrAI Console (e2e)', () => {
 
       const params = (await request(http).get('/api/v1/governance/parameters').set(auth(a.owner)).expect(200)).body;
       const hours = params.parameters.find((p: any) => p.name === 'incidentReportHours');
-      expect(hours).toMatchObject({ value: 24, set_by: ['rbi-free-ai'], rule: 'min' });
+      expect(hours).toMatchObject({ value: 24, set_by: ['rbi-free-ai'], rule: 'min', enforced: false, enforced_by: [] });
+      expect(hours.candidates.find((c: any) => c.source === 'eu-ai-act').value).toBe(360);
+      expect(params.parameters.find((p: any) => p.name === 'driftRecencyDays')).toMatchObject({ enforced: true });
       await request(http).get('/api/v1/governance/parameters?as_of=not-a-date').set(auth(a.owner)).expect(400);
 
       // Live evaluation: one result per control, reported under every pack clause; tenant isolation.
@@ -2559,6 +2561,8 @@ describe('SentrAI Console (e2e)', () => {
       await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(b.owner)).expect(404);
       const past = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls?as_of=2024-01-01`).set(auth(a.owner)).expect(200)).body;
       expect(Object.keys(past.pack_versions)).toEqual(['nist-ai-rmf', 'iso-42001']); // RBI and EU packs not yet in force
+      expect(past.basis).toBe('CURRENT_MODEL_STATE_UNDER_RULES_AS_OF');
+      expect(past.recorded_as_of).toBeNull(); // nothing was recorded by 2024
 
       await request(http).post(`/api/v1/governance/models/${a.modelId}/evaluate`).set(auth(a.viewer)).expect(403);
       await request(http).post(`/api/v1/governance/models/${a.modelId}/evaluate`).set(auth(b.owner)).expect(404);
@@ -2567,6 +2571,10 @@ describe('SentrAI Console (e2e)', () => {
       const latest = (await request(http).get(`/api/v1/governance/models/${a.modelId}/control-results`).set(auth(a.viewer)).expect(200)).body;
       expect(latest.results).toHaveLength(ev.controls.length);
       expect(latest.results[0].pack_versions).toEqual(ev.pack_versions);
+      // as_of after a recorded evaluation returns that record as it stood.
+      await new Promise((r) => setTimeout(r, 1100));
+      const asRecorded = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls?as_of=${new Date().toISOString()}`).set(auth(a.owner)).expect(200)).body;
+      expect(asRecorded.recorded_as_of.results).toHaveLength(ev.controls.length);
 
       // Pack selector on the rollup.
       const all = (await request(http).get('/api/v1/compliance/portfolio').set(auth(a.owner)).expect(200)).body;
@@ -2576,6 +2584,8 @@ describe('SentrAI Console (e2e)', () => {
       expect(base.frameworks.map((f: any) => f.id)).toEqual(['nist_ai_rmf', 'iso_42001']);
       expect(base.packs.filter((p: any) => p.selected).map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001']);
       expect(base.summary.headline).toContain('2 selected frameworks');
+      // An unknown pack id is refused rather than reported as 100% compliant.
+      await request(http).get('/api/v1/compliance/portfolio?packs=nist-ai-rmf,not-a-pack').set(auth(a.owner)).expect(400);
     });
   });
 });
