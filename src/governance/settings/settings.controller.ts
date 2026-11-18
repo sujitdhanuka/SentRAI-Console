@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query, Req, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -7,6 +7,7 @@ import { Role } from '../../common/enums';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { orgScope } from '../governance-access';
 import { GovernanceSettingsService } from './settings.service';
+import { ActingOrgInterceptor } from '../acting-org.interceptor';
 
 /**
  * Governance settings window (E1.2). Read by anyone in the organisation;
@@ -15,6 +16,7 @@ import { GovernanceSettingsService } from './settings.service';
  */
 @ApiTags('Governance')
 @ApiBearerAuth()
+@UseInterceptors(ActingOrgInterceptor)
 @Controller('api/v1/governance/settings')
 export class GovernanceSettingsController {
   constructor(private readonly settings: GovernanceSettingsService) {}

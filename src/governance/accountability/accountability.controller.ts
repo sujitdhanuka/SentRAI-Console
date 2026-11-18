@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,10 +6,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { AccountabilityService } from './accountability.service';
+import { ActingOrgInterceptor } from '../acting-org.interceptor';
 
 /** Accountability (E1.9). 404 unless GOV_E1_9_ACCOUNTABILITY is on. */
 @ApiTags('Governance')
 @ApiBearerAuth()
+@UseInterceptors(ActingOrgInterceptor)
 @Controller('api/v1')
 export class AccountabilityController {
   constructor(private readonly svc: AccountabilityService) {}

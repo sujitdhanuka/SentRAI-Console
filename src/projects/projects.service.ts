@@ -81,6 +81,7 @@ export class ProjectsService {
       model_count: models.length,
       compliant_count: compliant,
       open_gap_count: openGaps,
+      tenant_id: orm.tenantId ?? null,
       tenant_name: tenantName,
       has_scan_result: orm.lastScanResult != null,
       models_discovered: orm.lastScanResult ? orm.lastScanResult.files_flagged : null,

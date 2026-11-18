@@ -7,6 +7,9 @@
 export const API = '/api/v1';
 export const TOKEN_KEY = 'sentrai_access_token';
 export const USER_KEY = 'sentrai_user';
+/** Organization of the selected project scope. A global OWNER/ADMIN works in
+ *  that organization's governance; the server ignores it for org members. */
+export const ACTIVE_ORG_KEY = 'sentrai_active_org_id';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -16,7 +19,11 @@ export class ApiError extends Error {
 
 function authHeader(): Record<string, string> {
   const token = localStorage.getItem(TOKEN_KEY);
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const org = localStorage.getItem(ACTIVE_ORG_KEY);
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(org ? { 'X-SentrAI-Org': org } : {}),
+  };
 }
 
 async function readError(res: Response): Promise<string> {

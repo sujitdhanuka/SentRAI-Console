@@ -643,17 +643,50 @@ export function Governance() {
   const features = useGovernanceFeatures((s) => s.features);
   const load = useGovernanceFeatures((s) => s.load);
   const user = useSession((s) => s.user);
+  const activeProjectId = useSession((s) => s.activeProjectId);
+  const activeOrgId = useSession((s) => s.activeOrgId);
+  const setActiveOrg = useSession((s) => s.setActiveOrg);
   const [tab, setTab] = useState('');
+  const [scopeOrgName, setScopeOrgName] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(false);
   useEffect(() => {
     void load();
   }, [load]);
 
+  // A global OWNER/ADMIN (no organization of their own) works in the
+  // organization of the selected project scope.
+  const isGlobal = !user?.tenant_id && (user?.role === 'ADMIN' || user?.role === 'OWNER');
+  useEffect(() => {
+    if (!isGlobal || !activeProjectId) {
+      setScopeOrgName(null);
+      return;
+    }
+    let cancelled = false;
+    setResolving(true);
+    api<{ tenant_id?: string | null; tenant_name?: string | null }>(`/projects/${activeProjectId}`)
+      .then((p) => {
+        if (cancelled) return;
+        if ((p.tenant_id ?? null) !== activeOrgId) setActiveOrg(p.tenant_id ?? null);
+        setScopeOrgName(p.tenant_name ?? null);
+      })
+      .catch(() => undefined)
+      .finally(() => !cancelled && setResolving(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [isGlobal, activeProjectId, activeOrgId, setActiveOrg]);
+
   const tabs = TABS.filter((t) => features?.[t.flag]);
-  const orgId = user?.tenant_id ?? null;
+  const orgId = user?.tenant_id ?? (isGlobal && activeProjectId ? activeOrgId : null);
   const active = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? 'settings';
 
   return (
     <AppShell title="Governance">
+      {isGlobal && orgId && (
+        <div className="shrink-0 border-b border-border bg-accent-soft px-3 py-1 text-[10.5px] text-accent">
+          Working in {scopeOrgName ?? 'the scoped organization'}'s governance, from the selected project scope.
+        </div>
+      )}
       <div className="flex shrink-0 gap-1 border-b border-border px-2 pt-1" role="tablist">
         {tabs.map((t) => (
           <button
@@ -667,16 +700,22 @@ export function Governance() {
           </button>
         ))}
       </div>
-      <main className="min-h-0 flex-1 overflow-y-auto p-2">
-        {!features ? (
+      <main key={orgId ?? 'none'} className="min-h-0 flex-1 overflow-y-auto p-2">
+        {!features || resolving ? (
           <Skeleton className="h-64 w-full" />
         ) : !features.governanceSettings ? (
           <Panel title="Governance"><p className="p-3 text-[11px] text-text-secondary">Governance settings are not switched on for this deployment.</p></Panel>
         ) : !orgId ? (
           <Panel title="Governance">
             <div className="space-y-2 p-3 text-[11px] text-text-secondary">
-              <p>Governance is kept per organization, and your account is not assigned to one yet.</p>
-              {(user?.role === 'ADMIN' || user?.role === 'OWNER') ? (
+              <p>Governance is kept per organization.</p>
+              {isGlobal && activeProjectId ? (
+                <p>The selected project is not in an organization. Assign it to one, or pick a project that belongs to one on the <a href="#/projects" className="text-accent underline">Projects</a> page.</p>
+              ) : isGlobal ? (
+                <p>
+                  Your account works across organizations. Pick a project on the <a href="#/projects" className="text-accent underline">Projects</a> page to set the scope, and governance opens for that project's organization.
+                </p>
+              ) : (user?.role === 'ADMIN' || user?.role === 'OWNER') ? (
                 <p>
                   Open <a href="#/users" className="text-accent underline">Users</a>, choose Edit on your account (or another user), pick the organization, then sign out and back in.
                 </p>

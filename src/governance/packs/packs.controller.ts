@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,10 +6,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../../common/enums';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { PacksService } from './packs.service';
+import { ActingOrgInterceptor } from '../acting-org.interceptor';
 
 /** Framework packs and the control library (E1.1). Every route is a 404 unless GOV_E1_1_PACKS is on. */
 @ApiTags('Governance')
 @ApiBearerAuth()
+@UseInterceptors(ActingOrgInterceptor)
 @Controller('api/v1/governance')
 export class PacksController {
   constructor(private readonly packs: PacksService) {}

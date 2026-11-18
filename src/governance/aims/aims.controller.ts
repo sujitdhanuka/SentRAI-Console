@@ -1,14 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { AIMS_EDITORS, AimsService } from './aims.service';
+import { ActingOrgInterceptor } from '../acting-org.interceptor';
 
 /** AIMS workspace (E1.6). 404 unless GOV_E1_6_AIMS is on. Edit: Owner, CISO, Admin of the org. */
 @ApiTags('Governance')
 @ApiBearerAuth()
+@UseInterceptors(ActingOrgInterceptor)
 @Controller('api/v1/governance/aims')
 export class AimsController {
   constructor(private readonly aims: AimsService) {}

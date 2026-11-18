@@ -1,14 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { RISK_WRITERS, RisksService } from './risks.service';
+import { ActingOrgInterceptor } from '../acting-org.interceptor';
 
 /** Risk register (E1.3). 404 unless GOV_E1_3_RISKS is on. */
 @ApiTags('Governance')
 @ApiBearerAuth()
+@UseInterceptors(ActingOrgInterceptor)
 @Controller('api/v1/governance')
 export class RisksController {
   constructor(private readonly risks: RisksService) {}

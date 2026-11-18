@@ -24,6 +24,8 @@ interface Project {
   last_scanned_at: string | null;
   has_scan_result?: boolean;
   codebase_source?: string | null;
+  tenant_id?: string | null;
+  tenant_name?: string | null;
 }
 
 const CARD = 'rounded-md border border-border bg-surface p-3';
@@ -132,7 +134,7 @@ export function Projects() {
   };
 
   const activate = (p: Project) => {
-    setActiveProject(p.project_id, p.name);
+    setActiveProject(p.project_id, p.name, p.tenant_id ?? null);
     toast(`Scope set to ${p.name}`, 'positive');
     navigate('inventory');
   };

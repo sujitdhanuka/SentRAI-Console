@@ -2645,6 +2645,43 @@ describe('SentrAI Console (e2e)', () => {
     });
   });
 
+  it('ACTING ORG: a global OWNER works in the scoped organization via X-SentrAI-Org; org members cannot use it', async () => {
+    const a = await govOrg('ActOrgA');
+    const b = await govOrg('ActOrgB');
+    const { auth } = a;
+    await request(http).post('/api/v1/users').set(auth(a.admin))
+      .send({ email: 'global-owner@act.test', full_name: 'Global Owner', password: 'pw12345678', role: 'OWNER' }).expect(201);
+    const gOwner = await login('global-owner@act.test', 'pw12345678');
+    const as = (t: string, org?: string) => ({ ...auth(t), ...(org ? { 'X-SentrAI-Org': org } : {}) });
+
+    // The project response names its organization, so the console can resolve the scope.
+    const proj = (await request(http).get(`/api/v1/projects/${a.projectId}`).set(auth(a.owner)).expect(200)).body;
+    expect(proj.tenant_id).toBe(a.orgId);
+
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      // Without a scope a global owner has no organization.
+      await request(http).get('/api/v1/governance/settings').set(as(gOwner)).expect(404);
+      // With the scope header they read and edit that org's settings.
+      const view = (await request(http).get('/api/v1/governance/settings').set(as(gOwner, a.orgId)).expect(200)).body;
+      expect(view.can_edit).toBe(true);
+      await request(http).put('/api/v1/governance/settings').set(as(gOwner, a.orgId))
+        .send({ settings: { gateMode: { HIGH: 'BLOCK' } }, reason: 'Global owner tightening the HIGH gate' }).expect(200);
+      expect((await request(http).get('/api/v1/governance/settings').set(auth(a.owner)).expect(200)).body.settings.gateMode.HIGH).toBe('BLOCK');
+      expect((await request(http).get('/api/v1/governance/settings').set(auth(b.owner)).expect(200)).body.settings.gateMode.HIGH).not.toBe('BLOCK');
+      // Accountability for the scoped org opens too.
+      await request(http).get(`/api/v1/organizations/${a.orgId}/accountability`).set(as(gOwner, a.orgId)).expect(200);
+      // Unknown organization is a 404.
+      await request(http).get('/api/v1/governance/settings').set(as(gOwner, 'no-such-org')).expect(404);
+      // An org member's header is ignored: B's owner still acts in B.
+      await request(http).put('/api/v1/governance/settings').set(as(b.owner, a.orgId))
+        .send({ settings: { gateMode: { MEDIUM: 'BLOCK' } }, reason: 'Trying to reach another org' }).expect(200);
+      expect((await request(http).get('/api/v1/governance/settings').set(auth(a.owner)).expect(200)).body.settings.gateMode.MEDIUM).not.toBe('BLOCK');
+      // A global admin can read but still cannot edit settings (not an editor role).
+      await request(http).put('/api/v1/governance/settings').set(as(a.admin, a.orgId))
+        .send({ settings: { gateMode: { HIGH: 'WARN' } }, reason: 'Admin should not edit settings' }).expect(403);
+    });
+  });
+
   it('SETTINGS (E1.2): Owner/CISO only, reason required, effective-dated, pack floors enforced, ledger entry written, parameters applied', async () => {
     const a = await govOrg('SetOrgA');
     const b = await govOrg('SetOrgB');

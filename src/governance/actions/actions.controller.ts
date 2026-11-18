@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -6,10 +6,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { RISK_WRITERS } from '../risks/risks.service';
 import { CorrectiveActionsService } from './actions.service';
+import { ActingOrgInterceptor } from '../acting-org.interceptor';
 
 /** Corrective-action register (E1.7). 404 unless GOV_E1_7_ACTIONS is on. */
 @ApiTags('Governance')
 @ApiBearerAuth()
+@UseInterceptors(ActingOrgInterceptor)
 @Controller('api/v1/governance/actions')
 export class CorrectiveActionsController {
   constructor(private readonly ca: CorrectiveActionsService) {}

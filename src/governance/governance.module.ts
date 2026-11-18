@@ -46,6 +46,7 @@ import { ImpactAssessmentController } from './impact/impact.controller';
 import { ImpactAssessmentService } from './impact/impact.service';
 import { ContextProfileController } from './context/context.controller';
 import { ContextProfileService } from './context/context.service';
+import { ActingOrgInterceptor } from './acting-org.interceptor';
 
 /**
  * Governance module (plan section 3): everything shared across frameworks.
@@ -71,6 +72,7 @@ import { ContextProfileService } from './context/context.service';
     CorrectiveActionsController, DocumentsController,
   ],
   providers: [
+    ActingOrgInterceptor,
     PacksService, GovernanceSettingsService, AccountabilityService, RisksService, ImpactAssessmentService,
     ContextProfileService, AimsService, CorrectiveActionsService, DocumentsService, NotifierService, FeatureFlagsService,
   ],
