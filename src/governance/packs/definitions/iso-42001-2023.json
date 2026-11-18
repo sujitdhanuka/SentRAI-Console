@@ -1,0 +1,77 @@
+{
+  "id": "iso-42001",
+  "version": "2023.1.0",
+  "effectiveFrom": "2023-12-18",
+  "name": "ISO/IEC 42001:2023",
+  "jurisdiction": "International",
+  "baseline": true,
+  "region": null,
+  "reportFormat": "framework",
+  "reportName": "ISO 42001",
+  "responseKey": "iso_42001",
+  "legacyId": "iso_42001",
+  "tierClassifier": "iso",
+  "source": "ISO/IEC 42001:2023 clauses 4–10 and Annex A",
+  "changelog": [
+    "2023.1.0: migrated from frameworks.validator.ts with the Phase 0 corrected codes; results unchanged."
+  ],
+  "parameters": {},
+  "clauses": [
+    {
+      "code": "AIMS-6.1.2", "clause": "6.1.2", "name": "AI System Risk Assessment",
+      "control": "CTL-RISK-01", "opts": { "requirePolicy": false }, "mandatory": true,
+      "evidence": { "pass": "System evaluated risk tier: {riskLevel}", "fail": "Risk level unclassified" },
+      "gap": "ISO 42001 requires systematic risk classification for each AI system."
+    },
+    {
+      "code": "AIMS-8.4", "clause": "8.4", "name": "AI System Impact Assessment (6.1.4 / 8.4)",
+      "control": "CTL-IMPACT-01", "mandatory": false, "alsoEvidences": ["6.1.4", "A.5.2", "A.5.3", "A.5.4", "A.5.5"],
+      "evidence": {
+        "not_assessed": "NOT ASSESSED: SentRAI does not yet record AI system impact assessments; a use-case description is not one",
+        "missing": "No AI system impact assessment recorded for this model",
+        "not_final": "Impact assessment v{version} is {status}, not FINAL",
+        "pass": "Impact assessment v{version} signed {signedAt}"
+      },
+      "gap": "Clauses 6.1.4 and 8.4 require documented AI system impact assessments; keep yours outside SentRAI until the impact-assessment workflow ships."
+    },
+    {
+      "code": "AIMS-A.7.5", "clause": "A.7.5", "name": "Data & Codebase Provenance",
+      "control": "CTL-PROV-01", "mandatory": true,
+      "evidence": { "pass": "Source/data references tracked: {provenanceOrList}", "fail": "No codebase or data dependencies registered" },
+      "gap": "Annex A.7.5 requires recorded provenance: track the source repository or third-party dependencies."
+    },
+    {
+      "code": "AIMS-9.1", "clause": "9.1", "name": "Performance Monitoring & Measurement",
+      "control": "CTL-MON-01", "mandatory": { "riskIn": ["MEDIUM", "HIGH", "CRITICAL"] },
+      "gap": "Clause 9.1 requires active performance monitoring of deployed AI systems."
+    },
+    {
+      "code": "AIMS-9.2", "clause": "9.2", "name": "Internal Audit Cadence",
+      "control": "CTL-AUD-01", "opts": { "requireFuture": true }, "mandatory": false,
+      "evidence": {
+        "pass": "Next audit scheduled for {nextAuditDue}",
+        "past_due": "Audit is past due",
+        "none": "No internal audit scheduled"
+      },
+      "gap": "Clause 9.2 requires internal audits at planned intervals; schedule the next audit."
+    },
+    {
+      "code": "AIMS-10.2", "clause": "10.2", "name": "Nonconformity & Corrective Action",
+      "control": "CTL-INC-01", "mandatory": false,
+      "evidence": { "pass": "No overdue incident reports", "fail": "{overdue} incident(s) past reporting deadline" },
+      "gap": "Clause 10.2 requires timely handling of nonconformities: report overdue incidents."
+    },
+    {
+      "code": "AIMS-5.3", "clause": "5.3", "name": "Roles, Responsibilities & Accountability",
+      "control": "CTL-ACC-01", "opts": { "rule": "prefix" }, "mandatory": true,
+      "evidence": { "pass": "Accountable team assigned: {ownerTeam}", "fail": "No accountable team assigned to this AI system" },
+      "gap": "Clause 5.3 requires assigned roles and responsibilities: assign a named owner team."
+    },
+    {
+      "code": "AIMS-A.6.2.7", "clause": "A.6.2.7", "name": "AI System Technical Documentation",
+      "control": "CTL-DOC-02", "mandatory": false,
+      "evidence": { "pass": "Model card / system documentation artifact attached", "fail": "No model card attached" },
+      "gap": "Annex A.6.2.7 recommends technical documentation for relevant parties (attach a model_card artifact)."
+    }
+  ]
+}

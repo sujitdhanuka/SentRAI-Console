@@ -6,6 +6,8 @@ import { RiskLevel, SutraAlignment } from '../common/enums';
 import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
 import { AIModelEntry, hasEvidence, isHighOrAbove, redTeamWithinInterval } from '../domain/model-inventory';
 import { bcpDrillIntervalDays, bcpDrillStatus } from '../domain/monitoring';
+import { evaluatePackById, toSutrasReport } from '../governance/packs/pack-engine';
+import type { ResolvedParameters } from '../governance/packs/pack.types';
 
 /** Operational evidence the Sutra checks can use when the caller has it. */
 export interface SutrasContext {
@@ -13,6 +15,9 @@ export interface SutrasContext {
   bcpDrillLastConducted?: Date | null;
   /** Governance feature flags; read from the environment when omitted. */
   flags?: FeatureFlags;
+  /** Parameters resolved for the model's organisation (E1.1/E1.2); defaults when omitted. */
+  packParams?: ResolvedParameters;
+  governance?: Record<string, any>;
 }
 
 export interface SutraCheck {
@@ -54,8 +59,10 @@ export function sutrasReportAsDict(report: SutrasComplianceReport): Record<strin
 }
 
 export function validateSutrasCompliance(entry: AIModelEntry, ctx: SutrasContext = {}): SutrasComplianceReport {
-  const checks: SutraCheck[] = [];
   const flags = ctx.flags ?? getFeatureFlags();
+  // E1.1: with GOV_E1_1_PACKS on, the RBI FREE-AI pack produces this report.
+  if (flags.packEngine) return toSutrasReport(evaluatePackById('rbi-free-ai', entry, ctx, { flags, params: ctx.packParams }), entry);
+  const checks: SutraCheck[] = [];
   const isMedOrHigh = entry.riskLevel === RiskLevel.MEDIUM || entry.riskLevel === RiskLevel.HIGH;
 
   // Sutra 1: Trust is the Foundation

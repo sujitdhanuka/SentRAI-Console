@@ -1,0 +1,127 @@
+{
+  "id": "eu-ai-act",
+  "version": "2024.1.0",
+  "effectiveFrom": "2024-08-01",
+  "name": "EU AI Act (Regulation 2024/1689)",
+  "jurisdiction": "European Union",
+  "baseline": false,
+  "region": "EU",
+  "reportFormat": "framework",
+  "reportName": "EU AI Act",
+  "responseKey": "eu_ai_act",
+  "legacyId": "eu_ai_act",
+  "tierClassifier": "eu",
+  "source": "Regulation (EU) 2024/1689. Not re-assessed in this round (plan section 10).",
+  "changelog": [
+    "2024.1.0: migrated from frameworks.validator.ts; results unchanged."
+  ],
+  "parameters": {
+    "euHighRiskDomains": ["credit_underwriting", "loan_decisioning", "fund_movement", "credit_scoring", "insurance_pricing"],
+    "incidentReportHours": 72
+  },
+  "clauses": [
+    {
+      "code": "Art-9", "clause": "Article 9", "name": "Risk Management System",
+      "control": "CTL-RISK-01", "opts": { "requirePolicy": true }, "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": { "pass": "Risk tier {riskLevel} under board policy {boardPolicyRef}", "fail": "Risk classification or governing policy reference missing" },
+      "gap": "High-risk AI systems require a documented risk-management system (classification + board policy)."
+    },
+    {
+      "code": "Art-10", "clause": "Article 10", "name": "Data & Data Governance",
+      "control": "CTL-DATA-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": {
+        "bias_test": "Bias-test evidence artifact attached",
+        "dependencies": "Training data dependencies documented",
+        "fail": "No bias-testing evidence or data dependencies recorded"
+      },
+      "gap": "High-risk systems must document training data governance and bias testing (attach a bias_test artifact)."
+    },
+    {
+      "code": "Art-11", "clause": "Article 11", "name": "Technical Documentation",
+      "control": "CTL-DOC-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": { "pass": "Source codebase ref: {sourceRef}; purpose documented", "fail": "Missing source traceability or substantive purpose documentation" },
+      "gap": "High-risk AI systems must have complete technical documentation including source traceability."
+    },
+    {
+      "code": "Art-12", "clause": "Article 12", "name": "Record-Keeping (Automatic Logs)",
+      "control": "CTL-REC-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": {
+        "pass": "{ledgerEventCount} ledger event(s), {driftReportCount} drift evaluation(s) on record",
+        "fail": "Insufficient operational records: model needs ledger history and drift evaluations"
+      },
+      "gap": "High-risk systems require automatically generated operational logs (ledger events + drift evaluations)."
+    },
+    {
+      "code": "Art-14", "clause": "Article 14", "name": "Human Oversight Gate",
+      "control": "CTL-HUM-01", "opts": { "mode": "required" }, "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": { "pass": "Human-in-the-loop is active", "fail": "Oversight deactivated" },
+      "gap": "High-risk systems require explicit human-in-the-loop oversight gates."
+    },
+    {
+      "code": "Art-15", "clause": "Article 15", "name": "Accuracy, Robustness & Cybersecurity",
+      "control": "CTL-MON-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "gap": "High-risk systems require continuous accuracy/robustness monitoring (recent drift evaluations)."
+    },
+    {
+      "code": "Art-13", "clause": "Article 13", "name": "Transparency & Information to Deployers",
+      "control": "CTL-INFO-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": {
+        "pass": "Documented purpose with a named owner ({ownerTeam})",
+        "fail": "Deployer information incomplete: needs a substantive purpose and a named accountable owner"
+      },
+      "gap": "High-risk systems must give deployers clear use instructions and an identified accountable owner."
+    },
+    {
+      "code": "Art-25", "clause": "Article 25", "name": "Provider Responsibilities Along the Value Chain",
+      "control": "CTL-PROV-02", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": { "pass": "Provider recorded: {developedBy}", "fail": "No provider / build origin recorded for this system" },
+      "gap": "High-risk systems must identify the provider (internal or third party) responsible along the value chain."
+    },
+    {
+      "code": "Art-27", "clause": "Article 27", "name": "Fundamental Rights Impact Assessment",
+      "control": "CTL-PRIV-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": { "pass": "Fundamental-rights / data-protection impact assessment attached", "fail": "No FRIA/DPIA artifact attached" },
+      "gap": "High-risk deployers must complete a fundamental-rights impact assessment (attach a dpia artifact)."
+    },
+    {
+      "code": "Art-72", "clause": "Article 72", "name": "Post-Market Monitoring",
+      "control": "CTL-MON-02", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": {
+        "pass": "Active post-market monitoring: business-continuity plan configured with recent drift evaluations",
+        "fail": "Post-market monitoring incomplete: needs a configured continuity plan and recent drift evaluations"
+      },
+      "gap": "High-risk providers must operate a documented post-market monitoring plan (continuity plan + ongoing drift evaluation)."
+    },
+    {
+      "code": "Art-17", "clause": "Article 17", "name": "Quality Management System",
+      "control": "CTL-AUD-01", "opts": { "requireFuture": true }, "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": {
+        "pass": "Planned internal audit on {nextAuditDue}",
+        "past_due": "Quality-management audit is past due",
+        "none": "No quality-management audit cadence scheduled"
+      },
+      "gap": "High-risk providers must operate a quality-management system with a planned internal audit cadence."
+    },
+    {
+      "code": "Art-26", "clause": "Article 26", "name": "Deployer Operational Record",
+      "control": "CTL-DEP-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "evidence": {
+        "pass": "Put into service on {deploymentDate}",
+        "fail": "No deployment date recorded — operation cannot be monitored from a known start"
+      },
+      "gap": "Deployers of high-risk systems must record the deployment date so operation is monitored from putting-into-service."
+    },
+    {
+      "code": "Art-50", "clause": "Article 50", "name": "Transparency & Disclosure",
+      "control": "CTL-CTX-01", "opts": { "minLength": 10, "untrimmed": true }, "mandatory": true, "appliesWhenTier": ["Limited Risk"],
+      "evidence": { "pass": "Use case transparency text: {descPrefix}...", "fail": "No transparency statement" },
+      "gap": "Limited risk systems must provide clear use case descriptions for user transparency."
+    },
+    {
+      "code": "Art-Minimal", "clause": "Article 95", "name": "General Compliance Guidelines",
+      "control": "CTL-NONE", "mandatory": true, "appliesWhenTier": ["Minimal Risk"],
+      "evidence": { "pass": "Minimal risk model. Complies by default." },
+      "gap": ""
+    }
+  ]
+}

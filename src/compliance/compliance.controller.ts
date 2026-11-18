@@ -29,8 +29,8 @@ export class ComplianceController {
 
   /** Executive portfolio rollup: per-framework pass rates, risk tiers, top gaps. */
   @Get('portfolio')
-  portfolio(@CurrentUser() user: CurrentUserType, @Query('project_id') projectId?: string) {
-    return this.compliance.portfolio(user, projectId ?? null);
+  portfolio(@CurrentUser() user: CurrentUserType, @Query('project_id') projectId?: string, @Query('packs') packs?: string) {
+    return this.compliance.portfolio(user, projectId ?? null, packs ? packs.split(',').map((p) => p.trim()).filter(Boolean) : null);
   }
 
   /** Draft the board-facing executive paragraph, grounded in the rollup numbers. */

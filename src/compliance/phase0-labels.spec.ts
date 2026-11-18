@@ -22,8 +22,8 @@ import {
 import { ISO42001Plugin } from './plugins/iso-42001.plugin';
 import { validateSutrasCompliance } from './sutras.validator';
 
-const OFF: FeatureFlags = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false };
-const ON: FeatureFlags = { governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true };
+const OFF: FeatureFlags = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false, packEngine: false };
+const ON: FeatureFlags = { governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true, packEngine: false };
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
 

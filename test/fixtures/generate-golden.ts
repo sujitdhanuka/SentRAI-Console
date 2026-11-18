@@ -11,7 +11,7 @@ import { validateSutrasCompliance } from '../../src/compliance/sutras.validator'
 import { COMPLIANCE_FIXTURES } from './compliance-fixtures';
 
 // Pinned: the baseline is the flags-off output, whatever the shell environment says.
-const OFF = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false };
+const OFF = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false, packEngine: false };
 
 const out = COMPLIANCE_FIXTURES.map(({ id, entry, ctx: base }) => {
   const ctx = { ...base, flags: OFF };

@@ -2477,4 +2477,105 @@ describe('SentrAI Console (e2e)', () => {
       else process.env.GOVERNANCE_V2 = prev;
     }
   });
+
+  /** Org with an owner, viewer and CISO plus one HIGH credit model (governance Phase 1 e2e helpers). */
+  const govOrg = async (name: string) => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const org = await request(http).post('/api/v1/organizations').set(auth(admin)).send({ name, description: 'test' }).expect(201);
+    const user = async (role: string) => {
+      const email = `${role.toLowerCase()}@${name.toLowerCase()}.test`;
+      await request(http).post('/api/v1/users').set(auth(admin))
+        .send({ email, full_name: `${name} ${role}`, password: 'pw123456', role, organization_id: org.body.organization_id }).expect(201);
+      return login(email, 'pw123456');
+    };
+    const owner = await user('OWNER');
+    const ciso = await user('CISO');
+    const viewer = await user('VIEWER');
+    const orgAdmin = await user('ADMIN');
+    const project = await request(http).post('/api/v1/projects').set(auth(owner)).send({ name: `${name} App`, root_directory: process.cwd() }).expect(201);
+    const model = await request(http).post('/api/v1/inventory/models').set(auth(owner)).send({
+      name: `${name} Credit`, model_type: 'MACHINE_LEARNING', functional_area: 'credit_underwriting',
+      use_case_description: 'Scores SME credit applications for the underwriting team', human_oversight_required: true,
+      board_policy_ref: 'BP-1', project_id: project.body.project_id, target_customer_segments: ['sme'],
+    }).expect(201);
+    return { admin, owner, ciso, viewer, orgAdmin, orgId: org.body.organization_id, projectId: project.body.project_id, modelId: model.body.model_id, auth };
+  };
+
+  /** Run `fn` with the given governance env vars, restoring them afterwards. */
+  const withEnv = async (vars: Record<string, string>, fn: () => Promise<void>) => {
+    const prev: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(vars)) { prev[k] = process.env[k]; process.env[k] = v; }
+    try { await fn(); } finally {
+      for (const [k, v] of Object.entries(prev)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    }
+  };
+
+  it('PACKS (E1.1): hidden while off; with the engine on, compliance output is unchanged and packs, versions, controls and results are served', async () => {
+    const a = await govOrg('PackOrgA');
+    const b = await govOrg('PackOrgB');
+    const { auth } = a;
+    await request(http).get('/api/v1/governance/packs').set(auth(a.owner)).expect(404);
+    await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.owner)).expect(404);
+    const flagOffPortfolio = (await request(http).get('/api/v1/compliance/portfolio').set(auth(a.owner)).expect(200)).body;
+    expect(flagOffPortfolio.packs).toBeUndefined();
+
+    const cc = async () => (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
+    let legacy: any;
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E1_1_PACKS: 'false' }, async () => { legacy = await cc(); });
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      // Golden compatibility through the API: the engine reproduces the validators exactly.
+      expect(await cc()).toEqual(legacy);
+
+      const packs = (await request(http).get('/api/v1/governance/packs').set(auth(a.viewer)).expect(200)).body;
+      expect(packs.baseline).toEqual(['nist-ai-rmf', 'iso-42001']);
+      expect(packs.packs.map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001', 'rbi-free-ai', 'eu-ai-act']);
+      for (const p of packs.packs) {
+        expect(p.status).toBe('ACTIVE');
+        expect(p.content_hash).toMatch(/^[0-9a-f]{64}$/);
+      }
+      const versions = (await request(http).get('/api/v1/governance/packs/rbi-free-ai/versions').set(auth(a.owner)).expect(200)).body;
+      expect(versions.versions[0]).toMatchObject({ version: '2025.1.0', status: 'ACTIVE' });
+      expect(versions.versions[0].first_loaded_at).toBeTruthy();
+      await request(http).get('/api/v1/governance/packs/nope/versions').set(auth(a.owner)).expect(404);
+      const diff = (await request(http).get('/api/v1/governance/packs/nist-ai-rmf/diff').set(auth(a.owner)).expect(200)).body;
+      expect(diff.clauses).toEqual({ added: [], removed: [], changed: [] });
+
+      const lib = (await request(http).get('/api/v1/governance/controls').set(auth(a.owner)).expect(200)).body;
+      const fair = lib.controls.find((c: any) => c.control_id === 'CTL-FAIR-01');
+      expect(fair.mapped_by).toEqual([{ pack_id: 'rbi-free-ai', code: 'FAIRNESS_AND_EQUITY', clause: 'Sutra 4' }]);
+
+      const params = (await request(http).get('/api/v1/governance/parameters').set(auth(a.owner)).expect(200)).body;
+      const hours = params.parameters.find((p: any) => p.name === 'incidentReportHours');
+      expect(hours).toMatchObject({ value: 24, set_by: ['rbi-free-ai'], rule: 'min' });
+      await request(http).get('/api/v1/governance/parameters?as_of=not-a-date').set(auth(a.owner)).expect(400);
+
+      // Live evaluation: one result per control, reported under every pack clause; tenant isolation.
+      const ev = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.viewer)).expect(200)).body;
+      expect(Object.keys(ev.pack_versions)).toEqual(['nist-ai-rmf', 'iso-42001', 'rbi-free-ai', 'eu-ai-act']);
+      const owner = ev.controls.find((c: any) => c.control_id === 'CTL-ACC-01');
+      expect(owner.clauses).toEqual(expect.arrayContaining(['nist-ai-rmf:GOVERN-2.1', 'iso-42001:AIMS-5.3', 'rbi-free-ai:ACCOUNTABILITY']));
+      expect(ev.controls.find((c: any) => c.control_id === 'CTL-IMPACT-01').status).toBe('NOT_ASSESSED');
+      await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(b.owner)).expect(404);
+      const past = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls?as_of=2024-01-01`).set(auth(a.owner)).expect(200)).body;
+      expect(Object.keys(past.pack_versions)).toEqual(['nist-ai-rmf', 'iso-42001']); // RBI and EU packs not yet in force
+
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/evaluate`).set(auth(a.viewer)).expect(403);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/evaluate`).set(auth(b.owner)).expect(404);
+      const rec = (await request(http).post(`/api/v1/governance/models/${a.modelId}/evaluate`).set(auth(a.owner)).expect(200)).body;
+      expect(rec.recorded).toBe(ev.controls.length);
+      const latest = (await request(http).get(`/api/v1/governance/models/${a.modelId}/control-results`).set(auth(a.viewer)).expect(200)).body;
+      expect(latest.results).toHaveLength(ev.controls.length);
+      expect(latest.results[0].pack_versions).toEqual(ev.pack_versions);
+
+      // Pack selector on the rollup.
+      const all = (await request(http).get('/api/v1/compliance/portfolio').set(auth(a.owner)).expect(200)).body;
+      expect(all.frameworks).toHaveLength(4);
+      expect(all.packs.every((p: any) => p.selected)).toBe(true);
+      const base = (await request(http).get('/api/v1/compliance/portfolio?packs=nist-ai-rmf,iso-42001').set(auth(a.owner)).expect(200)).body;
+      expect(base.frameworks.map((f: any) => f.id)).toEqual(['nist_ai_rmf', 'iso_42001']);
+      expect(base.packs.filter((p: any) => p.selected).map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001']);
+      expect(base.summary.headline).toContain('2 selected frameworks');
+    });
+  });
 });

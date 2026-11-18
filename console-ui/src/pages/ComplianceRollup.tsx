@@ -26,6 +26,8 @@ interface PortfolioReport {
     pass_rate: number; open_gaps: number; readiness: string;
   }>;
   top_gaps: Array<{ framework: string; control: string; count: number; statement: string }>;
+  /** Present only when the governance pack engine is switched on (E1.1). */
+  packs?: Array<{ pack_id: string; name: string; version: string; baseline: boolean; region: string | null; selected: boolean }>;
   ci_gate: {
     events_recorded: number;
     gate_readiness_score: number | null;
@@ -65,6 +67,8 @@ export function ComplianceRollup() {
   const [error, setError] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<{ narrative: string; narrative_source: string } | null>(null);
   const [drafting, setDrafting] = useState(false);
+  /** Pack selector (E1.1): null = every pack in force. */
+  const [packSel, setPackSel] = useState<string[] | null>(null);
 
   const draftNarrative = async () => {
     setDrafting(true);
@@ -87,18 +91,30 @@ export function ComplianceRollup() {
     setLoading(true);
     setError(null);
     try {
-      const qs = activeProjectId ? `?project_id=${encodeURIComponent(activeProjectId)}` : '';
+      const params = new URLSearchParams();
+      if (activeProjectId) params.set('project_id', activeProjectId);
+      if (packSel?.length) params.set('packs', packSel.join(','));
+      const qs = params.toString() ? `?${params}` : '';
       setReport(await api<PortfolioReport>(`/compliance/portfolio${qs}`));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load rollup');
     } finally {
       setLoading(false);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, packSel]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const togglePack = (id: string) => {
+    const all = report?.packs?.map((p) => p.pack_id) ?? [];
+    const current = packSel ?? all;
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    // Keep at least one pack; selecting everything again means "no filter".
+    if (!next.length) return;
+    setPackSel(next.length === all.length ? null : next);
+  };
 
   const exportPdf = async () => {
     try {
@@ -162,7 +178,7 @@ export function ComplianceRollup() {
       ) : s ? (
         <div className="grid shrink-0 grid-cols-3 gap-px border-b border-border bg-border lg:grid-cols-5">
           <Stat label="Models in scope" value={String(s.total_models)} sub={activeProjectId ? 'active project' : 'all projects'} />
-          <Stat label="Fully compliant" value={`${Math.round(s.compliance_rate * 100)}%`} sub={`${s.fully_compliant}/${s.total_models} across 4 frameworks`} tone={s.compliance_rate >= 1 ? 'text-positive' : s.compliance_rate > 0 ? 'text-warning' : 'text-negative'} />
+          <Stat label="Fully compliant" value={`${Math.round(s.compliance_rate * 100)}%`} sub={`${s.fully_compliant}/${s.total_models} across ${report?.frameworks.length ?? 4} framework${report?.frameworks.length === 1 ? '' : 's'}`} tone={s.compliance_rate >= 1 ? 'text-positive' : s.compliance_rate > 0 ? 'text-warning' : 'text-negative'} />
           <Stat label="Open blocking gaps" value={String(s.open_blocking_gaps)} sub="must close before sign-off" tone={s.open_blocking_gaps > 0 ? 'text-negative' : 'text-positive'} />
           <Stat label="High-risk models" value={String(s.high_risk_models)} sub="HIGH / CRITICAL tier" tone={s.high_risk_models > 0 ? 'text-warning' : 'text-positive'} />
           <Stat label="Blocked gates" value={String(ci?.active_blocked_gates ?? 0)} sub={`${ci?.shadow_ai_assets ?? 0} shadow AI asset(s)`} tone={(ci?.active_blocked_gates ?? 0) > 0 ? 'text-negative' : 'text-positive'} />
@@ -176,6 +192,30 @@ export function ComplianceRollup() {
           <div className="grid gap-2 lg:grid-cols-2"><Skeleton className="h-64 w-full" /><Skeleton className="h-64 w-full" /></div>
         ) : report ? (
           <div className="flex flex-col gap-2">
+            {report.packs && (
+              <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2" aria-label="Framework packs">
+                <span className="mr-1 text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Packs</span>
+                {report.packs.map((p) => (
+                  <button
+                    key={p.pack_id}
+                    onClick={() => togglePack(p.pack_id)}
+                    aria-pressed={p.selected}
+                    title={`${p.name} v${p.version}${p.baseline ? ' · always-on baseline' : p.region ? ` · region ${p.region}` : ''}`}
+                    className={`rounded border px-2 py-0.5 text-[10.5px] ${
+                      p.selected ? 'border-accent bg-accent-soft text-accent' : 'border-border text-text-tertiary hover:bg-surface-hover'
+                    }`}
+                  >
+                    {p.name}
+                    <span className="ml-1 font-mono text-[9px] opacity-70">v{p.version}</span>
+                  </button>
+                ))}
+                {packSel && (
+                  <button onClick={() => setPackSel(null)} className="ml-auto text-[10px] text-text-secondary underline">
+                    Show all
+                  </button>
+                )}
+              </div>
+            )}
             <div className="rounded-md border border-border bg-surface px-3 py-2.5">
               <div className="mb-1 flex items-center gap-2">
                 {s!.compliance_rate >= 1 ? <ShieldCheck size={14} className="text-positive" /> : <ShieldAlert size={14} className="text-warning" />}
