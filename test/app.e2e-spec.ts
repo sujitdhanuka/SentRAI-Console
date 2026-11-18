@@ -2688,6 +2688,8 @@ describe('SentrAI Console (e2e)', () => {
       expect(nowAfter.settings.scoringMatrix).toBe('5x5');
       expect(nowAfter.settings.gateMode.MEDIUM).toBe('WARN');
       expect(nowAfter.upcoming).toHaveLength(1);
+      expect(nowAfter.upcoming[0].versions).toHaveLength(2);
+      expect(nowAfter.upcoming[0].changes.map((c: any) => c.field)).toEqual(expect.arrayContaining(['scoringMatrix', 'gateMode.MEDIUM']));
       const laterAfter = (await request(http).get(`/api/v1/governance/settings?as_of=${future}`).set(auth(a.owner)).expect(200)).body;
       expect(laterAfter.settings.scoringMatrix).toBe('3x3');
       expect(laterAfter.settings.gateMode.MEDIUM).toBe('WARN');
