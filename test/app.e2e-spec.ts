@@ -2290,4 +2290,107 @@ describe('SentrAI Console (e2e)', () => {
     await request(http).get(`/api/v1/compliance/incident/${raised[0].incident_id}`).set('Authorization', `Bearer ${other}`).expect(404);
     await request(http).get(`/api/v1/compliance/incident/${raised[0].incident_id}`).set(auth).expect(200);
   });
+  it('PHASE 0: corrected compliance codes are printed and flagged checks stay off by default', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const project = await request(http).post('/api/v1/projects').set(auth(admin)).send({ name: 'Labels App', root_directory: process.cwd() }).expect(201);
+    const model = await request(http).post('/api/v1/inventory/models').set(auth(admin)).send({
+      name: 'Labels Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'credit_underwriting',
+      use_case_description: 'Scores SME credit applications for the underwriting team', human_oversight_required: true,
+      board_policy_ref: 'BP-1', project_id: project.body.project_id,
+    }).expect(201);
+    const cc = await request(http).get(`/api/v1/inventory/models/${model.body.model_id}/compliance-check`).set(auth(admin)).expect(200);
+    const nist = cc.body.nist_rmf.checks.map((c: any) => c.control_code);
+    expect(nist).toEqual(expect.arrayContaining(['GOVERN-2.1', 'GOVERN-1.5', 'GOVERN-3.2', 'MAP-4.1', 'MEASURE-2.4', 'MEASURE-2.7', 'MANAGE-2.4', 'MANAGE-4.3']));
+    for (const legacy of ['GOVERN-1.1', 'GOVERN-1.3', 'MAP-1.2', 'MAP-1.3', 'MEASURE-2.1', 'MEASURE-2.2', 'MANAGE-1.1', 'MANAGE-1.2', 'MANAGE-1.3', 'MEASURE-2.10']) {
+      expect(nist).not.toContain(legacy);
+    }
+    const impact = cc.body.iso_42001.checks.find((c: any) => c.control_code === 'AIMS-8.4');
+    expect(impact).toMatchObject({ passed: false, mandatory: false, not_assessed: true });
+    expect(cc.body.iso_42001.checks.map((c: any) => c.control_code)).not.toContain('AIMS-8.2');
+
+    const cov = await request(http).get('/api/v1/compliance/coverage').set(auth(admin)).expect(200);
+    const codes = cov.body.frameworks.flatMap((f: any) => f.evaluated.map((c: any) => c.code));
+    expect(codes).not.toEqual(expect.arrayContaining(['REC-16']));
+    expect(codes).not.toContain('REC-24');
+    expect(codes).not.toContain('MEASURE-2.10');
+    expect(codes).not.toContain('REC-21');
+    const page = await request(http).get('/coverage').expect(200);
+    expect(page.text).toContain('GOVERN-3.2');
+    expect(page.text).not.toContain('MANAGE-1.1');
+  });
+
+  it('BCP DRILLS: hidden unless enabled, then org-scoped with Owner/CISO/Admin writes (E0.4)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const setup = async (name: string) => {
+      const org = await request(http).post('/api/v1/organizations').set(auth(admin)).send({ name, description: 'test' }).expect(201);
+      const user = async (role: string) => {
+        const email = `${role.toLowerCase()}@${name.toLowerCase()}.test`;
+        await request(http).post('/api/v1/users').set(auth(admin))
+          .send({ email, full_name: `${name} ${role}`, password: 'pw123456', role, organization_id: org.body.organization_id }).expect(201);
+        return login(email, 'pw123456');
+      };
+      const owner = await user('OWNER');
+      const viewer = await user('VIEWER');
+      const reviewer = await user('REVIEWER');
+      const project = await request(http).post('/api/v1/projects').set(auth(owner)).send({ name: `${name} App`, root_directory: process.cwd() }).expect(201);
+      const model = await request(http).post('/api/v1/inventory/models').set(auth(owner)).send({
+        name: `${name} Credit`, model_type: 'MACHINE_LEARNING', functional_area: 'credit_underwriting',
+        use_case_description: 'Scores SME credit applications for the underwriting team', human_oversight_required: true,
+        board_policy_ref: 'BP-1', project_id: project.body.project_id,
+      }).expect(201);
+      return { owner, viewer, reviewer, modelId: model.body.model_id };
+    };
+    const a = await setup('DrillOrgA');
+    const b = await setup('DrillOrgB');
+    const drill = { scenario: 'Model endpoint outage; fall back to rules engine', result: 'PASSED_WITH_FINDINGS', findings: 'Failover took 4 minutes' };
+    const path = (id: string) => `/api/v1/monitoring/bcp/${id}/drills`;
+
+    // Flag off (default): the routes do not exist.
+    await request(http).get(path(a.modelId)).set(auth(a.owner)).expect(404);
+    await request(http).post(path(a.modelId)).set(auth(a.owner)).send(drill).expect(404);
+
+    const prev = process.env.GOVERNANCE_V2;
+    process.env.GOVERNANCE_V2 = 'true';
+    try {
+      // RBAC: viewers and reviewers cannot record; another org's model is a 404.
+      await request(http).post(path(a.modelId)).set(auth(a.viewer)).send(drill).expect(403);
+      await request(http).post(path(a.modelId)).set(auth(a.reviewer)).send(drill).expect(403);
+      await request(http).post(path(a.modelId)).set(auth(b.owner)).send(drill).expect(404);
+      await request(http).get(path(a.modelId)).set(auth(b.owner)).expect(404);
+
+      // HIGH model with no drill: Sutra 7 fails on the drill.
+      const before = await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200);
+      const safetyBefore = before.body.checks.find((c: any) => c.sutra === 'SAFETY_RESILIENCE_SUSTAINABILITY');
+      expect(safetyBefore.passed).toBe(false);
+      expect(safetyBefore.gap).toContain('no BCP drill');
+
+      await request(http).post(path(a.modelId)).set(auth(a.owner))
+        .send({ ...drill, conducted_at: new Date(Date.now() + 5 * 86_400_000).toISOString() }).expect(400);
+      await request(http).post(path(a.modelId)).set(auth(a.owner)).send({ ...drill, result: 'MAYBE' }).expect(400);
+      const rec = await request(http).post(path(a.modelId)).set(auth(a.owner)).send(drill).expect(201);
+      expect(rec.body).toMatchObject({ result: 'PASSED_WITH_FINDINGS', drill_status: 'CURRENT' });
+      // A back-dated older drill never moves drillLastConducted backwards.
+      await request(http).post(path(a.modelId)).set(auth(a.owner))
+        .send({ ...drill, result: 'PASSED', conducted_at: new Date(Date.now() - 400 * 86_400_000).toISOString() }).expect(201);
+
+      const list = await request(http).get(path(a.modelId)).set(auth(a.viewer)).expect(200);
+      expect(list.body.drills).toHaveLength(2);
+      expect(list.body.drill_status).toBe('CURRENT');
+      expect(list.body.drill_last_conducted).toBe(rec.body.conducted_at);
+
+      // The drill clears the drill part of Sutra 7 (no red-team on record, so it still fails on that).
+      const after = await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200);
+      const safetyAfter = after.body.checks.find((c: any) => c.sutra === 'SAFETY_RESILIENCE_SUSTAINABILITY');
+      expect(safetyAfter.gap).not.toContain('BCP drill');
+
+      // The ledger records the drill.
+      const ledger = await request(http).get(`/api/v1/inventory/models/${a.modelId}/ledger`).set(auth(a.owner)).expect(200);
+      expect(JSON.stringify(ledger.body)).toContain('BCP_DRILL_RECORDED');
+    } finally {
+      if (prev === undefined) delete process.env.GOVERNANCE_V2;
+      else process.env.GOVERNANCE_V2 = prev;
+    }
+  });
 });

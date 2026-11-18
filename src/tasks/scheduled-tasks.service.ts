@@ -99,6 +99,18 @@ export class ScheduledTasksService {
     }
   }
 
+  /** REC 21 (E0.4): remind owners before a HIGH-risk model's BCP drill falls due,
+   *  and flag missing or overdue drills (daily). No-op unless GOV_E0_4_BCP_DRILLS is on. */
+  @Cron('30 0 * * *')
+  async checkBcpDrills(): Promise<number> {
+    const due = await this.monitoring.drillsNeedingAttention();
+    if (due.length > 0) {
+      this.logger.log(`bcp_drill_check needing_attention=${due.length}`);
+      await this.notifier.notify('bcp_drill_due', { count: due.length, models: due });
+    }
+    return due.length;
+  }
+
   /** Pillar 1 — Alignment: escalate attestation items still PENDING past their
    *  due date (daily), the same overdue-escalation pattern as incidents. */
   @Cron('0 1 * * *')

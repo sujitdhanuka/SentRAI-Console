@@ -1,8 +1,13 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums';
+import { CurrentUser as CurrentUserType } from '../common/interfaces/current-user.interface';
+
 import { MonitoringService } from './monitoring.service';
-import { BcpActivateDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
+import { BcpActivateDto, BcpDrillDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
 
 @ApiTags('Model Monitoring & Drift')
 @ApiBearerAuth()
@@ -45,6 +50,19 @@ export class MonitoringController {
   @Get('bcp/:modelId/status')
   bcpStatus(@Param('modelId') modelId: string) {
     return this.monitoring.bcpStatus(modelId);
+  }
+
+  /** Record a BCP drill (E0.4). 404 unless GOV_E0_4_BCP_DRILLS is on. */
+  @Post('bcp/:modelId/drills')
+  @Roles(Role.OWNER, Role.CISO, Role.ADMIN)
+  recordDrill(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Body() dto: BcpDrillDto) {
+    return this.monitoring.recordDrill(user, modelId, dto);
+  }
+
+  /** Drill history and status for a model (E0.4). 404 unless the flag is on. */
+  @Get('bcp/:modelId/drills')
+  listDrills(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.monitoring.listDrills(user, modelId);
   }
 
   @Get('gpu/status')

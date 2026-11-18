@@ -1,7 +1,7 @@
-import { Activity, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Activity, ClipboardCheck, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useModels } from '../api/models';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
@@ -27,6 +27,34 @@ interface BcpStatus {
   activated_at?: string | null;
 }
 
+interface BcpDrill {
+  drill_id: string;
+  conducted_at: string;
+  scenario: string;
+  result: string;
+  findings: string | null;
+  conducted_by: string;
+}
+
+interface DrillHistory {
+  model_id: string;
+  risk_level: string;
+  drill_last_conducted: string | null;
+  drill_interval_days: number;
+  drill_status: 'NONE' | 'CURRENT' | 'DUE_SOON' | 'OVERDUE';
+  next_drill_due: string | null;
+  drills: BcpDrill[];
+}
+
+const DRILL_TONE: Record<DrillHistory['drill_status'], BadgeTone> = {
+  CURRENT: 'positive',
+  DUE_SOON: 'warning',
+  OVERDUE: 'negative',
+  NONE: 'negative',
+};
+const RESULT_TONE = (r: string): BadgeTone => (r === 'PASSED' ? 'positive' : r === 'FAILED' ? 'negative' : 'warning');
+const INPUT = 'rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text focus:border-accent';
+
 /** NOMINAL is the only healthy state; everything else is a real signal. */
 const STATUS_TONE = (s: string): BadgeTone =>
   s === 'NOMINAL' ? 'positive' : s === 'WARNING' ? 'warning' : 'negative';
@@ -40,6 +68,9 @@ export function Monitoring() {
   const [modelId, setModelId] = useState('');
   const [history, setHistory] = useState<DriftReport[]>([]);
   const [bcp, setBcp] = useState<BcpStatus | null>(null);
+  // null = drill tracking is not enabled on this server (the route answers 404).
+  const [drills, setDrills] = useState<DrillHistory | null>(null);
+  const [drillForm, setDrillForm] = useState<{ scenario: string; result: string; findings: string; conducted_at: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,12 +83,14 @@ export function Monitoring() {
     setLoading(true);
     setError(null);
     try {
-      const [h, b] = await Promise.all([
+      const [h, b, d] = await Promise.all([
         api<DriftReport[]>(`/monitoring/drift/${modelId}/history`),
         api<BcpStatus>(`/monitoring/bcp/${modelId}/status`).catch(() => null),
+        api<DrillHistory>(`/monitoring/bcp/${modelId}/drills`).catch(() => null),
       ]);
       setHistory(Array.isArray(h) ? h : []);
       setBcp(b);
+      setDrills(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load drift history');
     } finally {
@@ -78,6 +111,27 @@ export function Monitoring() {
       await load();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Evaluation failed — push score windows first', 'negative');
+    }
+  };
+
+  const recordDrill = async () => {
+    if (!drillForm) return;
+    try {
+      await api(`/monitoring/bcp/${modelId}/drills`, {
+        method: 'POST',
+        body: JSON.stringify({
+          scenario: drillForm.scenario,
+          result: drillForm.result,
+          findings: drillForm.findings || undefined,
+          conducted_at: drillForm.conducted_at ? new Date(drillForm.conducted_at).toISOString() : undefined,
+        }),
+      });
+      toast('Drill recorded', 'positive');
+      setDrillForm(null);
+      await load();
+    } catch (e) {
+      const msg = e instanceof ApiError && e.status === 403 ? 'Only Owner, CISO or Admin can record drills' : e instanceof Error ? e.message : 'Could not record drill';
+      toast(msg, 'negative');
     }
   };
 
@@ -133,8 +187,8 @@ export function Monitoring() {
         </div>
       </div>
 
-      <main className="min-h-0 flex-1 overflow-hidden p-2">
-        <Panel title="Drift history" className="h-full">
+      <main className={`min-h-0 flex-1 overflow-hidden p-2 ${drills ? 'grid grid-rows-2 gap-2' : ''}`}>
+        <Panel title="Drift history" className={drills ? 'min-h-0' : 'h-full'}>
           {error ? (
             <PanelError onRetry={load} />
           ) : loading ? (
@@ -170,6 +224,75 @@ export function Monitoring() {
             </table>
           )}
         </Panel>
+        {drills && (
+          <Panel
+            title="BCP drills"
+            className="min-h-0"
+            right={
+              <div className="flex items-center gap-2">
+                <Badge tone={DRILL_TONE[drills.drill_status]}>{drills.drill_status.replace('_', ' ')}</Badge>
+                <span className="font-mono text-[9px] text-text-tertiary">
+                  {drills.next_drill_due ? `next due ${new Date(drills.next_drill_due).toLocaleDateString()}` : 'no drill on record'} · every {drills.drill_interval_days}d
+                </span>
+                <button
+                  onClick={() => setDrillForm(drillForm ? null : { scenario: '', result: 'PASSED', findings: '', conducted_at: '' })}
+                  className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[10.5px] text-text-secondary hover:bg-surface-hover"
+                >
+                  <ClipboardCheck size={12} /> Record drill
+                </button>
+              </div>
+            }
+          >
+            {drillForm && (
+              <div className="flex flex-wrap items-end gap-2 border-b border-border p-2">
+                <input aria-label="Scenario" placeholder="Scenario, e.g. model endpoint outage; fall back to rules engine" value={drillForm.scenario}
+                  onChange={(e) => setDrillForm({ ...drillForm, scenario: e.target.value })} className={`${INPUT} min-w-[240px] flex-1`} />
+                <select aria-label="Result" value={drillForm.result} onChange={(e) => setDrillForm({ ...drillForm, result: e.target.value })} className={INPUT}>
+                  <option value="PASSED">Passed</option>
+                  <option value="PASSED_WITH_FINDINGS">Passed with findings</option>
+                  <option value="FAILED">Failed</option>
+                </select>
+                <input aria-label="Conducted on" type="date" value={drillForm.conducted_at}
+                  onChange={(e) => setDrillForm({ ...drillForm, conducted_at: e.target.value })} className={INPUT} />
+                <input aria-label="Findings" placeholder="Findings (optional)" value={drillForm.findings}
+                  onChange={(e) => setDrillForm({ ...drillForm, findings: e.target.value })} className={`${INPUT} min-w-[180px] flex-1`} />
+                <button onClick={recordDrill} disabled={drillForm.scenario.trim().length < 3}
+                  className="rounded-md bg-accent px-2.5 py-1 text-[11px] text-white disabled:opacity-50">Save</button>
+              </div>
+            )}
+            {!drills.drills.length ? (
+              <p className="p-3 text-[11px] leading-relaxed text-text-secondary">
+                No BCP drills recorded for this model.{' '}
+                {drills.risk_level === 'HIGH' || drills.risk_level === 'CRITICAL'
+                  ? 'HIGH risk models need a drill within the interval (RBI FREE-AI Rec 21).'
+                  : 'Drills are required for HIGH risk models and recommended for others.'}
+              </p>
+            ) : (
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr>
+                    <th className={TH}>Conducted</th>
+                    <th className={TH}>Result</th>
+                    <th className={TH}>Scenario</th>
+                    <th className={TH}>Findings</th>
+                    <th className={TH}>By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drills.drills.map((d) => (
+                    <tr key={d.drill_id} className="border-b border-border hover:bg-surface-hover">
+                      <td className={`${TD} text-text-secondary`}>{new Date(d.conducted_at).toLocaleDateString()}</td>
+                      <td className="px-2 py-1.5"><Badge tone={RESULT_TONE(d.result)}>{d.result.replace(/_/g, ' ')}</Badge></td>
+                      <td className="px-2 py-1.5 text-[11px] text-text">{d.scenario}</td>
+                      <td className="px-2 py-1.5 text-[11px] text-text-secondary">{d.findings ?? '—'}</td>
+                      <td className={`${TD} text-text-tertiary`}>{d.conducted_by}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Panel>
+        )}
       </main>
     </AppShell>
   );

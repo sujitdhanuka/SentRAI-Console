@@ -197,3 +197,40 @@ export function deactivateBcp(state: BCPFallbackState): void {
   state.fallbackReason = '';
   state.fallbackActivatedAt = null;
 }
+
+/* ------------------------- BCP drill recency (E0.4) ------------------------ */
+
+/** Default days between BCP drills for HIGH-risk models (RBI Rec 21); override with BCP_DRILL_INTERVAL_DAYS. */
+export const DEFAULT_BCP_DRILL_INTERVAL_DAYS = 365;
+/** Default days before a drill falls due that the reminder job fires; override with BCP_DRILL_REMINDER_DAYS. */
+export const DEFAULT_BCP_DRILL_REMINDER_DAYS = 30;
+
+function positiveInt(v: string | undefined, fallback: number): number {
+  const n = v ? parseInt(v, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+export function bcpDrillIntervalDays(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveInt(env.BCP_DRILL_INTERVAL_DAYS, DEFAULT_BCP_DRILL_INTERVAL_DAYS);
+}
+
+export function bcpDrillReminderDays(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveInt(env.BCP_DRILL_REMINDER_DAYS, DEFAULT_BCP_DRILL_REMINDER_DAYS);
+}
+
+export type DrillStatus = 'NONE' | 'CURRENT' | 'DUE_SOON' | 'OVERDUE';
+
+/** Where a model's last drill stands against the interval. */
+export function bcpDrillStatus(
+  last: Date | null | undefined,
+  now: Date = new Date(),
+  intervalDays = bcpDrillIntervalDays(),
+  reminderDays = bcpDrillReminderDays(),
+): { status: DrillStatus; ageDays: number | null; dueAt: Date | null } {
+  if (!last) return { status: 'NONE', ageDays: null, dueAt: null };
+  const ageDays = Math.floor((now.getTime() - last.getTime()) / 86_400_000);
+  const dueAt = new Date(last.getTime() + intervalDays * 86_400_000);
+  if (ageDays > intervalDays) return { status: 'OVERDUE', ageDays, dueAt };
+  if (ageDays >= intervalDays - reminderDays) return { status: 'DUE_SOON', ageDays, dueAt };
+  return { status: 'CURRENT', ageDays, dueAt };
+}

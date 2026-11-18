@@ -271,6 +271,21 @@ const REQUIRED_TABLES: TableSpec[] = [
       INDEX \`IDX_attestation_items_status\` (\`status\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
+  {
+    table: 'bcp_drills', // bcp-drill.entity.ts (governance E0.4 — RBI Rec 21)
+    createSql: `CREATE TABLE IF NOT EXISTS \`bcp_drills\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`conductedAt\` DATETIME NOT NULL,
+      \`scenario\` VARCHAR(500) NOT NULL,
+      \`result\` VARCHAR(30) NOT NULL,
+      \`findings\` TEXT NULL,
+      \`conductedBy\` VARCHAR(255) NOT NULL,
+      \`recordedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_bcp_drills_model\` (\`modelId\`),
+      INDEX \`IDX_bcp_drills_conducted\` (\`conductedAt\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 @Injectable()
