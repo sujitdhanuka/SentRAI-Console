@@ -1,0 +1,1887 @@
+[
+  {
+    "id": "high-governed",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-9",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-10",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-11",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-12",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-14",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-15",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-13",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-25",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-27",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-72",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-17",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-26",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": true,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "high-ungoverned",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": false,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": false,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-9",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-10",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-11",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-12",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-14",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-15",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-13",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-25",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-27",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-72",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-17",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-26",
+        "passed": false,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": false,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "high-redteam-200d",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-9",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-10",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-11",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-12",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-14",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-15",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-13",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-25",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-27",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-72",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-17",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-26",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": true,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "high-redteam-400d",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-9",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-10",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-11",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-12",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-14",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-15",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-13",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-25",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-27",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-72",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-17",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-26",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": true,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "high-report-only",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-9",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-10",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-11",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-12",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-14",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-15",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-13",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-25",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-27",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-72",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "Art-17",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "Art-26",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": true,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "medium-partial",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-Minimal",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": false,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "medium-short-usecase",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-Minimal",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": false,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "low-minimal",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-Minimal",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": false,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "genai-chatbot",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-50",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": false,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": false,
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "id": "critical-no-oversight",
+    "sutras": [
+      {
+        "code": "TRUST_IS_THE_FOUNDATION",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "PEOPLE_FIRST",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "INNOVATION_OVER_RESTRAINT",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "FAIRNESS_AND_EQUITY",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "ACCOUNTABILITY",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "UNDERSTANDABLE_BY_DESIGN",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "nist": [
+      {
+        "code": "GOVERN-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "GOVERN-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MAP-1.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MAP-1.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MEASURE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-2.3",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "MANAGE-1.1",
+        "passed": false,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-1.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MANAGE-2.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "MEASURE-3.1",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "eu": [
+      {
+        "code": "Art-Minimal",
+        "passed": true,
+        "mandatory": true
+      }
+    ],
+    "iso": [
+      {
+        "code": "AIMS-6.1.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-8.3",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.1",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-9.2",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-10.1",
+        "passed": true,
+        "mandatory": false
+      },
+      {
+        "code": "AIMS-7.2",
+        "passed": true,
+        "mandatory": true
+      },
+      {
+        "code": "AIMS-A.6.2",
+        "passed": false,
+        "mandatory": false
+      }
+    ]
+  }
+]

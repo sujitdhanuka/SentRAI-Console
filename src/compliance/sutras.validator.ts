@@ -3,7 +3,17 @@
  * foundational principles. Port of src/sentrai/compliance/sutras_validator.py.
  */
 import { RiskLevel, SutraAlignment } from '../common/enums';
-import { AIModelEntry, hasEvidence } from '../domain/model-inventory';
+import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
+import { AIModelEntry, hasEvidence, redTeamWithinInterval } from '../domain/model-inventory';
+import { bcpDrillIntervalDays, bcpDrillStatus } from '../domain/monitoring';
+
+/** Operational evidence the Sutra checks can use when the caller has it. */
+export interface SutrasContext {
+  /** Date of the model's last recorded BCP drill (E0.4). */
+  bcpDrillLastConducted?: Date | null;
+  /** Governance feature flags; read from the environment when omitted. */
+  flags?: FeatureFlags;
+}
 
 export interface SutraCheck {
   sutra: SutraAlignment;
@@ -43,8 +53,9 @@ export function sutrasReportAsDict(report: SutrasComplianceReport): Record<strin
   };
 }
 
-export function validateSutrasCompliance(entry: AIModelEntry): SutrasComplianceReport {
+export function validateSutrasCompliance(entry: AIModelEntry, ctx: SutrasContext = {}): SutrasComplianceReport {
   const checks: SutraCheck[] = [];
+  const flags = ctx.flags ?? getFeatureFlags();
   const isMedOrHigh = entry.riskLevel === RiskLevel.MEDIUM || entry.riskLevel === RiskLevel.HIGH;
 
   // Sutra 1: Trust is the Foundation
@@ -112,7 +123,7 @@ export function validateSutrasCompliance(entry: AIModelEntry): SutrasComplianceR
     sutra: SutraAlignment.ACCOUNTABILITY,
     passed: accountabilityOk,
     evidence: accountabilityOk ? `Owner team: ${entry.ownerTeam}` : '',
-    gap: accountabilityOk ? '' : 'No accountability chain (owner team) defined.',
+    gap: accountabilityOk ? '' : 'No accountability chain (owner team) defined. REC 14 requires the AI policy to set out accountability.',
     mandatory: true,
   });
 
@@ -125,27 +136,51 @@ export function validateSutrasCompliance(entry: AIModelEntry): SutrasComplianceR
     evidence: explainabilityOk ? 'Explainability declared' : '',
     gap: explainabilityOk
       ? ''
-      : 'No explainability mechanism declared for MEDIUM/HIGH risk model. REC 24 audit will fail.',
+      : 'No explainability mechanism declared for MEDIUM/HIGH risk model (Sutra 6: Understandable by Design).',
     mandatory: isMedOrHigh,
   });
 
   // Sutra 7: Safety, Resilience, Sustainability — red-team for HIGH (a date
   // on record or an attached red-team report both count as evidence).
-  const safetyOk =
-    entry.riskLevel === RiskLevel.HIGH
-      ? entry.lastRedTeamDate !== null || hasEvidence(entry, 'red_team')
-      : true;
+  const isHigh = entry.riskLevel === RiskLevel.HIGH;
+  const redTeamGap = 'HIGH risk model with no red-team exercise on record. REC 20 asks for red teaming at a frequency proportionate to risk, and after material changes.';
+  let safetyOk = isHigh ? entry.lastRedTeamDate !== null || hasEvidence(entry, 'red_team') : true;
+  let safetyEvidence = safetyOk
+    ? entry.lastRedTeamDate
+      ? `Last red-team: ${entry.lastRedTeamDate}`
+      : 'Red-team report attached as evidence artifact'
+    : '';
+  const gaps: string[] = safetyOk ? [] : [redTeamGap];
+
+  // E0.3: the red-team record must also be within the HIGH tier's interval.
+  if (isHigh && flags.redTeamIntervals && safetyOk) {
+    const rt = redTeamWithinInterval(entry);
+    if (!rt.ok) {
+      safetyOk = false;
+      gaps.push(`HIGH risk model last red teamed ${rt.ageDays ?? 'an unknown number of'} days ago; REC 20 interval for HIGH risk is ${rt.intervalDays} days.`);
+    }
+  }
+
+  // E0.4: HIGH risk models need a BCP drill within the interval (REC 21).
+  if (isHigh && flags.bcpDrills) {
+    const drill = bcpDrillStatus(ctx.bcpDrillLastConducted ?? null);
+    if (drill.status === 'NONE' || drill.status === 'OVERDUE') {
+      safetyOk = false;
+      gaps.push(
+        drill.status === 'NONE'
+          ? 'HIGH risk model with no BCP drill on record. REC 21 requires business-continuity plans for AI systems to be tested.'
+          : `HIGH risk model's last BCP drill was ${drill.ageDays} days ago; the drill interval is ${bcpDrillIntervalDays()} days (REC 21).`,
+      );
+    } else if (safetyEvidence) {
+      safetyEvidence += `; last BCP drill ${drill.ageDays} day(s) ago`;
+    }
+  }
+
   checks.push({
     sutra: SutraAlignment.SAFETY,
     passed: safetyOk,
-    evidence: safetyOk
-      ? entry.lastRedTeamDate
-        ? `Last red-team: ${entry.lastRedTeamDate}`
-        : 'Red-team report attached as evidence artifact'
-      : '',
-    gap: safetyOk
-      ? ''
-      : 'HIGH risk model with no red-team exercise on record. REC 20 mandates semi-annual red-teaming.',
+    evidence: safetyOk ? safetyEvidence : '',
+    gap: gaps.join(' '),
     mandatory: true,
   });
 

@@ -1,0 +1,60 @@
+/**
+ * Governance feature flags (plan E0.1).
+ *
+ * GOVERNANCE_V2 is the master switch and defaults OFF. With no new environment
+ * variables set, hosted SentRAI behaves exactly as before: only the Phase 0
+ * label corrections (bug fixes) apply. When the master switch is on, every epic
+ * flag defaults on and can be turned off one at a time, e.g.
+ *   GOVERNANCE_V2=true GOV_E0_4_BCP_DRILLS=false
+ *
+ * Validators are pure functions called from many places, so they read flags
+ * through getFeatureFlags() rather than through Nest DI; FeatureFlagsService is
+ * the injectable wrapper for services and controllers.
+ */
+import { Injectable } from '@nestjs/common';
+
+export const EPIC_FLAGS = {
+  /** E0.3: one red-team interval per risk tier, used by every check. */
+  redTeamIntervals: 'GOV_E0_3_REDTEAM_INTERVALS',
+  /** E0.4: BCP drill records, reminders and the Sutra 7 / Rec 21 drill check. */
+  bcpDrills: 'GOV_E0_4_BCP_DRILLS',
+  /** E0.5: NIST MEASURE 2.10 privacy check. */
+  nistPrivacy: 'GOV_E0_5_NIST_PRIVACY',
+} as const;
+
+export type EpicFlag = keyof typeof EPIC_FLAGS;
+
+export interface FeatureFlags {
+  governanceV2: boolean;
+  redTeamIntervals: boolean;
+  bcpDrills: boolean;
+  nistPrivacy: boolean;
+}
+
+function parseBool(v: string | undefined): boolean | undefined {
+  if (v === undefined || v.trim() === '') return undefined;
+  return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
+}
+
+export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFlags {
+  const master = parseBool(env.GOVERNANCE_V2) ?? false;
+  const epic = (name: string) => master && (parseBool(env[name]) ?? true);
+  return {
+    governanceV2: master,
+    redTeamIntervals: epic(EPIC_FLAGS.redTeamIntervals),
+    bcpDrills: epic(EPIC_FLAGS.bcpDrills),
+    nistPrivacy: epic(EPIC_FLAGS.nistPrivacy),
+  };
+}
+
+@Injectable()
+export class FeatureFlagsService {
+  /** Read on every call so tests and operators can change env without a restart of the module graph. */
+  get flags(): FeatureFlags {
+    return getFeatureFlags();
+  }
+
+  isEnabled(flag: EpicFlag | 'governanceV2'): boolean {
+    return this.flags[flag];
+  }
+}

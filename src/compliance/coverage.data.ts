@@ -7,11 +7,18 @@
  * gains or loses a check, this file changes in the same commit. Overstating
  * coverage here is a product-integrity bug of the highest severity — this page
  * exists precisely so our claims can never drift from our code.
+ *
+ * Checks behind an off-by-default governance flag are listed only while that
+ * flag is on (see getCoverage), so the page never claims a check that is not
+ * running.
  */
+import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
 
 export interface CoverageControl {
   code: string;
   name: string;
+  /** Listed only when this governance flag is on. */
+  flag?: keyof Omit<FeatureFlags, 'governanceV2'>;
 }
 
 export interface FrameworkCoverage {
@@ -43,15 +50,18 @@ export const COVERAGE: FrameworkCoverage[] = [
       { code: 'SUTRA-5', name: 'Accountability' },
       { code: 'SUTRA-6', name: 'Understandable by Design' },
       { code: 'SUTRA-7', name: 'Safety, Resilience & Sustainability' },
-      { code: 'REC-14', name: 'Board-approved AI policy (checked per model; gates live promotion)' },
-      { code: 'REC-16', name: 'Accountability chain / named owner (gates live promotion)' },
-      { code: 'REC-20', name: 'Bias-test evidence for MEDIUM/HIGH risk' },
-      { code: 'REC-24', name: 'Explainability mechanism for MEDIUM/HIGH risk' },
+      {
+        code: 'REC-14',
+        name: 'Board-approved AI policy and accountability: policy reference and named owner (via Sutras 1 and 5; gates live promotion)',
+      },
+      { code: 'REC-20', name: 'Red-team exercise on record for HIGH risk (via Sutra 7)' },
+      { code: 'REC-21', name: 'BCP drill within the drill interval for HIGH risk (via Sutra 7)', flag: 'bcpDrills' },
     ],
     universe: { total: 26, unit: 'committee recommendations' },
     statement:
-      'All 7 sutras are evaluated on every model. Of the committee report’s 26 recommendations, ' +
-      '4 are enforced as explicit per-model controls (14, 16, 20, 24); several others are implemented ' +
+      'All 7 sutras are evaluated on every model, including bias testing (Sutra 4), accountability ' +
+      '(Sutra 5) and explainability (Sutra 6). Of the committee report’s 26 recommendations, ' +
+      '{recCount} are checked per model through the sutra checks ({recList}); several others are implemented ' +
       'as platform machinery rather than per-model checks (see operational list). Remaining ' +
       'recommendations are on the pack roadmap.',
     operational: [
@@ -68,26 +78,27 @@ export const COVERAGE: FrameworkCoverage[] = [
     jurisdiction: 'United States',
     depth: 'partial',
     evaluated: [
-      { code: 'GOVERN-1.1', name: 'Organizational Ownership & Responsibility' },
+      { code: 'GOVERN-2.1', name: 'Organizational Ownership & Responsibility' },
       { code: 'GOVERN-1.2', name: 'Board Policy Alignment' },
-      { code: 'GOVERN-1.3', name: 'Audit Cadence Defined' },
+      { code: 'GOVERN-1.5', name: 'Audit Cadence Defined' },
+      { code: 'GOVERN-3.2', name: 'Human Oversight Controls' },
       { code: 'MAP-1.1', name: 'Purpose & Use-Case Documentation' },
-      { code: 'MAP-1.2', name: 'Deployment Context & Affected Users' },
-      { code: 'MAP-1.3', name: 'Source & Dependency Provenance' },
-      { code: 'MEASURE-2.1', name: 'Security Red Teaming & Bias Auditing' },
-      { code: 'MEASURE-2.2', name: 'Performance Drift Measurement' },
+      { code: 'MAP-1.1', name: 'Deployment Context & Affected Users' },
+      { code: 'MAP-4.1', name: 'Source & Dependency Provenance' },
       { code: 'MEASURE-2.3', name: 'Performance Benchmarks Recorded' },
-      { code: 'MANAGE-1.1', name: 'Human Oversight Controls' },
-      { code: 'MANAGE-1.2', name: 'Fallback / Business-Continuity Plan' },
-      { code: 'MANAGE-1.3', name: 'Incident Reporting Hygiene' },
-      { code: 'MANAGE-2.1', name: 'Risk Response Resourcing (Named Owner)' },
+      { code: 'MEASURE-2.4', name: 'Performance Drift Measurement' },
+      { code: 'MEASURE-2.7', name: 'Security Red Teaming & Bias Auditing (also evidences MEASURE 2.11)' },
+      { code: 'MEASURE-2.10', name: 'Privacy Risk Examined (DPIA / Privacy Review)', flag: 'nistPrivacy' },
       { code: 'MEASURE-3.1', name: 'Risk Tracking Mechanisms (Ledger History)' },
+      { code: 'MANAGE-2.1', name: 'Risk Response Resourcing (Named Owner)' },
+      { code: 'MANAGE-2.4', name: 'Fallback / Business-Continuity Plan' },
+      { code: 'MANAGE-4.3', name: 'Incident Reporting Hygiene' },
     ],
     universe: { total: 72, unit: 'playbook subcategories' },
     statement:
-      '14 of the playbook’s 72 subcategories are evaluated as per-model controls across all four ' +
+      '{checkCount} per-model checks cover {subCount} of the playbook’s 72 subcategories across all four ' +
       'functions (GOVERN, MAP, MEASURE, MANAGE), chosen for signal over ceremony. A verdict here means ' +
-      'those 14 controls pass; it is an indicative posture signal, not full-framework conformance. ' +
+      'those checks pass; it is an indicative posture signal, not full-framework conformance. ' +
       'Full subcategory coverage ships as a data-driven control pack on the current roadmap.',
   },
   {
@@ -126,28 +137,45 @@ export const COVERAGE: FrameworkCoverage[] = [
     jurisdiction: 'International',
     depth: 'partial',
     evaluated: [
-      { code: 'AIMS-6.1.2', name: 'AI System Risk Assessment' },
-      { code: 'AIMS-8.2', name: 'AI System Impact Assessment' },
-      { code: 'AIMS-8.3', name: 'Data & Codebase Governance' },
-      { code: 'AIMS-7.2', name: 'Competence & Accountability' },
+      { code: 'AIMS-5.3', name: 'Roles, Responsibilities & Accountability' },
+      { code: 'AIMS-6.1.2', name: 'AI System Risk Assessment (risk tier set)' },
       { code: 'AIMS-9.1', name: 'Performance Monitoring & Measurement' },
       { code: 'AIMS-9.2', name: 'Internal Audit Cadence' },
-      { code: 'AIMS-10.1', name: 'Nonconformity & Corrective Action' },
-      { code: 'AIMS-A.6.2', name: 'AI System Documentation (Model Card)' },
+      { code: 'AIMS-10.2', name: 'Nonconformity & Corrective Action' },
+      { code: 'AIMS-A.6.2.7', name: 'AI System Technical Documentation (Model Card)' },
+      { code: 'AIMS-A.7.5', name: 'Data & Codebase Provenance' },
     ],
     universe: { total: 38, unit: 'Annex A controls' },
     statement:
-      'Eight management-system checks spanning clauses 6, 7, 8, 9 and 10 plus Annex A documentation ' +
-      'are evaluated per model. The full 38 Annex A controls are not yet individually mapped; SentRAI ' +
-      'supports an ISO 42001 programme — it does not by itself constitute certifiable conformance. ' +
-      'Complete Annex A mapping is on the pack roadmap.',
+      'Seven checks spanning clauses 5, 6, 9 and 10 plus Annex A documentation and provenance ' +
+      'are evaluated per model. The AI system impact assessment (6.1.4 / 8.4) is reported as NOT ASSESSED: ' +
+      'SentRAI does not yet record impact assessments, so it makes no claim there. The full 38 Annex A ' +
+      'controls are not yet individually mapped; SentRAI supports an ISO 42001 programme — it does not by ' +
+      'itself constitute certifiable conformance. Complete Annex A mapping is on the pack roadmap.',
   },
 ];
 
-export function coverageSummary() {
+/** Coverage as it stands with the given flags: flagged checks appear only when on,
+ *  and the statement counts are computed from what is listed. */
+export function getCoverage(flags: FeatureFlags = getFeatureFlags()): FrameworkCoverage[] {
+  return COVERAGE.map((f) => {
+    const evaluated = f.evaluated.filter((c) => !c.flag || flags[c.flag]);
+    const recs = evaluated.filter((c) => c.code.startsWith('REC-')).map((c) => c.code.slice(4));
+    const subCount = new Set(evaluated.map((c) => c.code)).size + (evaluated.some((c) => c.code === 'MEASURE-2.7') ? 1 : 0);
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five'];
+    const statement = f.statement
+      .replace('{recCount}', words[recs.length] ?? String(recs.length))
+      .replace('{recList}', `Recs ${recs.join(', ').replace(/, ([^,]*)$/, ' and $1')}`)
+      .replace('{checkCount}', String(evaluated.length))
+      .replace('{subCount}', String(subCount));
+    return { ...f, evaluated: evaluated.map(({ code, name }) => ({ code, name })), statement };
+  });
+}
+
+export function coverageSummary(flags: FeatureFlags = getFeatureFlags()) {
   return {
     generated_from: 'src/compliance/coverage.data.ts — kept in lockstep with the validators by contract',
-    frameworks: COVERAGE.map((f) => ({
+    frameworks: getCoverage(flags).map((f) => ({
       id: f.id,
       name: f.name,
       jurisdiction: f.jurisdiction,

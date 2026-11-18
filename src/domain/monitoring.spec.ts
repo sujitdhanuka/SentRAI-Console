@@ -1,4 +1,4 @@
-import { computePsi, evaluateDrift, wasserstein1d } from './monitoring';
+import { bcpDrillIntervalDays, bcpDrillReminderDays, bcpDrillStatus, computePsi, evaluateDrift, wasserstein1d } from './monitoring';
 import { DriftStatus } from '../common/enums';
 
 // Reference values computed from numpy.histogram + scipy-equivalent 1-D EMD.
@@ -40,5 +40,27 @@ describe('drift math parity with numpy/scipy', () => {
     const r = evaluateDrift('m1', TRAINING, TRAINING, 0.9, 0.8);
     expect(r.circuitBreakerActive).toBe(true);
     expect(r.accuracyDelta).toBeCloseTo(-0.1, 10);
+  });
+});
+
+describe('BCP drill status (E0.4)', () => {
+  const now = new Date('2026-12-01T00:00:00Z');
+  const ago = (d: number) => new Date(now.getTime() - d * 86_400_000);
+
+  it('classifies missing, fresh, due-soon and overdue drills', () => {
+    expect(bcpDrillStatus(null, now, 365, 30).status).toBe('NONE');
+    expect(bcpDrillStatus(ago(10), now, 365, 30).status).toBe('CURRENT');
+    expect(bcpDrillStatus(ago(334), now, 365, 30).status).toBe('CURRENT');
+    expect(bcpDrillStatus(ago(335), now, 365, 30).status).toBe('DUE_SOON');
+    expect(bcpDrillStatus(ago(365), now, 365, 30).status).toBe('DUE_SOON');
+    expect(bcpDrillStatus(ago(366), now, 365, 30).status).toBe('OVERDUE');
+    expect(bcpDrillStatus(ago(10), now, 365, 30).dueAt!.toISOString()).toBe(new Date(ago(10).getTime() + 365 * 86_400_000).toISOString());
+  });
+
+  it('reads interval and reminder overrides from the environment, ignoring junk', () => {
+    expect(bcpDrillIntervalDays({})).toBe(365);
+    expect(bcpDrillIntervalDays({ BCP_DRILL_INTERVAL_DAYS: '180' })).toBe(180);
+    expect(bcpDrillIntervalDays({ BCP_DRILL_INTERVAL_DAYS: 'abc' })).toBe(365);
+    expect(bcpDrillReminderDays({ BCP_DRILL_REMINDER_DAYS: '14' })).toBe(14);
   });
 });

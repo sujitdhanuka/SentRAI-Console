@@ -152,3 +152,50 @@ export function explainTriageFactors(entry: AIModelEntry, secretCount = 0): stri
   }
   return factors;
 }
+
+/* ------------------------- Red-team interval (E0.3) ------------------------ */
+
+/**
+ * One red-team interval per risk tier, used by the NIST check, the Sutra 7
+ * check and the workflow guide (RBI Rec 20: frequency proportionate to risk).
+ * Applied only when the GOV_E0_3_REDTEAM_INTERVALS flag is on; becomes a
+ * governance setting in E1.2.
+ */
+export const RED_TEAM_INTERVAL_DAYS = { HIGH: 90, MEDIUM: 180, LOW: 365 } as const;
+
+/** Interval used while the flag is off: the NIST check's original 12-month rule. */
+export const LEGACY_RED_TEAM_INTERVAL_DAYS = 365;
+
+export function redTeamIntervalDays(risk: RiskLevel): number {
+  const sev = RISK_SEVERITY[risk] ?? 0;
+  if (sev >= RISK_SEVERITY[RiskLevel.HIGH]) return RED_TEAM_INTERVAL_DAYS.HIGH;
+  if (sev >= RISK_SEVERITY[RiskLevel.MEDIUM]) return RED_TEAM_INTERVAL_DAYS.MEDIUM;
+  return RED_TEAM_INTERVAL_DAYS.LOW;
+}
+
+/** Most recent red-team evidence: the recorded date, else the newest attached red_team report. */
+export function lastRedTeamEvidenceAt(entry: AIModelEntry): Date | null {
+  if (entry.lastRedTeamDate) return entry.lastRedTeamDate;
+  const stamps = (entry.evidenceArtifacts ?? [])
+    .filter((a) => a.type === 'red_team' && a.added_at)
+    .map((a) => new Date(a.added_at).getTime())
+    .filter((t) => !Number.isNaN(t));
+  return stamps.length ? new Date(Math.max(...stamps)) : null;
+}
+
+/** Whole days between `date` and `now` (floored), the convention every check uses. */
+export function daysBetween(date: Date, now: Date = new Date()): number {
+  return Math.floor((now.getTime() - date.getTime()) / 86_400_000);
+}
+
+/** Per-tier red-team recency: ok when the newest evidence is no older than the tier's interval. */
+export function redTeamWithinInterval(
+  entry: AIModelEntry,
+  now: Date = new Date(),
+): { ok: boolean; ageDays: number | null; intervalDays: number } {
+  const intervalDays = redTeamIntervalDays(entry.riskLevel);
+  const at = lastRedTeamEvidenceAt(entry);
+  if (!at) return { ok: false, ageDays: null, intervalDays };
+  const ageDays = daysBetween(at, now);
+  return { ok: ageDays <= intervalDays, ageDays, intervalDays };
+}

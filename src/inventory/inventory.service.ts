@@ -138,7 +138,7 @@ export class InventoryService implements OnModuleInit {
     }));
   }
 
-  /** Gather operational evidence for framework validators (Art-12, MEASURE-2.2, ...). */
+  /** Gather operational evidence for framework validators (Art-12, MEASURE-2.4, ...). */
   async buildValidationContext(modelId: string): Promise<ValidationContext> {
     const [ledgerEventCount, driftReportCount, lastDrift, overdueIncidentCount, bcpState] = await Promise.all([
       this.ledger.count({ where: { modelId } }),
@@ -160,6 +160,7 @@ export class InventoryService implements OnModuleInit {
       lastDriftAt: lastDrift?.computedAt ?? null,
       overdueIncidentCount,
       bcpConfigured: Boolean(bcpState),
+      bcpDrillLastConducted: bcpState?.drillLastConducted ?? null,
       euHighRiskDomains: this.config.get<string[]>('euAiActHighRiskDomains'),
     };
   }
@@ -563,7 +564,7 @@ export class InventoryService implements OnModuleInit {
     const entry = modelEntityToEntry(orm);
     const ctx = await this.buildValidationContext(modelId);
     const gapLines: string[] = [
-      ...sutrasBlockingGaps(validateSutrasCompliance(entry)).map((g) => `[RBI FREE-AI] ${g}`),
+      ...sutrasBlockingGaps(validateSutrasCompliance(entry, ctx)).map((g) => `[RBI FREE-AI] ${g}`),
       ...frameworkBlockingGaps(validateNistRmf(entry, ctx)).map((g) => `[NIST AI RMF] ${g}`),
       ...frameworkBlockingGaps(validateEuAiAct(entry, ctx)).map((g) => `[EU AI Act] ${g}`),
       ...frameworkBlockingGaps(validateIso42001(entry, ctx)).map((g) => `[ISO 42001] ${g}`),
@@ -803,7 +804,7 @@ export class InventoryService implements OnModuleInit {
 
     const finalEntry = modelEntityToEntry(orm);
     const ctx = await this.buildValidationContext(modelId);
-    const compliance = sutrasReportAsDict(validateSutrasCompliance(finalEntry));
+    const compliance = sutrasReportAsDict(validateSutrasCompliance(finalEntry, ctx));
     compliance.nist_rmf = frameworkReportAsDict(validateNistRmf(finalEntry, ctx));
     compliance.eu_ai_act = frameworkReportAsDict(validateEuAiAct(finalEntry, ctx));
     compliance.iso_42001 = frameworkReportAsDict(validateIso42001(finalEntry, ctx));
@@ -820,7 +821,7 @@ export class InventoryService implements OnModuleInit {
     const orm = await this.getOrThrow(modelId);
     const entry = modelEntityToEntry(orm);
     const ctx = await this.buildValidationContext(modelId);
-    const res = sutrasReportAsDict(validateSutrasCompliance(entry));
+    const res = sutrasReportAsDict(validateSutrasCompliance(entry, ctx));
     res.nist_rmf = frameworkReportAsDict(validateNistRmf(entry, ctx));
     res.eu_ai_act = frameworkReportAsDict(validateEuAiAct(entry, ctx));
     res.iso_42001 = frameworkReportAsDict(validateIso42001(entry, ctx));

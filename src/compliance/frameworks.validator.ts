@@ -10,7 +10,15 @@
  *    in as a ValidationContext by the caller.
  */
 import { ModelType, RiskLevel } from '../common/enums';
-import { AIModelEntry, hasEvidence } from '../domain/model-inventory';
+import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
+import {
+  AIModelEntry,
+  daysBetween,
+  hasEvidence,
+  LEGACY_RED_TEAM_INTERVAL_DAYS,
+  lastRedTeamEvidenceAt,
+  redTeamIntervalDays,
+} from '../domain/model-inventory';
 
 /** Operational evidence gathered from the platform's own records. */
 export interface ValidationContext {
@@ -21,6 +29,10 @@ export interface ValidationContext {
   bcpConfigured?: boolean;
   /** EU AI Act high-risk functional areas (env-configurable). */
   euHighRiskDomains?: string[];
+  /** Date of the model's last recorded BCP drill (E0.4). */
+  bcpDrillLastConducted?: Date | null;
+  /** Governance feature flags; read from the environment when omitted. */
+  flags?: FeatureFlags;
 }
 
 export interface FrameworkCheck {
@@ -30,6 +42,9 @@ export interface FrameworkCheck {
   evidence: string;
   gap: string;
   mandatory: boolean;
+  /** True when SentRAI cannot assess the control yet: reported as NOT ASSESSED,
+   *  never as a pass, and never blocking. */
+  notAssessed?: boolean;
 }
 
 export interface FrameworkComplianceReport {
@@ -63,6 +78,7 @@ export function frameworkReportAsDict(r: FrameworkComplianceReport): Record<stri
       evidence: c.evidence,
       gap: c.gap,
       mandatory: c.mandatory,
+      ...(c.notAssessed ? { not_assessed: true } : {}),
     })),
   };
 }
@@ -109,8 +125,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   // GOVERN — accountability structures
   const ownerStr = entry.ownerTeam || '';
   const hasOwner = Boolean(ownerStr) && !ownerStr.toLowerCase().includes('unassigned');
+  // Roles and responsibilities for AI risk (GOVERN 2.1).
   checks.push(check(
-    'GOVERN-1.1',
+    'GOVERN-2.1',
     'Organizational Ownership & Responsibility',
     hasOwner,
     hasOwner ? `Owner team: ${entry.ownerTeam}` : 'No owner team assigned',
@@ -127,8 +144,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   const hasAuditCadence = Boolean(entry.nextAuditDue);
+  // Periodic review of risk management planned (GOVERN 1.5).
   checks.push(check(
-    'GOVERN-1.3',
+    'GOVERN-1.5',
     'Audit Cadence Defined',
     hasAuditCadence,
     hasAuditCadence ? `Next audit due: ${entry.nextAuditDue!.toISOString().slice(0, 10)}` : 'No audit schedule recorded',
@@ -146,8 +164,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   const hasContext = Boolean(entry.functionalArea) && (entry.targetCustomerSegments ?? []).length > 0;
+  // Deployment setting and affected people are part of context (MAP 1.1).
   checks.push(check(
-    'MAP-1.2',
+    'MAP-1.1',
     'Deployment Context & Affected Users',
     hasContext,
     hasContext
@@ -158,8 +177,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   const hasProvenance = Boolean(entry.sourceRef) || (entry.dependencies ?? []).length > 0;
+  // Mapping the system's components and third-party dependencies (MAP 4.1).
   checks.push(check(
-    'MAP-1.3',
+    'MAP-4.1',
     'Source & Dependency Provenance',
     hasProvenance,
     hasProvenance ? `Provenance: ${entry.sourceRef ?? 'dependency list'}` : 'No source reference or dependencies recorded',
@@ -168,11 +188,27 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   // MEASURE — the system is actually tested and measured
+  // Security and resilience evaluated (MEASURE 2.7); the review also covers
+  // bias auditing (MEASURE 2.11).
+  const flags = ctx.flags ?? getFeatureFlags();
   let redTeamOk = false;
   let redTeamEvidence = 'No red-team / bias-audit evidence on record';
-  if (entry.lastRedTeamDate) {
+  let redTeamGap = 'Measure stage requires a bias audit / red-team review within the last 12 months (date or attached report).';
+  if (flags.redTeamIntervals) {
+    // E0.3: one interval per risk tier, the same rule Sutra 7 uses.
+    const interval = redTeamIntervalDays(entry.riskLevel);
+    const at = lastRedTeamEvidenceAt(entry);
+    redTeamGap = `Measure stage requires a bias audit / red-team review within ${interval} days for ${entry.riskLevel} risk (date or attached report).`;
+    if (at) {
+      const d = daysBetween(at);
+      redTeamOk = d <= interval;
+      redTeamEvidence = redTeamOk
+        ? `Last red teamed ${d} days ago (${at.toISOString().slice(0, 10)}); ${entry.riskLevel} interval is ${interval} days`
+        : `Red teaming stale: last performed ${d} days ago; ${entry.riskLevel} interval is ${interval} days`;
+    }
+  } else if (entry.lastRedTeamDate) {
     const d = daysSince(entry.lastRedTeamDate);
-    redTeamOk = d < 365;
+    redTeamOk = d < LEGACY_RED_TEAM_INTERVAL_DAYS;
     redTeamEvidence = redTeamOk
       ? `Last red teamed ${d} days ago (${entry.lastRedTeamDate.toISOString().slice(0, 10)})`
       : `Red teaming stale: last performed ${d} days ago`;
@@ -181,16 +217,17 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
     redTeamEvidence = 'Red-team report attached as evidence artifact';
   }
   checks.push(check(
-    'MEASURE-2.1',
+    'MEASURE-2.7',
     'Security Red Teaming & Bias Auditing',
     redTeamOk,
     redTeamEvidence,
-    'Measure stage requires a bias audit / red-team review within the last 12 months (date or attached report).',
+    redTeamGap,
   ));
 
   const drift = recentDrift(ctx);
+  // Functionality and behaviour monitored in production (MEASURE 2.4).
   checks.push(check(
-    'MEASURE-2.2',
+    'MEASURE-2.4',
     'Performance Drift Measurement',
     drift.ok,
     drift.evidence,
@@ -209,8 +246,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
 
   // MANAGE — risks are actively managed
   const hasOversight = !(isHigh && !entry.humanOversightRequired);
+  // Human-AI configuration and oversight roles (GOVERN 3.2; also MAP 3.5).
   checks.push(check(
-    'MANAGE-1.1',
+    'GOVERN-3.2',
     'Human Oversight Controls',
     hasOversight,
     entry.humanOversightRequired
@@ -220,8 +258,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   const bcpOk = Boolean(ctx.bcpConfigured);
+  // Mechanisms to supersede or disengage the system (MANAGE 2.4).
   checks.push(check(
-    'MANAGE-1.2',
+    'MANAGE-2.4',
     'Fallback / Business-Continuity Plan',
     bcpOk,
     bcpOk ? 'BCP fallback state configured for this model' : 'No BCP fallback configured',
@@ -230,8 +269,9 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   const overdue = ctx.overdueIncidentCount ?? 0;
+  // Incidents tracked and communicated (MANAGE 4.3).
   checks.push(check(
-    'MANAGE-1.3',
+    'MANAGE-4.3',
     'Incident Reporting Hygiene',
     overdue === 0,
     overdue === 0 ? 'No overdue incident reports' : `${overdue} incident(s) past their reporting deadline`,
@@ -256,6 +296,19 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
     trackingOk ? `${ctx.ledgerEventCount} ledger event(s) tracking this model over time` : 'No risk-tracking history recorded for this model',
     'Identified risks must be tracked over time (an append-only ledger history for the model).',
   ));
+
+  // E0.5 — privacy risk examined and documented (MEASURE 2.10). Reuses the
+  // dpia evidence type the EU AI Act Art-27 check already reads.
+  if (flags.nistPrivacy) {
+    const privacyOk = hasEvidence(entry, 'dpia');
+    checks.push(check(
+      'MEASURE-2.10',
+      'Privacy Risk Examined (DPIA / Privacy Review)',
+      privacyOk,
+      privacyOk ? 'DPIA / privacy-review artifact attached' : 'No DPIA or privacy-review artifact attached',
+      'Measure stage requires the system’s privacy risk to be examined and documented (attach a dpia artifact).',
+    ));
+  }
 
   return { frameworkName: 'NIST AI RMF', modelId: entry.modelId, modelName: entry.name, riskTier: isHigh ? 'High' : 'Standard', checks };
 }
@@ -447,23 +500,29 @@ export function validateIso42001(entry: AIModelEntry, ctx: ValidationContext = {
     'ISO 42001 requires systematic risk classification for each AI system.',
   ));
 
-  const useCase = entry.useCaseDescription || '';
-  const hasImpact = Boolean(useCase && useCase.length > 10);
-  checks.push(check(
-    'AIMS-8.2',
-    'AI System Impact Assessment',
-    hasImpact,
-    hasImpact ? `Impact assessment description provided (${useCase.length} chars)` : 'No impact description recorded',
-    'Clause 8.2 requires documented AI system impact assessments.',
-  ));
+  // AI system impact assessment (6.1.4, performed per 8.4). SentRAI has no
+  // impact-assessment record yet, and use-case text is not one, so this is
+  // reported NOT ASSESSED rather than passed. Never blocking.
+  checks.push({
+    ...check(
+      'AIMS-8.4',
+      'AI System Impact Assessment (6.1.4 / 8.4)',
+      false,
+      'NOT ASSESSED: SentRAI does not yet record AI system impact assessments; a use-case description is not one',
+      'Clauses 6.1.4 and 8.4 require documented AI system impact assessments; keep yours outside SentRAI until the impact-assessment workflow ships.',
+      false,
+    ),
+    notAssessed: true,
+  });
 
   const hasDataGov = Boolean(entry.sourceRef || (entry.dependencies && entry.dependencies.length));
+  // Data and component provenance (Annex A.7.5).
   checks.push(check(
-    'AIMS-8.3',
-    'Data & Codebase Governance',
+    'AIMS-A.7.5',
+    'Data & Codebase Provenance',
     hasDataGov,
     hasDataGov ? `Source/data references tracked: ${entry.sourceRef || 'Dependencies list'}` : 'No codebase or data dependencies registered',
-    'AIMS Data Governance requires tracking source repository or third-party dependencies.',
+    'Annex A.7.5 requires recorded provenance: track the source repository or third-party dependencies.',
   ));
 
   const drift = recentDrift(ctx);
@@ -492,31 +551,31 @@ export function validateIso42001(entry: AIModelEntry, ctx: ValidationContext = {
 
   const overdue = ctx.overdueIncidentCount ?? 0;
   checks.push(check(
-    'AIMS-10.1',
+    'AIMS-10.2',
     'Nonconformity & Corrective Action',
     overdue === 0,
     overdue === 0 ? 'No overdue incident reports' : `${overdue} incident(s) past reporting deadline`,
-    'Clause 10 requires timely handling of nonconformities: report overdue incidents.',
+    'Clause 10.2 requires timely handling of nonconformities: report overdue incidents.',
     false,
   ));
 
-  // AIMS-7.2 — competence & accountability: a named team owns the system.
+  // AIMS-5.3 — roles, responsibilities and authorities: a named team owns the system.
   checks.push(check(
-    'AIMS-7.2',
-    'Competence & Accountability',
+    'AIMS-5.3',
+    'Roles, Responsibilities & Accountability',
     ownerAssigned(entry),
     ownerAssigned(entry) ? `Accountable team assigned: ${entry.ownerTeam}` : 'No accountable team assigned to this AI system',
-    'Clause 7.2 requires competent, accountable ownership: assign a named owner team.',
+    'Clause 5.3 requires assigned roles and responsibilities: assign a named owner team.',
   ));
 
-  // AIMS-A.6.2 — AI system documentation (a model card). Best-practice, not a hard gate.
+  // AIMS-A.6.2.7 — AI system technical documentation (a model card). Best-practice, not a hard gate.
   const modelCardOk = hasEvidence(entry, 'model_card');
   checks.push(check(
-    'AIMS-A.6.2',
-    'AI System Documentation',
+    'AIMS-A.6.2.7',
+    'AI System Technical Documentation',
     modelCardOk,
     modelCardOk ? 'Model card / system documentation artifact attached' : 'No model card attached',
-    'Annex A.6.2 recommends documented AI system information (attach a model_card artifact).',
+    'Annex A.6.2.7 recommends technical documentation for relevant parties (attach a model_card artifact).',
     false,
   ));
 

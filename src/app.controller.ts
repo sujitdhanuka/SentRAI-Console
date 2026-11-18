@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from './common/decorators/public.decorator';
 import { INDEX_HTML, LANDING_HTML, HELP_MD, DEMO_MP4, GATE_SCRIPT_CANDIDATES } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
-import { COVERAGE } from './compliance/coverage.data';
+import { getCoverage } from './compliance/coverage.data';
 import { APP_VERSION, BUILD_TAG } from './common/build';
 import { GA_SNIPPET } from './common/analytics';
 
@@ -162,7 +162,7 @@ export class AppController {
   @ApiExcludeEndpoint()
   coveragePage(@Res() res: Response): void {
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const cards = COVERAGE.map((f) => `
+    const cards = getCoverage().map((f) => `
       <section class="fw">
         <div class="fw-head">
           <h2>${esc(f.name)} <span class="jur">${esc(f.jurisdiction)}</span></h2>

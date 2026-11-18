@@ -48,9 +48,9 @@ describe('compliance plugins (parity with test_compliance_plugins.py)', () => {
     expect(report.blockingGaps.length).toBeGreaterThan(0);
   });
 
-  it('ISO plugin: missing owner team is blocking (ISO42001-9.3)', () => {
+  it('ISO plugin: missing owner team is blocking (ISO42001-5.3)', () => {
     const report = new ISO42001Plugin().evaluate({ ...COMPLIANT_ASSET, owner_team: '' });
-    expect(report.blockingGaps.map((r) => r.controlId)).toContain('ISO42001-9.3');
+    expect(report.blockingGaps.map((r) => r.controlId)).toContain('ISO42001-5.3');
   });
 
   it('EU plugin classifies high risk and passes the Art6 classification control', () => {

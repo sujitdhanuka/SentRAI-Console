@@ -3,13 +3,29 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AIModelEntity, DriftReportEntity, ScoreWindowEntity } from '../database/entities';
-import { DriftStatus, RiskLevel } from '../common/enums';
+import {
+  AIModelEntity,
+  BcpDrillEntity,
+  DriftReportEntity,
+  ModelLedgerEventEntity,
+  ProjectEntity,
+  ScoreWindowEntity,
+} from '../database/entities';
+import { DriftStatus, RiskLevel, Role } from '../common/enums';
+import { FeatureFlagsService } from '../common/feature-flags';
+import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { NotifierService } from '../common/notifier.service';
-import { activateBcp, deactivateBcp, driftSummary, evaluateDrift } from '../domain/monitoring';
+import {
+  activateBcp,
+  bcpDrillIntervalDays,
+  bcpDrillStatus,
+  deactivateBcp,
+  driftSummary,
+  evaluateDrift,
+} from '../domain/monitoring';
 import { BcpStateStore } from './bcp-state.store';
 import { getGpuUtilization } from './gpu-monitor';
-import { BcpActivateDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
+import { BcpActivateDto, BcpDrillDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
 
 @Injectable()
 export class MonitoringService {
@@ -19,8 +35,12 @@ export class MonitoringService {
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(DriftReportEntity) private readonly drifts: Repository<DriftReportEntity>,
     @InjectRepository(ScoreWindowEntity) private readonly windows: Repository<ScoreWindowEntity>,
+    @InjectRepository(BcpDrillEntity) private readonly drills: Repository<BcpDrillEntity>,
+    @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
+    @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     private readonly bcp: BcpStateStore,
     private readonly notifier: NotifierService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   async evaluateDrift(dto: DriftEvaluationDto): Promise<DriftReportResponse> {
@@ -238,6 +258,121 @@ export class MonitoringService {
       rules_engine: state.rulesEngineRef,
       human_sample_pct: state.humanSamplePct,
     };
+  }
+
+  /* ----------------------------- BCP drills (E0.4) ----------------------------- */
+
+  /** Drill tracking only exists while GOV_E0_4_BCP_DRILLS is on; otherwise the
+   *  routes answer 404 as if they were not there, so hosted behaviour is unchanged. */
+  private assertDrillsEnabled(): void {
+    if (!this.flags.isEnabled('bcpDrills')) throw new NotFoundException();
+  }
+
+  /** A model in the caller's organization. Another organization's model is a 404,
+   *  so its existence isn't disclosed; ADMIN is a global superuser. */
+  private async modelForUser(user: CurrentUser, modelId: string): Promise<AIModelEntity> {
+    const model = await this.models.findOne({ where: { id: modelId } });
+    if (!model) throw new NotFoundException('Model not found');
+    if (user.role === Role.ADMIN) return model;
+    const project = model.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+    if ((project?.tenantId ?? null) !== (user.tenantId ?? null)) throw new NotFoundException('Model not found');
+    return model;
+  }
+
+  private drillView(d: BcpDrillEntity) {
+    return {
+      drill_id: d.id,
+      model_id: d.modelId,
+      conducted_at: d.conductedAt.toISOString(),
+      scenario: d.scenario,
+      result: d.result,
+      findings: d.findings,
+      conducted_by: d.conductedBy,
+      recorded_at: d.recordedAt.toISOString(),
+    };
+  }
+
+  async recordDrill(user: CurrentUser, modelId: string, dto: BcpDrillDto) {
+    this.assertDrillsEnabled();
+    const model = await this.modelForUser(user, modelId);
+    const now = new Date();
+    const conductedAt = dto.conducted_at ? new Date(dto.conducted_at) : now;
+    if (Number.isNaN(conductedAt.getTime())) throw new BadRequestException('conducted_at is not a valid date');
+    if (conductedAt.getTime() > now.getTime() + 60_000) throw new BadRequestException('conducted_at cannot be in the future');
+
+    const row = await this.drills.save(this.drills.create({
+      id: uuidv4(),
+      modelId: model.id,
+      conductedAt,
+      scenario: dto.scenario.trim(),
+      result: dto.result,
+      findings: dto.findings?.trim() || null,
+      conductedBy: user.email,
+      recordedAt: now,
+    }));
+
+    // drillLastConducted tracks the newest drill, so back-dating an older drill
+    // never moves it backwards.
+    const state = await this.bcp.getOrCreate(model.id);
+    if (!state.drillLastConducted || state.drillLastConducted.getTime() < conductedAt.getTime()) {
+      state.drillLastConducted = conductedAt;
+      await this.bcp.save(state);
+    }
+
+    await this.ledger.save(this.ledger.create({
+      id: uuidv4(),
+      modelId: model.id,
+      eventType: 'BCP_DRILL_RECORDED',
+      eventData: { drill_id: row.id, result: row.result, conducted_at: conductedAt.toISOString() },
+      actor: user.email,
+      occurredAt: now,
+    }));
+
+    return { ...this.drillView(row), ...this.drillSummary(state.drillLastConducted) };
+  }
+
+  async listDrills(user: CurrentUser, modelId: string) {
+    this.assertDrillsEnabled();
+    const model = await this.modelForUser(user, modelId);
+    const [rows, state] = await Promise.all([
+      this.drills.find({ where: { modelId: model.id }, order: { conductedAt: 'DESC' }, take: 100 }),
+      this.bcp.get(model.id),
+    ]);
+    return {
+      model_id: model.id,
+      risk_level: model.riskLevel,
+      ...this.drillSummary(state?.drillLastConducted ?? null),
+      drills: rows.map((r) => this.drillView(r)),
+    };
+  }
+
+  private drillSummary(last: Date | null) {
+    const s = bcpDrillStatus(last);
+    return {
+      drill_last_conducted: last ? last.toISOString() : null,
+      drill_interval_days: bcpDrillIntervalDays(),
+      drill_status: s.status,
+      next_drill_due: s.dueAt ? s.dueAt.toISOString() : null,
+    };
+  }
+
+  /** Active HIGH/CRITICAL models whose drill is missing, due soon or overdue
+   *  (the scheduled reminder job). Empty while the flag is off. */
+  async drillsNeedingAttention(now: Date = new Date()) {
+    if (!this.flags.isEnabled('bcpDrills')) return [];
+    const models = await this.models.find({
+      where: { isActive: true, riskLevel: In([RiskLevel.HIGH, RiskLevel.CRITICAL]) },
+      select: ['id', 'name', 'riskLevel'],
+    });
+    const out: Array<{ model_id: string; model_name: string; status: string; next_drill_due: string | null }> = [];
+    for (const m of models) {
+      const state = await this.bcp.get(m.id);
+      const s = bcpDrillStatus(state?.drillLastConducted ?? null, now);
+      if (s.status !== 'CURRENT') {
+        out.push({ model_id: m.id, model_name: m.name, status: s.status, next_drill_due: s.dueAt ? s.dueAt.toISOString() : null });
+      }
+    }
+    return out;
   }
 
   /** Models above warning thresholds that HIGH/MEDIUM cron should re-check. */
