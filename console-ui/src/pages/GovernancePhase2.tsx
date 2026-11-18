@@ -663,3 +663,29 @@ export function AssuranceTab() {
     </div>
   );
 }
+
+/* ----------------------------- E2.2 decision view on the Grievances page */
+
+/** Per-grievance decision actions (link to a decision, appeal a rejection, ask for reconsideration). Shown only while the US kit is on. */
+export function GrievanceDecision({ grievanceId, status }: { grievanceId: string; status: string }) {
+  const call = useToastCall();
+  const [open, setOpen] = useState(false);
+  const [ref, setRef] = useState('');
+  const [request, setRequest] = useState('');
+  const [view, setView] = useState<any>(null);
+  if (!open) return <Button size="xs" variant="ghost" onClick={() => setOpen(true)}>Decision…</Button>;
+  return (
+    <div className="mt-1 space-y-1 rounded border border-border p-2">
+      <div className="flex flex-wrap items-end gap-1">
+        <input className={`${FIELD} max-w-[200px]`} placeholder="Decision reference" value={ref} onChange={(e) => setRef(e.target.value)} />
+        <Button size="xs" variant="secondary" disabled={!ref} onClick={() => void call(() => post(`/governance/grievances/${grievanceId}/link-decision`, { decision_ref: ref }), 'Linked to the decision')}>Link</Button>
+        <Button size="xs" variant="secondary" disabled={!ref} onClick={() => void call(async () => setView(await api<any>(`/governance/decisions/${encodeURIComponent(ref)}`)), 'Loaded')}>View decision</Button>
+        <input className={`${FIELD} max-w-sm`} placeholder="What the applicant asks for" value={request} onChange={(e) => setRequest(e.target.value)} />
+        <Button size="xs" variant="secondary" onClick={() => void call(() => post(`/governance/grievances/${grievanceId}/reconsider`, { request, decision_ref: ref || undefined }), 'Reconsideration opened')}>Human reconsideration</Button>
+        <Button size="xs" variant="secondary" disabled={status !== 'REJECTED'} title={status !== 'REJECTED' ? 'An appeal follows a rejected grievance' : ''} onClick={() => void call(() => post(`/governance/grievances/${grievanceId}/appeal`, { request, decision_ref: ref || undefined }), 'Appeal opened')}>Appeal</Button>
+        <Button size="xs" variant="ghost" onClick={() => setOpen(false)}>Close</Button>
+      </div>
+      {view && <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(view, null, 2)}</pre>}
+    </div>
+  );
+}

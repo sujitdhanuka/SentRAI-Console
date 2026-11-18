@@ -11,6 +11,8 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { useGovernanceFeatures } from '../stores/governanceFeatures';
+import { GrievanceDecision } from './GovernancePhase2';
 
 interface Grievance {
   grievance_id: string; model_id: string; subject: string; description: string;
@@ -39,6 +41,12 @@ const IS_LIVE = (s: string) => !TERMINAL.has(s);
 export function Grievances() {
   const toast = useConsoleUi((s) => s.toast);
   const { models } = useModels();
+  // E2.2: decision actions appear only while the US kit flag is on.
+  const features = useGovernanceFeatures((s) => s.features);
+  const loadFeatures = useGovernanceFeatures((s) => s.load);
+  useEffect(() => {
+    void loadFeatures();
+  }, [loadFeatures]);
   const [rows, setRows] = useState<Grievance[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
@@ -201,6 +209,7 @@ export function Grievances() {
                     {g.resolution_notes ? ` · “${g.resolution_notes}”` : ''}
                   </p>
                   <RaiseAction source="GRIEVANCE" sourceId={g.grievance_id} defaultNonconformity={`Grievance: ${g.subject}. ${g.description}`} />
+                  {features?.usKit && <GrievanceDecision grievanceId={g.grievance_id} status={g.status} />}
                 </li>
               ))}
             </ul>

@@ -13,7 +13,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
-import { ModelLifecycleStage, RiskLevel } from '../../common/enums';
+import { AuditType, ModelLifecycleStage, RiskLevel } from '../../common/enums';
 import { FeatureFlagsService } from '../../common/feature-flags';
 import { CurrentUser } from '../../common/interfaces/current-user.interface';
 import { NotifierService } from '../../common/notifier.service';
@@ -22,9 +22,11 @@ import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, addOrgFacts, emitModelEvent, governanceHooks } from '../hooks';
 import { phase2Param } from '../packs/parameter-resolver';
 import { PacksService } from '../packs/packs.service';
-import { addMonths, DAY_MS, MAINTAINERS, orgFor, orgModels, orgParams, reqText, requireRole } from '../phase2-util';
+import { addMonths, DAY_MS, MAINTAINERS, orgFor, orgModels, orgParams, packApplies, reqText, requireRole } from '../phase2-util';
 import { RisksService } from '../risks/risks.service';
 
+/** RBI FREE-AI pack id: third-party audits for HIGH systems while it is in force. */
+const RBI_PACK_ID = 'rbi-free-ai';
 const isHigh = (r: string) => r === RiskLevel.HIGH || r === RiskLevel.CRITICAL;
 const LIVE: string[] = [ModelLifecycleStage.DEPLOYED, ModelLifecycleStage.MONITORING];
 /** Platform audit interval for HIGH systems when no pack sets one (matches PLATFORM_DEFAULTS). */
@@ -115,8 +117,11 @@ export class RedTeamAuditService implements OnModuleInit {
             : 'A high-risk system needs a red-team exercise before it goes live',
         });
       }
-      const due = await this.auditDueFor(model, params);
-      if (due && due.getTime() < Date.now()) out.push({ code: 'audit_overdue', message: `The periodic audit for this ${model.riskLevel} system was due on ${due.toISOString().slice(0, 10)}` });
+      const tp = await this.thirdPartyRequired(model, orgId);
+      const due = await this.auditDueFor(model, params, tp);
+      if (due && due.getTime() < Date.now()) {
+        out.push({ code: 'audit_overdue', message: `The periodic ${tp ? 'third-party ' : ''}audit for this ${model.riskLevel} system was due on ${due.toISOString().slice(0, 10)}` });
+      }
       return out;
     });
   }
@@ -125,10 +130,18 @@ export class RedTeamAuditService implements OnModuleInit {
     return (await orgParams(this.packs, orgId))['redTeamPreDeployRequired.HIGH'] === true;
   }
 
-  private async auditDueFor(model: AIModelEntity, params: Record<string, any>): Promise<Date | null> {
+  /** RBI FREE-AI: with the RBI pack in force, the periodic audit of a HIGH / CRITICAL system must be a third-party audit. */
+  private async thirdPartyRequired(model: AIModelEntity, orgId: string | null): Promise<boolean> {
+    return isHigh(model.riskLevel) && (await packApplies(this.packs, orgId, RBI_PACK_ID));
+  }
+
+  private async auditDueFor(model: AIModelEntity, params: Record<string, any>, thirdParty = false): Promise<Date | null> {
     const interval = Number(params['auditIntervalDays.HIGH']) > 0 ? Number(params['auditIntervalDays.HIGH']) : DEFAULT_AUDIT_DAYS;
-    const last = await this.audits.findOne({ where: { modelId: model.id }, order: { createdAt: 'DESC' } });
-    return auditDue(model, last, interval);
+    const where: Record<string, any> = { modelId: model.id };
+    if (thirdParty) where.auditType = AuditType.THIRD_PARTY;
+    const last = await this.audits.findOne({ where, order: { createdAt: 'DESC' } });
+    // The model's own next-audit date says nothing about the audit's type, so a third-party requirement runs from the last third-party audit.
+    return auditDue(thirdParty ? { ...model, nextAuditDue: null } : model, last, interval);
   }
 
   private async markRequired(modelId: string, reason: string, emit = true): Promise<void> {
@@ -149,11 +162,12 @@ export class RedTeamAuditService implements OnModuleInit {
     const { model, orgId } = await modelForUser(this.models, this.projects, user, modelId);
     const params = await orgParams(this.packs, orgId);
     const rt = redTeamState(model, params['redTeamPreDeployRequired.HIGH'] === true);
-    const due = await this.auditDueFor(model, params);
+    const tp = await this.thirdPartyRequired(model, orgId);
+    const due = await this.auditDueFor(model, params, tp);
     return {
       model_id: modelId, risk_level: model.riskLevel, lifecycle_stage: model.lifecycleStage,
       red_team: { required_since: rt.requiredSince, reason: rt.reason, satisfied: rt.satisfied, last_red_team: rt.lastRedTeam, pre_deploy_rule: params['redTeamPreDeployRequired.HIGH'] === true },
-      audit: { next_due: due, overdue: !!due && due.getTime() < Date.now(), interval_days: Number(params['auditIntervalDays.HIGH']) || DEFAULT_AUDIT_DAYS },
+      audit: { next_due: due, overdue: !!due && due.getTime() < Date.now(), interval_days: Number(params['auditIntervalDays.HIGH']) || DEFAULT_AUDIT_DAYS, third_party_required: tp },
     };
   }
 
@@ -191,12 +205,13 @@ export class RedTeamAuditService implements OnModuleInit {
     const rows: any[] = [];
     for (const m of await orgModels(this.models, this.projects, orgId)) {
       const rt = redTeamState(m, pre);
-      const due = await this.auditDueFor(m, params);
+      const tp = await this.thirdPartyRequired(m, orgId);
+      const due = await this.auditDueFor(m, params, tp);
       if (rt.satisfied && !(due && due.getTime() < Date.now()) && !rt.requiredSince) continue;
       rows.push({
         model_id: m.id, name: m.name, risk_level: m.riskLevel, lifecycle_stage: m.lifecycleStage,
         red_team_due: !rt.satisfied, red_team_required_since: rt.requiredSince, red_team_reason: rt.reason, last_red_team: rt.lastRedTeam,
-        audit_due: due, audit_overdue: !!due && due.getTime() < Date.now(),
+        audit_due: due, audit_overdue: !!due && due.getTime() < Date.now(), third_party_audit_required: tp,
       });
     }
     const fr = await this.frameworkReview(orgId);
