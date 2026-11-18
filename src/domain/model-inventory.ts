@@ -46,6 +46,10 @@ export interface EvidenceArtifact {
   added_at: string;
   /** Parsed structured summary — e.g. behavioral-eval pass rate + failed checks. */
   data?: Record<string, any>;
+  /** Controlled document behind the artifact (governance E1.8). */
+  document_id?: string;
+  document_version?: number;
+  document_hash?: string;
 }
 
 /** True when the entry carries an attached evidence artifact of the given type. */

@@ -12,6 +12,7 @@ import { useConsoleUi } from '../stores/consoleUi';
 import { useGovernanceFeatures } from '../stores/governanceFeatures';
 import { useSession } from '../stores/session';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
+import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
 
 /* ------------------------------------------------------------------ types */
 
@@ -622,6 +623,9 @@ const TABS: Tab[] = [
   { id: 'risks', label: 'Risk register', flag: 'riskRegister' },
   { id: 'impact', label: 'Impact assessments', flag: 'impactAssessment' },
   { id: 'context', label: 'Context profiles', flag: 'contextProfile' },
+  { id: 'aims', label: 'AIMS workspace', flag: 'aims' },
+  { id: 'actions', label: 'Corrective actions', flag: 'correctiveActions' },
+  { id: 'documents', label: 'Documents', flag: 'documentControl' },
   { id: 'settings', label: 'Settings & risk appetite', flag: 'governanceSettings' },
   { id: 'accountability', label: 'Accountability', flag: 'accountability' },
   { id: 'history', label: 'Change history', flag: 'governanceSettings' },
@@ -668,6 +672,12 @@ export function Governance() {
           <ImpactTab />
         ) : active === 'context' ? (
           <ContextTab />
+        ) : active === 'aims' ? (
+          <AimsTab />
+        ) : active === 'actions' ? (
+          <ActionsTab />
+        ) : active === 'documents' ? (
+          <DocumentsTab />
         ) : active === 'settings' ? (
           <SettingsTab />
         ) : active === 'accountability' ? (

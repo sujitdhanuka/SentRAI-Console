@@ -62,7 +62,7 @@ export function InventoryDashboard() {
         />
         <div className="flex w-full shrink-0 flex-col gap-2 lg:w-[316px]">
           <ComponentDetail component={selected} loading={loading} error={error} onRetry={load} />
-          <GapsQueue gaps={selectedGaps} components={components} scopeName={selected?.name} loading={loading} error={error} onRetry={load} />
+          <GapsQueue gaps={selectedGaps} components={components} scopeName={selected?.name} scopeId={selected?.id} loading={loading} error={error} onRetry={load} />
           <GovernanceCalendar events={selectedCalendar} scopeName={selected?.name} loading={loading} error={error} onRetry={load} />
         </div>
       </main>

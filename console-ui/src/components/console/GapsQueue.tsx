@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
+
+import { api } from '../../api/client';
 import { AIComponent, GovernanceGap } from '../../providers';
+import { useGovernanceFeatures } from '../../stores/governanceFeatures';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
 import { Panel, PanelError } from '../ui/Panel';
@@ -12,6 +16,7 @@ export function GapsQueue({
   gaps,
   components,
   scopeName,
+  scopeId,
   loading,
   error,
   onRetry,
@@ -20,6 +25,8 @@ export function GapsQueue({
   components: AIComponent[];
   /** When set, the queue is scoped to a single selected component. */
   scopeName?: string;
+  /** Model id of the scoped component (filters overdue corrective actions). */
+  scopeId?: string;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
@@ -34,7 +41,19 @@ export function GapsQueue({
     select(componentId);
     setDrawer(true);
   };
-  const sorted = [...gaps].sort((a, b) => {
+  // Governance E1.7: overdue corrective actions surface here while the register is on.
+  const features = useGovernanceFeatures((s) => s.features);
+  const [overdueActions, setOverdueActions] = useState<GovernanceGap[]>([]);
+  useEffect(() => {
+    if (!features?.correctiveActions) { setOverdueActions([]); return; }
+    api<{ actions: Array<{ action_id: string; model_id: string | null; nonconformity: string; action: string }> }>('/governance/actions?overdue=true')
+      .then((r) => setOverdueActions(r.actions.filter((x) => x.model_id && (!scopeId || x.model_id === scopeId)).map((x) => ({
+        id: `ca-${x.action_id}`, severity: 'HIGH', componentId: x.model_id!, framework: 'Corrective action (ISO 10.2)',
+        description: `${x.action} — ${x.nonconformity}`, due: 'OVERDUE',
+      }))))
+      .catch(() => setOverdueActions([]));
+  }, [features?.correctiveActions, scopeId, gaps]);
+  const sorted = [...gaps, ...overdueActions].sort((a, b) => {
     const ao = a.due === 'OVERDUE' ? 0 : 1;
     const bo = b.due === 'OVERDUE' ? 0 : 1;
     return ao - bo || SEV_RANK[a.severity] - SEV_RANK[b.severity];

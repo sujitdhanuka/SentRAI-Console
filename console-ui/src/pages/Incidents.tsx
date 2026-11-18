@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client';
 import { useModels } from '../api/models';
+import { RaiseAction } from '../components/console/RaiseAction';
 import { AppShell } from '../components/console/AppShell';
 import { Badge, BadgeTone } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -327,6 +328,7 @@ export function Incidents() {
                     deadline {new Date(i.reporting_deadline).toLocaleString()}
                     {i.regulator_notified ? ' · regulator notified' : ' · regulator not yet notified'}
                   </p>
+                  <RaiseAction source="INCIDENT" sourceId={i.incident_id} defaultNonconformity={`Incident: ${i.description}`} />
                 </li>
               ))}
             </ul>

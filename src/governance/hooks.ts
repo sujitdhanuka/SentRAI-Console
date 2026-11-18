@@ -18,6 +18,8 @@ export interface GovernanceHooks {
   gateCheck?: (modelId: string) => Promise<{ mode: string; tier: string; block: Array<{ code: string; message: string }>; warn: Array<{ code: string; message: string }> } | null>;
   /** Residual risks and limitations for the public transparency card. */
   cardGovernance?: (modelId: string) => Promise<Record<string, any> | undefined>;
+  /** Resolve a controlled document an evidence artifact points to (E1.8); undefined while the flag is off. */
+  evidenceDocument?: (modelId: string, documentId: string) => Promise<{ document_id: string; version: number; hash: string } | undefined>;
 }
 
 export const governanceHooks: GovernanceHooks = {};

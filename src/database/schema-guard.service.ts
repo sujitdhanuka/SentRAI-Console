@@ -432,6 +432,80 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'aims_records', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`aims_records\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`type\` VARCHAR(30) NOT NULL,
+      \`title\` VARCHAR(300) NOT NULL,
+      \`content\` MEDIUMTEXT NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`ownerUserId\` VARCHAR(36) NULL,
+      \`approvedBy\` VARCHAR(255) NULL,
+      \`approvedAt\` DATETIME NULL,
+      \`reviewDueAt\` DATETIME NULL,
+      \`documentId\` VARCHAR(36) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_aims_records_org\` (\`orgId\`),
+      INDEX \`IDX_aims_records_type\` (\`type\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'corrective_actions', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`corrective_actions\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`source\` VARCHAR(20) NOT NULL,
+      \`sourceId\` VARCHAR(100) NULL,
+      \`modelId\` VARCHAR(36) NULL,
+      \`nonconformity\` TEXT NOT NULL,
+      \`rootCause\` TEXT NULL,
+      \`action\` TEXT NOT NULL,
+      \`ownerUserId\` VARCHAR(36) NULL,
+      \`dueAt\` DATETIME NULL,
+      \`status\` VARCHAR(30) NOT NULL,
+      \`effectivenessReview\` TEXT NULL,
+      \`effective\` TINYINT(1) NULL,
+      \`closedAt\` DATETIME NULL,
+      \`closedBy\` VARCHAR(255) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_corrective_actions_org\` (\`orgId\`),
+      INDEX \`IDX_corrective_actions_source\` (\`sourceId\`),
+      INDEX \`IDX_corrective_actions_model\` (\`modelId\`),
+      INDEX \`IDX_corrective_actions_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'documents', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`documents\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`seriesId\` VARCHAR(36) NOT NULL,
+      \`docType\` VARCHAR(20) NOT NULL,
+      \`title\` VARCHAR(300) NOT NULL,
+      \`description\` TEXT NULL,
+      \`version\` INT NOT NULL,
+      \`hash\` VARCHAR(64) NOT NULL,
+      \`uri\` VARCHAR(1000) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`approvedBy\` VARCHAR(255) NULL,
+      \`approvedAt\` DATETIME NULL,
+      \`reviewDueAt\` DATETIME NULL,
+      \`retentionUntil\` DATETIME NULL,
+      \`supersedesId\` VARCHAR(36) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_documents_org\` (\`orgId\`),
+      INDEX \`IDX_documents_series\` (\`seriesId\`),
+      INDEX \`IDX_documents_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'control_results', // control-result.entity.ts (governance E1.1)
     createSql: `CREATE TABLE IF NOT EXISTS \`control_results\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

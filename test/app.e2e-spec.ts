@@ -2892,4 +2892,173 @@ describe('SentrAI Console (e2e)', () => {
       expect((await request(http).get(ia).set(auth(b.owner)).expect(200)).body.assessments).toEqual([]);
     });
   });
+
+  it('DOCUMENTS (E1.8): versions, approval, hash, supersession, review due; evidence points to a controlled document', async () => {
+    const a = await govOrg('DocOrgA');
+    const b = await govOrg('DocOrgB');
+    const { auth } = a;
+    const D = '/api/v1/governance/documents';
+    await request(http).get(D).set(auth(a.owner)).expect(404);
+    // Flag off: a document_id on evidence is ignored and the response is unchanged.
+    const off = (await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'dpia', ref: 'doc://dpia', document_id: 'x' })).body;
+    expect(off.artifact.document_id).toBeUndefined();
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      await request(http).post(D).set(auth(a.viewer)).send({ doc_type: 'POLICY', title: 'AI policy', uri: 'sharepoint://ai-policy-v1', content: 'v1' }).expect(403);
+      await request(http).post(D).set(auth(a.owner)).send({ doc_type: 'POLICY', title: 'AI policy', uri: 'x', hash: 'abc' }).expect(400);
+      await request(http).post(D).set(auth(a.owner)).send({ doc_type: 'POLICY', title: 'AI policy', uri: 'x', content: 'v1', hash: '0'.repeat(64) }).expect(400);
+      const v1 = (await request(http).post(D).set(auth(a.owner)).send({ doc_type: 'POLICY', title: 'AI policy', uri: 'sharepoint://ai-policy-v1', content: 'Policy text v1' }).expect(201)).body;
+      expect(v1).toMatchObject({ version: 1, status: 'DRAFT' });
+      expect(v1.hash).toMatch(/^[0-9a-f]{64}$/);
+      await request(http).post(`${D}/${v1.document_id}/approve`).set(auth(a.orgAdmin)).send({}).expect(403);
+      await request(http).post(`${D}/${v1.document_id}/approve`).set(auth(b.owner)).send({}).expect(404);
+      const ap = (await request(http).post(`${D}/${v1.document_id}/approve`).set(auth(a.ciso)).send({}).expect(200)).body;
+      expect(ap).toMatchObject({ status: 'APPROVED', approved_by: 'ciso@docorga.test' });
+      expect(ap.review_due_at).toBeTruthy();
+      const v2 = (await request(http).post(`${D}/${v1.document_id}/new-version`).set(auth(a.owner)).send({ uri: 'sharepoint://ai-policy-v2', content: 'Policy text v2', review_due_at: '2020-01-01' }).expect(201)).body;
+      expect(v2).toMatchObject({ version: 2, status: 'DRAFT', supersedes_id: v1.document_id });
+      await request(http).post(`${D}/${v1.document_id}/new-version`).set(auth(a.owner)).send({ content: 'v3' }).expect(409);
+      await request(http).post(`${D}/${v2.document_id}/approve`).set(auth(a.owner)).send({}).expect(200);
+      const hist = (await request(http).get(`${D}/${v2.document_id}`).set(auth(a.viewer)).expect(200)).body;
+      expect(hist.versions.map((x: any) => [x.version, x.status])).toEqual([[2, 'APPROVED'], [1, 'SUPERSEDED']]);
+      expect(hist.review_overdue).toBe(true);
+      const list = (await request(http).get(D).set(auth(a.owner)).expect(200)).body;
+      expect(list.documents).toHaveLength(1);
+      expect(list.review_overdue).toBe(1);
+      expect((await request(http).get(D).set(auth(b.owner)).expect(200)).body.documents).toEqual([]);
+
+      // Evidence points to a controlled document (version + hash); another org's document is refused.
+      const ev = (await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'model_card', ref: 'doc://card', document_id: v2.document_id }).expect(201)).body;
+      expect(ev.artifact).toMatchObject({ document_id: v2.document_id, document_version: 2, document_hash: v2.hash });
+      const bDoc = (await request(http).post(D).set(auth(b.owner)).send({ doc_type: 'EVIDENCE', title: 'B evidence', uri: 'x://b', content: 'b' }).expect(201)).body;
+      await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'model_card', ref: 'doc://card', document_id: bDoc.document_id }).expect(400);
+
+      // Daily reminder: one notification per organisation.
+      const notify = jest.spyOn(NotifierService.prototype, 'notify').mockResolvedValue(undefined);
+      try {
+        const { DocumentsService } = await import('../src/governance/documents/documents.service');
+        expect(await app.get(DocumentsService).reviewReminders()).toBeGreaterThanOrEqual(1);
+        const calls = notify.mock.calls.filter(([e]) => e === 'document_review_due').map(([, d]) => d as any);
+        expect(calls.find((c) => c.tenant_id === a.orgId).documents.map((d: any) => d.document_id)).toEqual([v2.document_id]);
+      } finally {
+        notify.mockRestore();
+      }
+    });
+  });
+
+  it('CORRECTIVE ACTIONS (E1.7): raised from incidents, grievances, controls; closed only with root cause and effectiveness; overdue listed', async () => {
+    const a = await govOrg('CaOrgA');
+    const b = await govOrg('CaOrgB');
+    const { auth } = a;
+    const C = '/api/v1/governance/actions';
+    await request(http).get(C).set(auth(a.owner)).expect(404);
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const inc = (await request(http).post('/api/v1/compliance/incident/report').set(auth(a.owner)).send({
+        model_id: a.modelId, model_name: 'CaOrgA Credit', re_name: 'CaOrgA', functional_area: 'credit_underwriting',
+        incident_category: 'MODEL_DRIFT', severity: 'P4_LOW', description: 'Approval rate drifted after the October data refresh',
+        observed_at: new Date().toISOString(), detected_at: new Date().toISOString(), model_risk_level: 'HIGH', immediate_action_taken: 'Monitoring increased',
+      }).expect(201)).body;
+      const incidentId = inc.incident_id ?? inc.id;
+      await request(http).post(C).set(auth(a.viewer)).send({ source: 'INCIDENT', source_id: incidentId, nonconformity: 'Drift not caught', action: 'Add weekly PSI job' }).expect(403);
+      await request(http).post(C).set(auth(b.owner)).send({ source: 'INCIDENT', source_id: incidentId, nonconformity: 'Drift not caught', action: 'Add weekly PSI job' }).expect(404);
+      const fromInc = (await request(http).post(C).set(auth(a.owner)).send({
+        source: 'INCIDENT', source_id: incidentId, nonconformity: 'Drift not caught before customers were affected', action: 'Add a weekly PSI job',
+        due_at: new Date(Date.now() - 86_400_000).toISOString(),
+      }).expect(201)).body;
+      expect(fromInc).toMatchObject({ source: 'INCIDENT', model_id: a.modelId, status: 'OPEN', overdue: true });
+      await request(http).post(C).set(auth(a.owner)).send({ source: 'CONTROL', nonconformity: 'MEASURE-2.7 failing', action: 'Run red team' }).expect(400);
+      const fromCtl = (await request(http).post(C).set(auth(a.owner)).send({ source: 'CONTROL', source_id: 'CTL-SEC-01', model_id: a.modelId, nonconformity: 'Red teaming overdue', action: 'Schedule the Q1 red team' }).expect(201)).body;
+      expect(fromCtl.model_id).toBe(a.modelId);
+
+      const list = (await request(http).get(`${C}?overdue=true`).set(auth(a.viewer)).expect(200)).body;
+      expect(list.actions.map((x: any) => x.action_id)).toEqual([fromInc.action_id]);
+      expect(list.summary).toEqual({ open: 2, overdue: 1 });
+      expect((await request(http).get(C).set(auth(b.owner)).expect(200)).body.actions).toEqual([]);
+
+      // Close needs root cause + effectiveness review; an ineffective action stays open.
+      await request(http).post(`${C}/${fromInc.action_id}/close`).set(auth(a.owner)).send({ effectiveness_review: 'Checked', effective: true }).expect(400);
+      const notYet = (await request(http).post(`${C}/${fromInc.action_id}/close`).set(auth(a.owner)).send({ root_cause: 'No scheduled drift job', effectiveness_review: 'Drift recurred in the next window', effective: false }).expect(200)).body;
+      expect(notYet).toMatchObject({ closed: false, status: 'IN_PROGRESS' });
+      const closed = (await request(http).post(`${C}/${fromInc.action_id}/close`).set(auth(a.owner)).send({ root_cause: 'No scheduled drift job', effectiveness_review: 'Two clean weekly runs; drift alerts now raised', effective: true }).expect(200)).body;
+      expect(closed).toMatchObject({ closed: true, status: 'CLOSED', closed_by: 'owner@caorga.test' });
+      await request(http).patch(`${C}/${fromInc.action_id}`).set(auth(a.owner)).send({ action: 'x' }).expect(400);
+    });
+  });
+
+  it('AIMS (E1.6): records per type, approval, ORG controls for ISO and RBI Rec 14, people-side setting, management review raises actions', async () => {
+    const a = await govOrg('AimsOrgA');
+    const b = await govOrg('AimsOrgB');
+    const { auth } = a;
+    const A = '/api/v1/governance/aims';
+    await request(http).get(`${A}/summary`).set(auth(a.owner)).expect(404);
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      let ctl = (await request(http).get(`${A}/controls`).set(auth(a.viewer)).expect(200)).body;
+      const iso = () => ctl.packs.find((p: any) => p.pack_id === 'iso-42001').clauses;
+      expect(iso().find((c: any) => c.code === 'AIMS-4.3')).toMatchObject({ passed: false, evidence: 'No approved record' });
+      expect(iso().find((c: any) => c.code === 'AIMS-7.2')).toMatchObject({ passed: false, evidence: 'No competence records' });
+      expect(iso().find((c: any) => c.code === 'AIMS-7.5')).toMatchObject({ passed: false, evidence: 'No approved controlled documents' });
+
+      // RBAC and validation.
+      await request(http).post(`${A}/SCOPE`).set(auth(a.viewer)).send({ content: { boundaries: 'x', ai_systems: 'y' } }).expect(403);
+      await request(http).post(`${A}/SCOPE`).set(auth(a.owner)).send({ content: { boundaries: 'Retail lending' } }).expect(400);
+      await request(http).post(`${A}/NOPE`).set(auth(a.owner)).send({ content: {} }).expect(404);
+      const scope = (await request(http).post(`${A}/SCOPE`).set(auth(a.owner)).send({ title: 'AIMS scope 2027', content: { boundaries: 'Retail and SME lending, India', ai_systems: 'All credit and fraud models' } }).expect(201)).body;
+      await request(http).post(`${A}/records/${scope.record_id}/approve`).set(auth(b.owner)).expect(404);
+      const ok = (await request(http).post(`${A}/records/${scope.record_id}/approve`).set(auth(a.ciso)).expect(200)).body;
+      expect(ok).toMatchObject({ status: 'APPROVED', iso_clauses: ['4.3', '4.4'] });
+      expect(ok.review_due_at).toBeTruthy();
+
+      // Audit programme: auditors must be independent (9.2 objectivity).
+      await request(http).post(`${A}/AUDIT_PROGRAMME`).set(auth(a.owner)).send({ content: { period: '2027', audits: [{ area: 'Credit models', planned_date: '2027-03-01', auditor: 'Model owner' }] } }).expect(400);
+      const ap = (await request(http).post(`${A}/AUDIT_PROGRAMME`).set(auth(a.owner)).send({ content: { period: '2027', audits: [{ area: 'Credit models', planned_date: '2027-03-01', auditor: 'Internal Audit', auditor_independent: true }] } }).expect(201)).body;
+      await request(http).post(`${A}/records/${ap.record_id}/approve`).set(auth(a.owner)).expect(200);
+
+      // RBI Rec 14: enable RBI, approve a policy missing Rec 14 sections → Rec 14 fails naming them.
+      await request(http).put('/api/v1/governance/settings').set(auth(a.ciso)).send({ settings: { enabledPacks: ['rbi-free-ai'] }, reason: 'Indian lending book in scope' }).expect(200);
+      const isoSections = { purpose_alignment: 'Supports lending strategy', objectives_framework: 'See objectives', requirements_commitment: 'Meets RBI and ISO', continual_improvement: 'Annual review' };
+      const pol = (await request(http).post(`${A}/POLICY`).set(auth(a.owner)).send({ title: 'AI policy', content: { sections: isoSections } }).expect(201)).body;
+      await request(http).post(`${A}/records/${pol.record_id}/approve`).set(auth(a.orgAdmin)).expect(403);
+      await request(http).post(`${A}/records/${pol.record_id}/approve`).set(auth(a.owner)).expect(200);
+      ctl = (await request(http).get(`${A}/controls`).set(auth(a.owner)).expect(200)).body;
+      expect(iso().find((c: any) => c.code === 'AIMS-5.2').passed).toBe(true);
+      const rec14 = ctl.packs.find((p: any) => p.pack_id === 'rbi-free-ai').clauses.find((c: any) => c.code === 'REC-14');
+      expect(rec14.passed).toBe(false);
+      expect(rec14.evidence).toContain('governance_structure');
+      expect(iso().find((c: any) => c.code === 'AIMS-4.3').passed).toBe(true);
+      expect(iso().find((c: any) => c.code === 'AIMS-9.2').passed).toBe(true);
+
+      // People-side items: competence records allowed by default; switching to customer responsibility blocks them.
+      const comp = (await request(http).post(`${A}/COMPETENCE`).set(auth(a.owner)).send({ content: { person_or_role: 'Model validators', evidence: 'FRM certification register' } }).expect(201)).body;
+      await request(http).post(`${A}/records/${comp.record_id}/approve`).set(auth(a.owner)).expect(200);
+      await request(http).put('/api/v1/governance/settings').set(auth(a.ciso)).send({ settings: { peopleItems: { awareness: { mode: 'CUSTOMER', owner: 'HR Learning', note: 'LMS' } } }, reason: 'Awareness tracked in the HR LMS' }).expect(200);
+      await request(http).post(`${A}/AWARENESS`).set(auth(a.owner)).send({ content: { person_or_role: 'All staff', evidence: 'LMS' } }).expect(409);
+      ctl = (await request(http).get(`${A}/controls`).set(auth(a.owner)).expect(200)).body;
+      expect(iso().find((c: any) => c.code === 'AIMS-7.2').passed).toBe(true);
+      expect(iso().find((c: any) => c.code === 'AIMS-7.3')).toMatchObject({ passed: false, not_assessed: true, evidence: 'Customer responsibility (owner: HR Learning)' });
+
+      // Management review: inputs pre-filled from the board pack; approved actions land in the corrective-action register.
+      const inputs = (await request(http).get(`${A}/mgmt-review/inputs`).set(auth(a.owner)).expect(200)).body;
+      expect(inputs.inputs.compliance.total_models).toBe(1);
+      const mr = (await request(http).post(`${A}/MGMT_REVIEW`).set(auth(a.owner)).send({
+        title: 'Q4 management review', content: { review_date: new Date().toISOString().slice(0, 10), attendees: ['CEO', 'CISO'], inputs: inputs.inputs,
+          decisions: ['Fund a fairness re-test'], actions: [{ action: 'Commission fairness re-test of the credit model', due_at: new Date(Date.now() + 60 * 86_400_000).toISOString() }] },
+      }).expect(201)).body;
+      const mra = (await request(http).post(`${A}/records/${mr.record_id}/approve`).set(auth(a.owner)).expect(200)).body;
+      expect(mra.corrective_actions_raised).toHaveLength(1);
+      const cas = (await request(http).get('/api/v1/governance/actions?source=MGMT_REVIEW').set(auth(a.owner)).expect(200)).body;
+      expect(cas.actions[0]).toMatchObject({ source: 'MGMT_REVIEW', source_id: mr.record_id });
+      ctl = (await request(http).get(`${A}/controls`).set(auth(a.owner)).expect(200)).body;
+      expect(iso().find((c: any) => c.code === 'AIMS-9.3').passed).toBe(true);
+      expect(iso().find((c: any) => c.code === 'AIMS-10.2').passed).toBe(true);
+
+      // Org controls never leak into per-model reports; recording writes ORG rows (no model).
+      const cc = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
+      expect(cc.iso_42001.checks.map((c: any) => c.control_code)).not.toContain('AIMS-4.3');
+      const rec = (await request(http).post(`${A}/controls/evaluate`).set(auth(a.owner)).expect(200)).body;
+      expect(rec.recorded).toBeGreaterThan(5);
+
+      const sum = (await request(http).get(`${A}/summary`).set(auth(a.viewer)).expect(200)).body;
+      expect(sum.types.find((t: any) => t.type === 'SCOPE').approved).toBe(1);
+      expect((await request(http).get(`${A}/records`).set(auth(b.owner)).expect(200)).body.records).toEqual([]);
+    });
+  });
 });

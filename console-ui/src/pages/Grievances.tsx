@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useModels } from '../api/models';
 import { AppShell } from '../components/console/AppShell';
+import { RaiseAction } from '../components/console/RaiseAction';
 import { Badge, BadgeTone } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
@@ -199,6 +200,7 @@ export function Grievances() {
                     filed {new Date(g.created_at).toLocaleString()} · {IS_LIVE(g.status) ? `SLA due ${new Date(g.sla_due_at).toLocaleDateString()}` : g.resolved_at ? `closed ${new Date(g.resolved_at).toLocaleDateString()}` : ''}
                     {g.resolution_notes ? ` · “${g.resolution_notes}”` : ''}
                   </p>
+                  <RaiseAction source="GRIEVANCE" sourceId={g.grievance_id} defaultNonconformity={`Grievance: ${g.subject}. ${g.description}`} />
                 </li>
               ))}
             </ul>

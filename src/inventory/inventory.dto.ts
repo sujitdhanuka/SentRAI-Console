@@ -57,6 +57,8 @@ export class EvidenceDto {
   @IsString() type!: string; // 'bias_test' | 'red_team' | 'model_card' | 'dpia' | ...
   @IsString() ref!: string; // URL or document reference
   @IsOptional() @IsString() description?: string;
+  /** A controlled document (governance E1.8) this artifact points to; used only while document control is on. */
+  @IsOptional() @IsString() document_id?: string;
   @IsOptional() @IsString() actor: string = 'dashboard_user';
 }
 

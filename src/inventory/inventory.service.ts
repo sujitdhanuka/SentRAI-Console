@@ -864,7 +864,7 @@ export class InventoryService implements OnModuleInit {
   }
 
   /** Attach an evidence artifact (bias-test report, red-team report, ...). */
-  async addEvidence(modelId: string, dto: { type: string; ref: string; description?: string }, actor: string) {
+  async addEvidence(modelId: string, dto: { type: string; ref: string; description?: string; document_id?: string }, actor: string) {
     const orm = await this.getOrThrow(modelId);
     const artifact: EvidenceArtifact = {
       type: dto.type,
@@ -872,6 +872,11 @@ export class InventoryService implements OnModuleInit {
       description: dto.description,
       added_at: new Date().toISOString(),
     };
+    // Governance E1.8: link the artifact to a controlled document (version + hash) when document control is on.
+    if (dto.document_id && governanceHooks.evidenceDocument) {
+      const doc = await governanceHooks.evidenceDocument(modelId, dto.document_id);
+      if (doc) Object.assign(artifact, { document_id: doc.document_id, document_version: doc.version, document_hash: doc.hash });
+    }
     orm.evidenceArtifacts = [...(orm.evidenceArtifacts ?? []), artifact];
     orm.updatedAt = new Date();
     await this.models.save(orm);

@@ -32,6 +32,12 @@ export const EPIC_FLAGS = {
   impactAssessment: 'GOV_E1_4_IMPACT',
   /** E1.5: structured model context profile. */
   contextProfile: 'GOV_E1_5_CONTEXT',
+  /** E1.6: organisation-level AIMS records (scope, policy, reviews, audit programme) and ORG controls. */
+  aims: 'GOV_E1_6_AIMS',
+  /** E1.7: shared nonconformity and corrective-action register. */
+  correctiveActions: 'GOV_E1_7_ACTIONS',
+  /** E1.8: document control for policies and evidence. */
+  documentControl: 'GOV_E1_8_DOCUMENTS',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -47,6 +53,9 @@ export interface FeatureFlags {
   riskRegister: boolean;
   impactAssessment: boolean;
   contextProfile: boolean;
+  aims: boolean;
+  correctiveActions: boolean;
+  documentControl: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -68,6 +77,9 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     riskRegister: epic(EPIC_FLAGS.riskRegister),
     impactAssessment: epic(EPIC_FLAGS.impactAssessment),
     contextProfile: epic(EPIC_FLAGS.contextProfile),
+    aims: epic(EPIC_FLAGS.aims),
+    correctiveActions: epic(EPIC_FLAGS.correctiveActions),
+    documentControl: epic(EPIC_FLAGS.documentControl),
   };
 }
 
