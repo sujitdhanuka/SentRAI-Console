@@ -7,7 +7,8 @@
  * environment and hard-coded values with a fallback to them when an
  * organisation has no settings.
  */
-import { BadRequestException, ForbiddenException, Injectable, OnModuleInit, UnprocessableEntityException } from '@nestjs/common';
+import { parameterCatalog } from '../packs/parameter-enforcement';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, OnModuleInit, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,6 +23,7 @@ import { resolveForPacks } from '../packs/pack-engine';
 import { BASELINE_PACK_IDS, packRegistry } from '../packs/pack-loader';
 import { PacksService } from '../packs/packs.service';
 import {
+  applyChanges,
   applyFloors,
   BANDS_3X3,
   BANDS_5X5,
@@ -103,6 +105,7 @@ export class GovernanceSettingsService implements OnModuleInit {
         people_items: PEOPLE_ITEMS,
         band_presets: { '5x5': BANDS_5X5, '3x3': BANDS_3X3 },
         approver_options: ['OWNER', 'CISO', 'APPROVER', 'REVIEWER', 'ACCOUNTABLE_OFFICIAL'],
+        parameters: parameterCatalog().map((c) => ({ name: c.name, enforced: c.enforced, enforced_by: c.enforcedBy })),
       },
     };
   }
@@ -162,8 +165,14 @@ export class GovernanceSettingsService implements OnModuleInit {
     // Past reports must keep the settings that applied at the time, so a change cannot be back-dated.
     if (effectiveFrom.getTime() < now.getTime() - 60_000) throw new BadRequestException('effective_from cannot be in the past');
 
+    const known = new Set(Object.keys(defaultSettings()));
+    const unknownKeys = Object.keys(body.settings ?? {}).filter((k) => !known.has(k));
+    if (unknownKeys.length) throw new BadRequestException(`Unknown settings field(s): ${unknownKeys.join(', ')}`);
+
     const latest = await this.rows.findOne({ where: { orgId }, order: { version: 'DESC' } });
-    const base = latest ? mergeSettings(defaultSettings(), latest.settings as any) : defaultSettings();
+    // Build on the settings in force at this change's own effective date, not on the
+    // newest version number: a version scheduled for later must not take effect early.
+    const base = (await this.inForce(orgId, effectiveFrom)).settings;
     let next = mergeSettings(base, body.settings ?? {});
     // Switching the matrix without new bands takes that matrix's preset bands.
     if (body.settings?.scoringMatrix && !body.settings?.bands && body.settings.scoringMatrix !== base.scoringMatrix) {
@@ -181,7 +190,7 @@ export class GovernanceSettingsService implements OnModuleInit {
     // Enabling a pack brings its floors with it when the caller did not set those fields.
     if (body.settings?.enabledPacks && !body.settings?.appetite?.requiredAuditType) next = applyFloors(next);
 
-    const problems = validateSettings(next);
+    const problems = validateSettings(next, effectiveFrom);
     for (const [band, who] of Object.entries(next.appetite.approvers ?? {})) {
       for (const w of who ?? []) {
         if (!['OWNER', 'CISO', 'APPROVER', 'REVIEWER', 'ACCOUNTABLE_OFFICIAL'].includes(w)) {
@@ -195,10 +204,39 @@ export class GovernanceSettingsService implements OnModuleInit {
     const changes = diffSettings(base, next);
     if (!changes.length) throw new BadRequestException('No changes');
 
+    // Versions already scheduled after this one would otherwise replace it on their
+    // date and silently undo it. Carry this change forward into each of them as a new
+    // version on the same date, except for fields that scheduled version itself sets.
+    const later = await this.rows
+      .createQueryBuilder('s')
+      .where('s.orgId = :orgId AND s.effectiveFrom > :at', { orgId, at: effectiveFrom })
+      .orderBy('s.effectiveFrom', 'ASC')
+      .addOrderBy('s.version', 'ASC')
+      .getMany();
+    const carryPlans: Array<{ effectiveFrom: Date; ofVersion: number; settings: GovernanceSettingsDoc; changes: Array<{ field: string; from: any; to: any }> }> = [];
+    const laterDates = [...new Map(later.map((l) => [l.effectiveFrom.getTime(), l])).values()];
+    for (const l of laterDates) {
+      const scheduledFields = later.filter((x) => x.effectiveFrom.getTime() === l.effectiveFrom.getTime()).flatMap((x) => (x.changes ?? []).map((c: any) => String(c.field)));
+      const carried = changes.filter((c) => !scheduledFields.some((f) => f === c.field || f.startsWith(`${c.field}.`) || c.field.startsWith(`${f}.`)));
+      if (!carried.length) continue;
+      const atThen = (await this.inForce(orgId, l.effectiveFrom)).settings;
+      const doc = applyChanges(atThen, carried);
+      const bad = validateSettings(doc, l.effectiveFrom);
+      if (bad.length) {
+        throw new ConflictException({
+          message: `This change conflicts with the version scheduled for ${l.effectiveFrom.toISOString().slice(0, 10)}: ${bad.map((b) => `${b.field}: ${b.message}`).join('; ')}. Schedule this change for that date or later instead.`,
+          problems: bad,
+        });
+      }
+      const carriedChanges = diffSettings(atThen, doc);
+      if (carriedChanges.length) carryPlans.push({ effectiveFrom: l.effectiveFrom, ofVersion: l.version, settings: doc, changes: carriedChanges });
+    }
+
+    let nextVersion = (latest?.version ?? 0) + 1;
     const row = await this.rows.save({
       id: uuidv4(),
       orgId,
-      version: (latest?.version ?? 0) + 1,
+      version: nextVersion,
       effectiveFrom,
       settings: next as any,
       changes,
@@ -207,6 +245,16 @@ export class GovernanceSettingsService implements OnModuleInit {
       reason,
       createdAt: now,
     });
+    const carriedForward: Array<{ version: number; effective_from: string; changes: Array<{ field: string; from: any; to: any }> }> = [];
+    for (const plan of carryPlans) {
+      nextVersion += 1;
+      await this.rows.save({
+        id: uuidv4(), orgId, version: nextVersion, effectiveFrom: plan.effectiveFrom, settings: plan.settings as any,
+        changes: plan.changes, changedBy: user.email, changedByRole: user.role,
+        reason: `Carried forward from v${row.version} over scheduled v${plan.ofVersion}: ${reason}`.slice(0, 1000), createdAt: now,
+      });
+      carriedForward.push({ version: nextVersion, effective_from: plan.effectiveFrom.toISOString(), changes: plan.changes });
+    }
     // The interceptor writes this curated summary to the hash-chained ledger.
     if (req) {
       req.auditSummary = {
@@ -217,9 +265,10 @@ export class GovernanceSettingsService implements OnModuleInit {
           reason,
           changes: changes.slice(0, 40),
           ...(changes.length > 40 ? { more_changes: changes.length - 40 } : {}),
+          ...(carriedForward.length ? { carried_forward: carriedForward.map((c) => ({ ...c, changes: c.changes.slice(0, 40) })) } : {}),
         },
       };
     }
-    return { ...(await this.get(user, orgId)), saved_version: row.version, saved_effective_from: effectiveFrom, changes };
+    return { ...(await this.get(user, orgId)), saved_version: row.version, saved_effective_from: effectiveFrom, changes, carried_forward: carriedForward };
   }
 }

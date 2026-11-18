@@ -121,9 +121,9 @@ export function bandFor(score: number, bands: Band[]): string {
 }
 
 /** Floors from enabled region packs plus the baseline (design §4.1 "Pack floors"). */
-export function floorsFor(enabledPacks: string[]) {
+export function floorsFor(enabledPacks: string[], at: Date = new Date()) {
   const ids = new Set([...BASELINE_PACK_IDS, ...enabledPacks]);
-  const packs = packRegistry().activeAt().filter((p) => ids.has(p.definition.id)).map((p) => p.definition);
+  const packs = packRegistry().activeAt(at).filter((p) => ids.has(p.definition.id)).map((p) => p.definition);
   return packFloors(packs);
 }
 
@@ -135,7 +135,8 @@ export interface SettingsProblem {
 }
 
 /** Validate a full settings document. Returns every problem, each naming the field (and the pack for floors). */
-export function validateSettings(doc: GovernanceSettingsDoc): SettingsProblem[] {
+/** `at`: the date the settings take effect; pack floors and available packs are those in force then. */
+export function validateSettings(doc: GovernanceSettingsDoc, at: Date = new Date()): SettingsProblem[] {
   const p: SettingsProblem[] = [];
   if (!['5x5', '3x3'].includes(doc.scoringMatrix)) p.push({ field: 'scoringMatrix', message: 'must be 5x5 or 3x3' });
   const max = matrixSize(doc.scoringMatrix) ** 2;
@@ -164,7 +165,7 @@ export function validateSettings(doc: GovernanceSettingsDoc): SettingsProblem[] 
   if (!(JURISDICTIONS as readonly string[]).includes(doc.primaryJurisdiction)) {
     p.push({ field: 'primaryJurisdiction', message: `must be one of ${JURISDICTIONS.join(', ')}` });
   }
-  const regionPacks = new Set(packRegistry().activeAt().filter((x) => !x.definition.baseline).map((x) => x.definition.id));
+  const regionPacks = new Set(packRegistry().activeAt(at).filter((x) => !x.definition.baseline).map((x) => x.definition.id));
   for (const id of doc.enabledPacks ?? []) {
     if (!regionPacks.has(id)) p.push({ field: 'enabledPacks', message: `${id} is not an available region pack` });
   }
@@ -190,7 +191,7 @@ export function validateSettings(doc: GovernanceSettingsDoc): SettingsProblem[] 
   }
 
   // Pack floors: a setting may be stricter than an enabled pack requires, never looser.
-  const floors = floorsFor(doc.enabledPacks ?? []);
+  const floors = floorsFor(doc.enabledPacks ?? [], at);
   for (const [name, floor] of Object.entries(floors)) {
     const spec = parameterSpec(name);
     const value = doc.appetite?.parameters?.[name];
@@ -247,6 +248,23 @@ export function gateTierOf(risk: RiskLevel | string): GateTier {
   if (risk === RiskLevel.HIGH) return 'HIGH';
   if (risk === RiskLevel.MEDIUM || risk === RiskLevel.LIMITED) return 'MEDIUM';
   return 'LOW';
+}
+
+/** Apply field-level changes (as produced by diffSettings) to a document; a null `to` removes the field. */
+export function applyChanges(doc: GovernanceSettingsDoc, changes: Array<{ field: string; to: any }>): GovernanceSettingsDoc {
+  const out: any = JSON.parse(JSON.stringify(doc));
+  for (const c of changes) {
+    const path = c.field.split('.');
+    let o = out;
+    for (const k of path.slice(0, -1)) {
+      if (!o[k] || typeof o[k] !== 'object') o[k] = {};
+      o = o[k];
+    }
+    const last = path[path.length - 1];
+    if (c.to === null || c.to === undefined) delete o[last];
+    else o[last] = JSON.parse(JSON.stringify(c.to));
+  }
+  return out;
 }
 
 /** Merge a partial update over a full document (objects merge, arrays and scalars replace). */
