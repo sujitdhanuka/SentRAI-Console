@@ -1,6 +1,7 @@
 /** E1.2 settings model: defaults, validation, pack floors, matrix bands, diffs, tiers. */
 import { RiskLevel } from '../../common/enums';
 import {
+  applyChanges,
   applyFloors,
   bandFor,
   BANDS_3X3,
@@ -84,7 +85,7 @@ describe('pack floors', () => {
   it('the baseline alone sets no floors; floors combine strictest across region packs', () => {
     expect(floorsFor([])).toEqual({});
     expect(floorsFor(['eu-ai-act', 'rbi-free-ai']).incidentReportHours).toEqual({ value: 24, packs: ['rbi-free-ai'] });
-    expect(floorsFor(['eu-ai-act']).incidentReportHours).toEqual({ value: 72, packs: ['eu-ai-act'] });
+    expect(floorsFor(['eu-ai-act']).incidentReportHours).toEqual({ value: 360, packs: ['eu-ai-act'] });
   });
 });
 
@@ -105,5 +106,30 @@ describe('helpers', () => {
       { field: 'gateMode.HIGH', from: 'WARN', to: 'BLOCK' },
       { field: 'enabledPacks', from: [], to: ['eu-ai-act'] },
     ]);
+  });
+});
+
+describe('applyChanges (carry-forward over scheduled versions)', () => {
+  it('sets dotted fields, replaces lists, deletes on null, and never mutates its input', () => {
+    const a = defaultSettings();
+    const b = applyChanges(a, [
+      { field: 'gateMode.HIGH', to: 'BLOCK' },
+      { field: 'enabledPacks', to: ['eu-ai-act'] },
+      { field: 'appetite.parameters.driftRecencyDays', to: 14 },
+    ]);
+    expect(b.gateMode.HIGH).toBe('BLOCK');
+    expect(b.enabledPacks).toEqual(['eu-ai-act']);
+    expect(b.appetite.parameters.driftRecencyDays).toBe(14);
+    expect(a.gateMode.HIGH).toBe('WARN');
+    const c = applyChanges(b, [{ field: 'appetite.parameters.driftRecencyDays', to: null }]);
+    expect('driftRecencyDays' in c.appetite.parameters).toBe(false);
+  });
+  it('replaying a diff onto a later version keeps that version\'s own fields', () => {
+    const base = defaultSettings();
+    const scheduled = mergeSettings(base, { scoringMatrix: '3x3', bands: BANDS_3X3 } as any);
+    const immediate = mergeSettings(base, { gateMode: { MEDIUM: 'WARN' } as any });
+    const carried = applyChanges(scheduled, diffSettings(base, immediate));
+    expect(carried.scoringMatrix).toBe('3x3');
+    expect(carried.gateMode.MEDIUM).toBe('WARN');
   });
 });

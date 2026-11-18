@@ -2662,6 +2662,34 @@ describe('SentrAI Console (e2e)', () => {
       expect(hist.versions.map((v: any) => v.version)).toEqual([4, 3, 2, 1]);
       expect(hist.versions[3]).toMatchObject({ changed_by: 'owner@setorga.test', reason: 'Board asked for a stricter HIGH gate' });
 
+      // Unknown top-level keys are rejected rather than silently dropped.
+      await put(a.owner, { settings: { gateModes: { HIGH: 'BLOCK' } }, reason: 'Typo in the field name' }).expect(400);
+
+      // An immediate change made while a version is scheduled applies now and is
+      // carried into the scheduled version, which does not come into force early.
+      const imm = (await put(a.owner, { settings: { gateMode: { MEDIUM: 'WARN' } }, reason: 'Warn on MEDIUM from today' }).expect(200)).body;
+      expect(imm.carried_forward).toHaveLength(1);
+      const nowAfter = (await request(http).get('/api/v1/governance/settings').set(auth(a.owner)).expect(200)).body;
+      expect(nowAfter.settings.scoringMatrix).toBe('5x5');
+      expect(nowAfter.settings.gateMode.MEDIUM).toBe('WARN');
+      expect(nowAfter.upcoming).toHaveLength(1);
+      const laterAfter = (await request(http).get(`/api/v1/governance/settings?as_of=${future}`).set(auth(a.owner)).expect(200)).body;
+      expect(laterAfter.settings.scoringMatrix).toBe('3x3');
+      expect(laterAfter.settings.gateMode.MEDIUM).toBe('WARN');
+      expect(laterAfter.settings.gateMode.HIGH).toBe('BLOCK');
+
+      // The settings window reports which parameters are actually enforced.
+      const cat = nowAfter.catalog.parameters;
+      expect(cat.find((c: any) => c.name === 'incidentReportHours').enforced).toBe(false);
+      expect(cat.find((c: any) => c.name === 'psiAlertThreshold').enforced).toBe(true);
+
+      // BCP drill status uses the organisation's drill interval, not the deployment default.
+      await put(a.owner, { settings: { appetite: { parameters: { bcpDrillIntervalDays: 30, bcpDrillReminderDays: 7 } } }, reason: 'Monthly drills for lending models' }).expect(200);
+      const drills = (await request(http).get(`/api/v1/monitoring/bcp/${a.modelId}/drills`).set(auth(a.owner)).expect(200)).body;
+      expect(drills).toMatchObject({ drill_interval_days: 30, drill_reminder_days: 7 });
+      const drillsB = (await request(http).get(`/api/v1/monitoring/bcp/${b.modelId}/drills`).set(auth(b.owner)).expect(200)).body;
+      expect(drillsB.drill_interval_days).not.toBe(30);
+
       // Ledger: the hash-chained audit event carries the reason and the diff.
       await new Promise((r) => setTimeout(r, 50));
       const events = (await request(http).get('/api/v1/audit/events?limit=200').set(auth(a.admin)).expect(200)).body;

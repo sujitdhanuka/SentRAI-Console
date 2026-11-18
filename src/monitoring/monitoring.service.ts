@@ -19,6 +19,7 @@ import { NotifierService } from '../common/notifier.service';
 import {
   activateBcp,
   bcpDrillIntervalDays,
+  bcpDrillReminderDays,
   bcpDrillStatus,
   deactivateBcp,
   driftSummary,
@@ -343,7 +344,7 @@ export class MonitoringService {
       occurredAt: now,
     }));
 
-    return { ...this.drillView(row), ...this.drillSummary(lastPassed, row.result) };
+    return { ...this.drillView(row), ...this.drillSummary(lastPassed, row.result, await this.drillParams(await this.tenantOfModel(model))) };
   }
 
   async listDrills(user: CurrentUser, modelId: string) {
@@ -357,19 +358,20 @@ export class MonitoringService {
       model_id: model.id,
       risk_level: model.riskLevel,
       drill_required: isHighOrAbove(model.riskLevel as RiskLevel),
-      ...this.drillSummary(lastPassed, rows[0]?.result ?? null),
+      ...this.drillSummary(lastPassed, rows[0]?.result ?? null, await this.drillParams(await this.tenantOfModel(model))),
       drills: rows.map((r) => this.drillView(r)),
     };
   }
 
   /** Status is measured from the latest *passed* drill (Rec 21); the newest
    *  drill's result is reported alongside so a recent failure is visible. */
-  private drillSummary(last: Date | null, latestResult: string | null) {
-    const s = bcpDrillStatus(last);
+  private drillSummary(last: Date | null, latestResult: string | null, p: { intervalDays: number; reminderDays: number }) {
+    const s = bcpDrillStatus(last, new Date(), p.intervalDays, p.reminderDays);
     return {
       drill_last_conducted: last ? last.toISOString() : null,
       latest_drill_result: latestResult,
-      drill_interval_days: bcpDrillIntervalDays(),
+      drill_interval_days: p.intervalDays,
+      drill_reminder_days: p.reminderDays,
       drill_status: s.status,
       next_drill_due: s.dueAt ? s.dueAt.toISOString() : null,
     };
@@ -378,6 +380,31 @@ export class MonitoringService {
   /** Active HIGH/CRITICAL models whose passed drill is missing, due soon or
    *  overdue (the scheduled reminder job), each tagged with its organization so
    *  the notification can be split per tenant. Empty while the flag is off. */
+  private async tenantOfModel(model: AIModelEntity): Promise<string | null> {
+    if (!model.projectId) return null;
+    const project = await this.projects.findOne({ where: { id: model.projectId } });
+    return project?.tenantId ?? null;
+  }
+
+  /** Drill interval and reminder window for an organisation. Governance E1.2:
+   *  when the organisation's settings (or an enabled pack) set them, those
+   *  values win; otherwise the deployment's environment defaults apply. */
+  private async drillParams(tenantId: string | null, at: Date = new Date()): Promise<{ intervalDays: number; reminderDays: number }> {
+    let intervalDays = bcpDrillIntervalDays();
+    let reminderDays = bcpDrillReminderDays();
+    if (governanceHooks.orgPackParams) {
+      const params = await governanceHooks.orgPackParams(tenantId, at);
+      const fromOrg = (name: string) => {
+        const src = params?.sources[name];
+        const v = Number(params?.values[name]);
+        return src && !src.setBy.includes('platform-default') && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
+      };
+      intervalDays = fromOrg('bcpDrillIntervalDays') ?? intervalDays;
+      reminderDays = fromOrg('bcpDrillReminderDays') ?? reminderDays;
+    }
+    return { intervalDays, reminderDays };
+  }
+
   async drillsNeedingAttention(now: Date = new Date()) {
     if (!this.flags.isEnabled('bcpDrills')) return [];
     const models = await this.models.find({
@@ -390,13 +417,17 @@ export class MonitoringService {
     ]);
     const tenantOf = new Map(projects.map((p) => [p.id, p.tenantId ?? null]));
     const out: Array<{ model_id: string; model_name: string; tenant_id: string | null; status: string; next_drill_due: string | null }> = [];
+    const paramsByTenant = new Map<string | null, { intervalDays: number; reminderDays: number }>();
+    for (const t of new Set<string | null>([null, ...tenantOf.values()])) paramsByTenant.set(t, await this.drillParams(t, now));
     for (const m of models) {
-      const s = bcpDrillStatus(passed.get(m.id) ?? null, now);
+      const tenant = m.projectId ? tenantOf.get(m.projectId) ?? null : null;
+      const p = paramsByTenant.get(tenant)!;
+      const s = bcpDrillStatus(passed.get(m.id) ?? null, now, p.intervalDays, p.reminderDays);
       if (s.status !== 'CURRENT') {
         out.push({
           model_id: m.id,
           model_name: m.name,
-          tenant_id: m.projectId ? tenantOf.get(m.projectId) ?? null : null,
+          tenant_id: tenant,
           status: s.status,
           next_drill_due: s.dueAt ? s.dueAt.toISOString() : null,
         });

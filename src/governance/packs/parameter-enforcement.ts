@@ -11,6 +11,9 @@ import { PARAMETER_SPECS } from './parameter-resolver';
 /** Consumers outside the control library, by parameter. */
 export const PARAMETER_CONSUMERS: Record<string, string[]> = {
   euHighRiskDomains: ['EU AI Act risk-tier classifier'],
+  psiAlertThreshold: ['Drift circuit breaker'],
+  bcpDrillIntervalDays: ['BCP drill status and reminders'],
+  bcpDrillReminderDays: ['BCP drill status and reminders'],
 };
 
 export function parameterEnforcement(name: string): { enforced: boolean; enforcedBy: string[] } {
