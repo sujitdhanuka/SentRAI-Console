@@ -11,6 +11,7 @@ import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form'
 import { useConsoleUi } from '../stores/consoleUi';
 import { useGovernanceFeatures } from '../stores/governanceFeatures';
 import { useSession } from '../stores/session';
+import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 
 /* ------------------------------------------------------------------ types */
 
@@ -618,6 +619,9 @@ function HistoryTab() {
 
 type Tab = { id: string; label: string; flag: string };
 const TABS: Tab[] = [
+  { id: 'risks', label: 'Risk register', flag: 'riskRegister' },
+  { id: 'impact', label: 'Impact assessments', flag: 'impactAssessment' },
+  { id: 'context', label: 'Context profiles', flag: 'contextProfile' },
   { id: 'settings', label: 'Settings & risk appetite', flag: 'governanceSettings' },
   { id: 'accountability', label: 'Accountability', flag: 'accountability' },
   { id: 'history', label: 'Change history', flag: 'governanceSettings' },
@@ -627,13 +631,14 @@ export function Governance() {
   const features = useGovernanceFeatures((s) => s.features);
   const load = useGovernanceFeatures((s) => s.load);
   const user = useSession((s) => s.user);
-  const [tab, setTab] = useState('settings');
+  const [tab, setTab] = useState('');
   useEffect(() => {
     void load();
   }, [load]);
 
   const tabs = TABS.filter((t) => features?.[t.flag]);
   const orgId = user?.tenant_id ?? null;
+  const active = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? 'settings';
 
   return (
     <AppShell title="Governance">
@@ -642,9 +647,9 @@ export function Governance() {
           <button
             key={t.id}
             role="tab"
-            aria-selected={tab === t.id}
+            aria-selected={active === t.id}
             onClick={() => setTab(t.id)}
-            className={`rounded-t px-3 py-1.5 text-[11px] ${tab === t.id ? 'border border-b-0 border-border bg-surface text-text' : 'text-text-secondary hover:text-text'}`}
+            className={`rounded-t px-3 py-1.5 text-[11px] ${active === t.id ? 'border border-b-0 border-border bg-surface text-text' : 'text-text-secondary hover:text-text'}`}
           >
             {t.label}
           </button>
@@ -657,9 +662,15 @@ export function Governance() {
           <Panel title="Governance"><p className="p-3 text-[11px] text-text-secondary">Governance settings are not switched on for this deployment.</p></Panel>
         ) : !orgId ? (
           <Panel title="Governance"><p className="p-3 text-[11px] text-text-secondary">Governance settings belong to an organization. Sign in as a member of one.</p></Panel>
-        ) : tab === 'settings' ? (
+        ) : active === 'risks' ? (
+          <RiskRegisterTab />
+        ) : active === 'impact' ? (
+          <ImpactTab />
+        ) : active === 'context' ? (
+          <ContextTab />
+        ) : active === 'settings' ? (
           <SettingsTab />
-        ) : tab === 'accountability' ? (
+        ) : active === 'accountability' ? (
           <AccountabilityTab orgId={orgId} />
         ) : (
           <HistoryTab />

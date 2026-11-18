@@ -59,6 +59,8 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'organizations', column: 'accountableOfficialUserId', definition: 'VARCHAR(36) NULL' },
   { table: 'organizations', column: 'governanceBoard', definition: 'TEXT NULL' },
   { table: 'organizations', column: 'accountabilityHistory', definition: 'TEXT NULL' },
+  // ai-model.entity.ts — structured context profile (governance E1.5).
+  { table: 'ai_models', column: 'contextProfile', definition: 'TEXT NULL' },
   // ai-model.entity.ts — named model owner (governance E1.9).
   { table: 'ai_models', column: 'ownerUserId', definition: 'VARCHAR(36) NULL' },
   // project.entity.ts — codebase origin ('zip'/'folder'/'github:owner/repo@branch').
@@ -321,6 +323,112 @@ const REQUIRED_TABLES: TableSpec[] = [
       UNIQUE INDEX \`IDX_governance_settings_org_version\` (\`orgId\`, \`version\`),
       INDEX \`IDX_governance_settings_org\` (\`orgId\`),
       INDEX \`IDX_governance_settings_effective\` (\`effectiveFrom\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'risks', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`risks\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`scopeType\` VARCHAR(20) NOT NULL,
+      \`scopeId\` VARCHAR(255) NULL,
+      \`category\` VARCHAR(30) NOT NULL,
+      \`title\` VARCHAR(300) NOT NULL,
+      \`description\` TEXT NULL,
+      \`affectedParties\` TEXT NULL,
+      \`harmType\` VARCHAR(100) NULL,
+      \`source\` VARCHAR(20) NOT NULL,
+      \`sourceRef\` VARCHAR(100) NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`ownerUserId\` VARCHAR(36) NULL,
+      \`nextReviewAt\` DATETIME NULL,
+      \`reviewReason\` VARCHAR(300) NULL,
+      \`dismissedReason\` VARCHAR(500) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_risks_org\` (\`orgId\`),
+      INDEX \`IDX_risks_scope\` (\`scopeId\`),
+      INDEX \`IDX_risks_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'risk_assessments', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`risk_assessments\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`riskId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`matrix\` VARCHAR(5) NOT NULL,
+      \`inherentL\` INT NOT NULL,
+      \`inherentI\` INT NOT NULL,
+      \`residualL\` INT NOT NULL,
+      \`residualI\` INT NOT NULL,
+      \`inherentBand\` VARCHAR(20) NOT NULL,
+      \`residualBand\` VARCHAR(20) NOT NULL,
+      \`rationale\` TEXT NULL,
+      \`controlIds\` TEXT NULL,
+      \`assessedBy\` VARCHAR(255) NOT NULL,
+      \`assessedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_risk_assessments_risk\` (\`riskId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'risk_actions', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`risk_actions\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`riskId\` VARCHAR(36) NOT NULL,
+      \`treatment\` VARCHAR(20) NOT NULL,
+      \`action\` VARCHAR(1000) NOT NULL,
+      \`ownerUserId\` VARCHAR(36) NULL,
+      \`dueAt\` DATETIME NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`completedAt\` DATETIME NULL,
+      INDEX \`IDX_risk_actions_risk\` (\`riskId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'risk_acceptances', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`risk_acceptances\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`riskId\` VARCHAR(36) NOT NULL,
+      \`assessmentVersion\` INT NOT NULL,
+      \`acceptedBy\` VARCHAR(255) NOT NULL,
+      \`role\` VARCHAR(30) NOT NULL,
+      \`acceptedAt\` DATETIME NOT NULL,
+      \`expiresAt\` DATETIME NULL,
+      \`waiverRef\` VARCHAR(200) NULL,
+      \`note\` VARCHAR(1000) NULL,
+      INDEX \`IDX_risk_acceptances_risk\` (\`riskId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'impact_assessments', // governance Phase 1
+    createSql: `CREATE TABLE IF NOT EXISTS \`impact_assessments\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`packIds\` TEXT NOT NULL,
+      \`version\` INT NOT NULL,
+      \`questionnaire\` MEDIUMTEXT NOT NULL,
+      \`contextSnapshot\` MEDIUMTEXT NULL,
+      \`riskSnapshot\` MEDIUMTEXT NULL,
+      \`status\` VARCHAR(30) NOT NULL,
+      \`signedBy\` VARCHAR(255) NULL,
+      \`signedByRole\` VARCHAR(30) NULL,
+      \`signedAt\` DATETIME NULL,
+      \`inScope\` TINYINT(1) NULL,
+      \`highImpact\` TINYINT(1) NULL,
+      \`materiality\` VARCHAR(20) NULL,
+      \`revalidationReason\` VARCHAR(300) NULL,
+      \`contentHash\` VARCHAR(64) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_impact_assessments_org\` (\`orgId\`),
+      INDEX \`IDX_impact_assessments_model\` (\`modelId\`),
+      INDEX \`IDX_impact_assessments_status\` (\`status\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {

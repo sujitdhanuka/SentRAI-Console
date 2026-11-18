@@ -26,6 +26,12 @@ export const EPIC_FLAGS = {
   governanceSettings: 'GOV_E1_2_SETTINGS',
   /** E1.9: accountable official, governance board, named model owners. */
   accountability: 'GOV_E1_9_ACCOUNTABILITY',
+  /** E1.3: risk register, starter catalogue, re-review triggers, residual-risk gate. */
+  riskRegister: 'GOV_E1_3_RISKS',
+  /** E1.4: impact assessments generated from the register, with sign-off and gate. */
+  impactAssessment: 'GOV_E1_4_IMPACT',
+  /** E1.5: structured model context profile. */
+  contextProfile: 'GOV_E1_5_CONTEXT',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -38,6 +44,9 @@ export interface FeatureFlags {
   packEngine: boolean;
   governanceSettings: boolean;
   accountability: boolean;
+  riskRegister: boolean;
+  impactAssessment: boolean;
+  contextProfile: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -56,6 +65,9 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     packEngine: epic(EPIC_FLAGS.packEngine),
     governanceSettings: epic(EPIC_FLAGS.governanceSettings),
     accountability: epic(EPIC_FLAGS.accountability),
+    riskRegister: epic(EPIC_FLAGS.riskRegister),
+    impactAssessment: epic(EPIC_FLAGS.impactAssessment),
+    contextProfile: epic(EPIC_FLAGS.contextProfile),
   };
 }
 

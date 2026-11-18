@@ -24,6 +24,11 @@ import { GrievanceEntity } from './grievance.entity';
 import { PackVersionEntity } from './pack-version.entity';
 import { ControlResultEntity } from './control-result.entity';
 import { GovernanceSettingsEntity } from './governance-settings.entity';
+import { RiskEntity } from './risk.entity';
+import { RiskAssessmentEntity } from './risk-assessment.entity';
+import { RiskActionEntity } from './risk-action.entity';
+import { RiskAcceptanceEntity } from './risk-acceptance.entity';
+import { ImpactAssessmentEntity } from './impact-assessment.entity';
 
 export {
   OrganizationEntity,
@@ -52,6 +57,11 @@ export {
   PackVersionEntity,
   ControlResultEntity,
   GovernanceSettingsEntity,
+  RiskEntity,
+  RiskAssessmentEntity,
+  RiskActionEntity,
+  RiskAcceptanceEntity,
+  ImpactAssessmentEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -81,4 +91,9 @@ export const ALL_ENTITIES = [
   PackVersionEntity,
   ControlResultEntity,
   GovernanceSettingsEntity,
+  RiskEntity,
+  RiskAssessmentEntity,
+  RiskActionEntity,
+  RiskAcceptanceEntity,
+  ImpactAssessmentEntity,
 ];

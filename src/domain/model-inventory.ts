@@ -35,6 +35,8 @@ export interface AIModelEntry {
   projectId: string | null;
   /** Attached evidence artifacts (bias-test reports, red-team reports, ...). */
   evidenceArtifacts?: EvidenceArtifact[];
+  /** Structured context profile (governance E1.5); read by the context controls. */
+  contextProfile?: Record<string, any> | null;
 }
 
 export interface EvidenceArtifact {

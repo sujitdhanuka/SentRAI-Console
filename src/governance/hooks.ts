@@ -14,6 +14,10 @@ export interface GovernanceHooks {
   modelGovernanceFacts?: (modelId: string, orgId: string | null) => Promise<Record<string, any> | undefined>;
   /** Events that trigger a risk re-review (incident, drift alert, red-team finding, material change). */
   onModelEvent?: (modelId: string, event: string, detail?: Record<string, any>) => Promise<void>;
+  /** Residual-risk / impact-assessment gate for a model: findings that block or warn (E1.3/E1.4). */
+  gateCheck?: (modelId: string) => Promise<{ mode: string; tier: string; block: Array<{ code: string; message: string }>; warn: Array<{ code: string; message: string }> } | null>;
+  /** Residual risks and limitations for the public transparency card. */
+  cardGovernance?: (modelId: string) => Promise<Record<string, any> | undefined>;
 }
 
 export const governanceHooks: GovernanceHooks = {};

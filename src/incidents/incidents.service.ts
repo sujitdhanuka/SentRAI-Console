@@ -1,3 +1,4 @@
+import { emitModelEvent } from '../governance/hooks';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
@@ -150,6 +151,8 @@ export class IncidentsService {
       createdAt: now,
       updatedAt: now,
     }));
+    // Governance E1.3: an incident re-opens the model's risk review.
+    await emitModelEvent(dto.model_id, 'INCIDENT', { ref: incidentId });
 
     if (dto.severity === IncidentSeverity.P1_CRITICAL || dto.severity === IncidentSeverity.P2_HIGH) {
       // Background escalation (fire-and-forget) — logs like the Python stub.

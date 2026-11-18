@@ -25,7 +25,7 @@ import {
   evaluateDrift,
 } from '../domain/monitoring';
 import { latestSuccessfulDrill, latestSuccessfulDrills } from './bcp-drills';
-import { governanceHooks } from '../governance/hooks';
+import { emitModelEvent, governanceHooks } from '../governance/hooks';
 import { BcpStateStore } from './bcp-state.store';
 import { getGpuUtilization } from './gpu-monitor';
 import { BcpActivateDto, BcpDrillDto, DriftEvaluationDto, DriftReportResponse, ScoreIngestDto } from './monitoring.dto';
@@ -81,6 +81,8 @@ export class MonitoringService {
     }));
 
     if (report.circuitBreakerActive) {
+      // Governance E1.3: a drift alert re-opens the model's risk review.
+      await emitModelEvent(dto.model_id, 'DRIFT_ALERT', { ref: `PSI ${report.psiScore.toFixed(3)}` });
       const state = await this.bcp.getOrCreate(dto.model_id);
       if (!state.fallbackActive) {
         activateBcp(state, `Circuit breaker: PSI=${report.psiScore.toFixed(3)}`, 'RULES_ENGINE_v2');

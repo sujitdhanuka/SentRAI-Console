@@ -65,6 +65,15 @@ export class AccountabilityService {
     return Boolean(org?.accountableOfficialUserId) && org!.accountableOfficialUserId === userId;
   }
 
+  /** Same check by email (the JWT's userId is the email in this codebase). */
+  async isAccountableOfficialEmail(orgId: string | null, email: string): Promise<boolean> {
+    if (!orgId) return false;
+    const org = await this.orgs.findOne({ where: { id: orgId } });
+    if (!org?.accountableOfficialUserId) return false;
+    const u = await this.users.findOne({ where: { id: org.accountableOfficialUserId } });
+    return u?.email === email;
+  }
+
   async update(
     user: CurrentUser,
     orgId: string,

@@ -1,3 +1,4 @@
+import { governanceHooks } from '../governance/hooks';
 import {
   ForbiddenException,
   Injectable,
@@ -46,7 +47,7 @@ export interface BlockingGap {
   reason: string;
   shadow: boolean;
   /** What kind of violation — governance completeness or tool authorization. */
-  kind?: 'governance' | 'tool_authorization' | 'risk_escalation';
+  kind?: 'governance' | 'tool_authorization' | 'risk_escalation' | 'residual_risk';
   /** Detected tools used outside the permitted set (Pillar 2 — Control). */
   unauthorized_tools?: string[];
   /** Exact flagged lines (for the auditor's inline code viewer). */
@@ -226,6 +227,7 @@ export class CiEvaluationService {
 
   private sarifRuleId(g: BlockingGap): string {
     if (g.kind === 'risk_escalation') return 'SENTRAI-RISK-ESCALATION';
+    if (g.kind === 'residual_risk') return 'SENTRAI-RESIDUAL-RISK';
     return g.kind === 'tool_authorization' ? 'SENTRAI-TOOL-AUTHZ' : `SENTRAI-GATE-${g.severity}`;
   }
 
@@ -234,7 +236,9 @@ export class CiEvaluationService {
     for (const g of gaps) {
       const id = this.sarifRuleId(g);
       if (!ids.has(id)) {
-        const rule = g.kind === 'risk_escalation'
+        const rule = g.kind === 'residual_risk'
+          ? { name: 'ResidualRiskUnaccepted', text: 'Residual risk above appetite not accepted, or impact assessment not final' }
+          : g.kind === 'risk_escalation'
           ? { name: 'RiskAboveRegisteredTier', text: 'AI model scans above its registered risk tier' }
           : g.kind === 'tool_authorization'
             ? { name: 'UnauthorizedToolUse', text: 'AI agent invokes a tool outside its authorized set' }
@@ -332,6 +336,27 @@ export class CiEvaluationService {
     const registered = await this.models.find({ where: { projectId, isActive: true } });
 
     const blockingGaps = this.evaluate(candidates, registered, policy);
+    // Governance E1.3/E1.4: residual_risk_unaccepted / impact_assessment_required,
+    // blocking or warning per the organisation's gate setting for the tier.
+    const governanceWarnings: Array<{ model_name: string; file_location: string; findings: string[] }> = [];
+    if (governanceHooks.gateCheck) {
+      const seen = new Set<string>();
+      for (const c of candidates) {
+        const m = registered.find((r) => r.sourceRef && r.sourceRef === c.filePath) ?? registered.find((r) => r.name.toLowerCase() === c.suggestedName.toLowerCase());
+        if (!m || seen.has(m.id)) continue;
+        seen.add(m.id);
+        const g = await governanceHooks.gateCheck(m.id);
+        if (!g) continue;
+        if (g.block.length) {
+          blockingGaps.push({
+            model_name: c.suggestedName, severity: String(c.riskHint).toUpperCase(), file_location: c.filePath,
+            missing: g.block.map((f) => f.code), kind: 'residual_risk', shadow: false,
+            reason: `Governance gate (${g.tier}): ${g.block.map((f) => f.message).join('; ')}.`,
+          });
+        }
+        if (g.warn.length) governanceWarnings.push({ model_name: c.suggestedName, file_location: c.filePath, findings: g.warn.map((f) => `${f.code}: ${f.message}`) });
+      }
+    }
     const verdict: 'pass' | 'fail' = blockingGaps.length > 0 ? 'fail' : 'pass';
 
     // Immutable pre-deployment audit record — one row per pipeline decision.
@@ -392,6 +417,7 @@ export class CiEvaluationService {
       // telemetry can be correlated back to the registry (Pillar 3).
       model_identities: this.collectIdentities(candidates, registered),
       sarif: this.buildSarif(blockingGaps, dto.commit_sha),
+      ...(governanceHooks.gateCheck && governanceWarnings.length ? { governance_warnings: governanceWarnings } : {}),
     };
   }
 
