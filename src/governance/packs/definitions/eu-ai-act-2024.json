@@ -13,11 +13,12 @@
   "tierClassifier": "eu",
   "source": "Regulation (EU) 2024/1689. Not re-assessed in this round (plan section 10).",
   "changelog": [
-    "2024.1.0: migrated from frameworks.validator.ts; results unchanged."
+    "2024.1.0: migrated from frameworks.validator.ts; results unchanged.",
+    "2024.1.0 (pre-release correction): incidentReportHours is 360 (Art. 73(2), 15 days), not GDPR's 72; Art. 73(3)-(4) shorten it to 2 or 10 days for widespread infringement or a death."
   ],
   "parameters": {
     "euHighRiskDomains": ["credit_underwriting", "loan_decisioning", "fund_movement", "credit_scoring", "insurance_pricing"],
-    "incidentReportHours": 72
+    "incidentReportHours": 360
   },
   "clauses": [
     {
