@@ -122,8 +122,31 @@ export class GovernanceSettingsService implements OnModuleInit {
       .getMany();
     return {
       ...this.view(current, orgId, user),
-      upcoming: upcoming.map((u) => ({ version: u.version, effective_from: u.effectiveFrom, reason: u.reason, changed_by: u.changedBy, changes: u.changes ?? [] })),
+      upcoming: this.upcomingView(upcoming),
     };
+  }
+
+  /** One entry per future date: the newest version on that date is what comes
+   *  into force (a carried-forward change sits on top of the scheduled one), and
+   *  its change list includes every version saved for that date. */
+  private upcomingView(rows: GovernanceSettingsEntity[]) {
+    const byDate = new Map<number, GovernanceSettingsEntity[]>();
+    for (const r of rows) {
+      const k = new Date(r.effectiveFrom).getTime();
+      byDate.set(k, [...(byDate.get(k) ?? []), r]);
+    }
+    return [...byDate.values()].map((group) => {
+      group.sort((x, y) => x.version - y.version);
+      const top = group[group.length - 1];
+      return {
+        version: top.version,
+        effective_from: top.effectiveFrom,
+        reason: group[0].reason,
+        changed_by: group[0].changedBy,
+        changes: group.flatMap((g) => g.changes ?? []),
+        versions: group.map((g) => ({ version: g.version, reason: g.reason, changed_by: g.changedBy })),
+      };
+    });
   }
 
   async history(orgId: string) {
