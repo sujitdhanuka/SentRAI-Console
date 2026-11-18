@@ -350,12 +350,17 @@ export class AuDtaService implements OnModuleInit {
     if (!this.flags.isEnabled('auPack')) return 0;
     let sent = 0;
     for (const org of await this.orgs.find()) {
-      if (!(await packApplies(this.packs, org.id, AU_PACK_ID, now))) continue;
-      const s = await this.shareStatus(org.id);
-      const soon = s.nextDueAt ? s.nextDueAt.getTime() - now.getTime() < 14 * DAY_MS : true;
-      if (!soon) continue;
-      await this.notifier.notify('dta_register_share_due', { tenant_id: org.id, last_shared_at: s.lastSharedAt, next_due_at: s.nextDueAt, overdue: s.overdue });
-      sent++;
+      // One organisation's bad settings must not stop reminders for the rest.
+      try {
+        if (!(await packApplies(this.packs, org.id, AU_PACK_ID, now))) continue;
+        const s = await this.shareStatus(org.id);
+        const soon = s.nextDueAt ? s.nextDueAt.getTime() - now.getTime() < 14 * DAY_MS : true;
+        if (!soon) continue;
+        await this.notifier.notify('dta_register_share_due', { tenant_id: org.id, last_shared_at: s.lastSharedAt, next_due_at: s.nextDueAt, overdue: s.overdue });
+        sent++;
+      } catch (e) {
+        this.logger.warn(`DTA share reminder skipped for org ${org.id}: ${String(e).slice(0, 200)}`);
+      }
     }
     if (sent) this.logger.log(`DTA register share reminders: ${sent}`);
     return sent;

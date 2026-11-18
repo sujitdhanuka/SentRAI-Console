@@ -65,12 +65,17 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'ownerUserId', definition: 'VARCHAR(36) NULL' },
   // ai-model.entity.ts — governance Phase 2: reason codes (E2.2), MRM scope (E2.3), red-team-required flag (E2.8).
   { table: 'ai_models', column: 'reasonCodeMap', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'reasonCodeSign', definition: 'VARCHAR(10) NULL' },
   { table: 'ai_models', column: 'mrmInScope', definition: 'TINYINT(1) NULL' },
   { table: 'ai_models', column: 'mrmExclusionReason', definition: 'VARCHAR(500) NULL' },
   { table: 'ai_models', column: 'redTeamRequiredAt', definition: 'DATETIME NULL' },
   { table: 'ai_models', column: 'redTeamRequiredReason', definition: 'VARCHAR(500) NULL' },
   // grievance.entity.ts — decision link and appeal chain (governance E2.2).
   { table: 'grievances', column: 'decisionRef', definition: 'VARCHAR(255) NULL' },
+  // explainability-record.entity.ts: the model a decision explanation belongs to (governance E2.2 tenant scoping).
+  { table: 'explainability_records', column: 'modelId', definition: 'VARCHAR(36) NULL' },
+  { table: 'model_validations', column: 'independenceAttestedBy', definition: 'VARCHAR(255) NULL' },
+  { table: 'model_validations', column: 'independenceAttestedAt', definition: 'DATETIME NULL' },
   { table: 'grievances', column: 'appealOf', definition: 'VARCHAR(36) NULL' },
   // project.entity.ts — codebase origin ('zip'/'folder'/'github:owner/repo@branch').
   { table: 'projects', column: 'codebaseSource', definition: 'VARCHAR(300) NULL' },
@@ -111,6 +116,25 @@ const REQUIRED_WIDENINGS: WidenSpec[] = [
   // deployment-gate-event.entity.ts — blockingGaps carries AST evidence
   // snippets for every flagged model; same overflow class.
   { table: 'deployment_gate_events', column: 'blockingGaps' },
+  // Governance Phase 2: JSON that grows with use (reason-code maps, fair-lending
+  // evidence on the model, deletion orders, validation findings).
+  { table: 'ai_models', column: 'reasonCodeMap' },
+  { table: 'ai_models', column: 'evidenceArtifacts' },
+  { table: 'datasets', column: 'qualityChecks' },
+  { table: 'datasets', column: 'deletionOrders' },
+  { table: 'model_validations', column: 'findings' },
+];
+
+/** Secondary indexes on existing tables (CREATE INDEX only when missing). */
+interface IndexSpec {
+  table: string;
+  name: string;
+  column: string;
+}
+
+const REQUIRED_INDEXES: IndexSpec[] = [
+  { table: 'grievances', name: 'IDX_grievances_decisionRef', column: 'decisionRef' },
+  { table: 'explainability_records', name: 'IDX_explainability_records_modelId', column: 'modelId' },
 ];
 
 /** Text types strictly smaller than MEDIUMTEXT — the only ones we widen. */
@@ -211,6 +235,8 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`validatorEmail\` VARCHAR(255) NULL,
       \`independent\` TINYINT(1) NOT NULL,
       \`independenceReasons\` TEXT NULL,
+      \`independenceAttestedBy\` VARCHAR(255) NULL,
+      \`independenceAttestedAt\` DATETIME NULL,
       \`scope\` TEXT NULL,
       \`conceptualSoundness\` TEXT NULL,
       \`implementationReview\` TEXT NULL,
@@ -220,7 +246,7 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`compensatingControls\` TEXT NULL,
       \`exceptionExpiresAt\` DATETIME NULL,
       \`expiresAt\` DATETIME NULL,
-      \`findings\` TEXT NULL,
+      \`findings\` MEDIUMTEXT NULL,
       \`completedAt\` DATETIME NULL,
       \`createdBy\` VARCHAR(255) NOT NULL,
       \`createdAt\` DATETIME NOT NULL,
@@ -344,13 +370,13 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`consentRef\` VARCHAR(255) NULL,
       \`personalData\` TINYINT(1) NOT NULL,
       \`sensitiveData\` TINYINT(1) NOT NULL,
-      \`qualityChecks\` TEXT NULL,
+      \`qualityChecks\` MEDIUMTEXT NULL,
       \`provenance\` TEXT NULL,
       \`preparation\` TEXT NULL,
       \`accessControls\` TEXT NULL,
       \`retentionUntil\` DATETIME NULL,
       \`deletionStatus\` VARCHAR(20) NOT NULL,
-      \`deletionOrders\` TEXT NULL,
+      \`deletionOrders\` MEDIUMTEXT NULL,
       \`ownerUserId\` VARCHAR(36) NULL,
       \`createdBy\` VARCHAR(255) NOT NULL,
       \`createdAt\` DATETIME NOT NULL,
@@ -819,6 +845,19 @@ export class SchemaGuardService implements OnApplicationBootstrap {
         }
       }
       if (added) this.logger.log(`Schema guard: ${added} column(s) added additively (no data touched).`);
+      for (const spec of REQUIRED_INDEXES) {
+        try {
+          const rows = await runner.query(
+            `SELECT COUNT(*) AS c FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+            [spec.table, spec.column],
+          );
+          if (Number(rows?.[0]?.c ?? 0) > 0) continue;
+          await runner.query(`CREATE INDEX \`${spec.name}\` ON \`${spec.table}\` (\`${spec.column}\`)`);
+          this.logger.log(`Schema guard: added index ${spec.name}`);
+        } catch (e) {
+          this.logger.warn(`Schema guard: could not ensure index ${spec.name}: ${String(e)}`);
+        }
+      }
       for (const spec of REQUIRED_WIDENINGS) {
         try {
           const live = await this.columnInfo(runner, spec.table, spec.column);

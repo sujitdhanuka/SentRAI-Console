@@ -16,6 +16,11 @@ export class ExplainabilityRecordEntity {
   @Column('varchar', { length: 255 })
   decisionOutcome!: string;
 
+  /** The model that made the decision (optional; governance E2.2 uses it to scope notices to the model's organisation). */
+  @Index()
+  @Column('varchar', { length: 36, nullable: true })
+  modelId!: string | null;
+
   @Column('float')
   confidenceScore!: number;
 

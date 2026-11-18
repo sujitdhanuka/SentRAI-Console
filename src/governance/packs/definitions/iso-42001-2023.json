@@ -387,6 +387,8 @@
       "gap": {
         "unassessed": "A.10.3 needs suppliers assessed against the organisation's responsible-AI approach.",
         "unsatisfactory": "A supplier assessment is unsatisfactory.",
+        "stale": "A vendor's due-diligence review date has passed; reassess it.",
+        "exited": "A component still comes from a vendor marked as exited.",
         "exit": "A HIGH-criticality supplier has no exit plan.",
         "licence": "A component has a restricted or unknown licence.",
         "not_assessed": "The vendor register is not switched on."

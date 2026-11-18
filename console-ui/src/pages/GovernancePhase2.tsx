@@ -13,6 +13,7 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { useSession } from '../stores/session';
 import { useModels } from './GovernanceRegister';
 
 /* ------------------------------------------------------------- shared */
@@ -106,6 +107,12 @@ const RESULT_TONE: Record<string, BadgeTone> = {
 };
 const tone = (s: string | null | undefined): BadgeTone => RESULT_TONE[String(s ?? '')] ?? 'neutral';
 
+/** Viewers are read-only (the server refuses their writes); their write controls are shown disabled. */
+function Writable({ children }: { children: ReactNode }) {
+  const viewer = useSession((s) => s.user?.role) === 'VIEWER';
+  return <fieldset disabled={viewer} title={viewer ? 'Viewers have read-only access' : undefined} className="contents">{children}</fieldset>;
+}
+
 /* ------------------------------------------------- E2.1 Australia (DTA) */
 
 export function AuDtaTab() {
@@ -114,6 +121,7 @@ export function AuDtaTab() {
   const tracker = useLoad<any>('/governance/au/in-scope');
   const subs = useLoad<any>('/governance/au/submissions');
   const [reference, setReference] = useState('');
+  const [report, setReport] = useState<{ model_id: string; name: string; reasons: string; mitigations: string; residual_risk: string } | null>(null);
   const reload = () => {
     void reg.reload();
     void tracker.reload();
@@ -137,8 +145,10 @@ export function AuDtaTab() {
           <span>Last shared with the DTA: <b>{day(share.lastSharedAt ?? share.last_shared_at)}</b></span>
           <span>Next due: <b>{day(share.nextDueAt ?? share.next_due_at)}</b></span>
           {(share.overdue) && <Badge tone="negative">overdue</Badge>}
-          <input className={`${FIELD} max-w-[220px]`} placeholder="DTA reference" value={reference} onChange={(e) => setReference(e.target.value)} />
-          <Button size="xs" disabled={reference.trim().length < 3} onClick={() => void call(() => post("/governance/exports/dta-register/share", { reference }), "Share recorded", reload)}>Record share with DTA</Button>
+          <Writable>
+            <input className={`${FIELD} max-w-[220px]`} placeholder="DTA reference" value={reference} onChange={(e) => setReference(e.target.value)} />
+            <Button size="xs" disabled={reference.trim().length < 3} onClick={() => void call(() => post("/governance/exports/dta-register/share", { reference }), "Share recorded", reload)}>Record share with DTA</Button>
+          </Writable>
         </div>
         <Table
           head={['Use case', 'Usage / domain', 'In scope', 'Risk', 'Owner', 'Impact assessment', 'Reported']}
@@ -151,15 +161,34 @@ export function AuDtaTab() {
       </Panel>
       <Panel
         title={`In-scope assessment of existing use cases (deadline ${tracker.data?.deadline ?? '30 Apr 2027'})`}
-        right={<Button size="xs" variant="secondary" onClick={() => void call(() => post('/governance/au/in-scope/bulk-start', {}), 'Draft assessments started', reload)}>Start drafts for all unassessed</Button>}
+        right={<Writable><Button size="xs" variant="secondary" onClick={() => void call(() => post('/governance/au/in-scope/bulk-start', {}), 'Draft assessments started', reload)}>Start drafts for all unassessed</Button></Writable>}
       >
         {tracker.data ? (
           <Table
-            head={['Use case', 'Risk', 'State', 'In scope', 'High-risk area']}
+            head={['Use case', 'Risk', 'State', 'In scope', 'High-risk area', '']}
             empty="No use cases."
-            rows={(tracker.data.use_cases ?? []).map((r: any) => [r.name, r.risk_level, <Badge key="s" tone={r.needs_action ? 'warning' : 'positive'}>{r.state}</Badge>, r.in_scope == null ? '—' : r.in_scope ? 'yes' : 'no', r.high_risk_area ?? '—'])}
+            rows={(tracker.data.use_cases ?? []).map((r: any) => [
+              r.name, r.risk_level, <Badge key="s" tone={r.needs_action ? 'warning' : 'positive'}>{r.state}</Badge>, r.in_scope == null ? '—' : r.in_scope ? 'yes' : 'no', r.high_risk_area ?? '—',
+              r.in_scope && ['HIGH', 'CRITICAL'].includes(r.risk_level)
+                ? <Button key="h" size="xs" variant="ghost" onClick={() => setReport({ model_id: r.model_id, name: r.name, reasons: '', mitigations: '', residual_risk: '' })}>Report to DTA</Button>
+                : null,
+            ])}
           />
         ) : <Skeleton className="h-24 w-full" />}
+        {report && (
+          <Writable>
+            <div className="grid grid-cols-3 gap-2 border-t border-border p-2">
+              <p className="col-span-3 text-[10.5px] text-text-secondary">High-risk use case report for <b>{report.name}</b>. Only the accountable official can record it.</p>
+              <Field label="Why it is high risk"><textarea className={`${FIELD} h-20`} value={report.reasons} onChange={(e) => setReport({ ...report, reasons: e.target.value })} /></Field>
+              <Field label="Mitigations"><textarea className={`${FIELD} h-20`} value={report.mitigations} onChange={(e) => setReport({ ...report, mitigations: e.target.value })} /></Field>
+              <Field label="Residual risk (optional)"><textarea className={`${FIELD} h-20`} value={report.residual_risk} onChange={(e) => setReport({ ...report, residual_risk: e.target.value })} /></Field>
+              <div className="col-span-3 flex gap-1">
+                <Button size="xs" disabled={report.reasons.trim().length < 10 || report.mitigations.trim().length < 10} onClick={() => void call(() => post(`/governance/models/${report.model_id}/dta-report`, { reasons: report.reasons, mitigations: report.mitigations, residual_risk: report.residual_risk || undefined }), 'Report recorded', () => { setReport(null); reload(); })}>Record report</Button>
+                <Button size="xs" variant="ghost" onClick={() => setReport(null)}>Cancel</Button>
+              </div>
+            </div>
+          </Writable>
+        )}
       </Panel>
       <Panel title="Submissions to the DTA">
         <Table
@@ -181,13 +210,17 @@ export function DecisionsTab() {
   const notices = useLoad<any>('/governance/notices');
   const appeals = useLoad<any>('/governance/appeals');
   const [mapText, setMapText] = useState('');
+  const [adverseSign, setAdverseSign] = useState('');
   const [ref, setRef] = useState('');
   const [decision, setDecision] = useState<any>(null);
   const [deciding, setDeciding] = useState<{ id: string; outcome: string; authority: string; evidence: string; outcome_notes: string; self_review_reason: string } | null>(null);
   const [grievance, setGrievance] = useState({ id: '', decision_ref: '', request: '' });
 
   useEffect(() => {
-    if (codes.data) setMapText(JSON.stringify(codes.data.map ?? {}, null, 2));
+    if (codes.data) {
+      setMapText(JSON.stringify(codes.data.map ?? {}, null, 2));
+      setAdverseSign(codes.data.adverse_sign ?? '');
+    }
   }, [codes.data]);
 
   const reloadAll = () => {
@@ -202,14 +235,24 @@ export function DecisionsTab() {
           <div className="space-y-2 p-2">
             <p className="text-[10.5px] text-text-secondary">Map each model feature to a reason code and the statement shown to the applicant, for example {'{"debt_to_income": {"code": "R01", "text": "Debt is high compared with income"}}'}.</p>
             <textarea aria-label="Reason-code map" className={`${FIELD} h-40 font-mono`} value={mapText} onChange={(e) => setMapText(e.target.value)} />
-            <Button size="sm" onClick={() => void call(async () => post(`/governance/models/${modelId}/reason-codes`, { map: JSON.parse(mapText || '{}') }, 'PUT'), 'Reason codes saved', codes.reload)}>Save map</Button>
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Which contributions push towards decline?">
+                <select className={`${FIELD} max-w-xs`} value={adverseSign} onChange={(e) => setAdverseSign(e.target.value)}>
+                  <option value="">Choose…</option>
+                  <option value="POSITIVE">Positive values (the model scores risk)</option>
+                  <option value="NEGATIVE">Negative values (the model scores approval)</option>
+                </select>
+              </Field>
+              <Button size="sm" disabled={!adverseSign} title={!adverseSign ? 'Choose the sign convention first' : ''} onClick={() => void call(async () => post(`/governance/models/${modelId}/reason-codes`, { map: JSON.parse(mapText || '{}'), adverse_sign: adverseSign }, 'PUT'), 'Reason codes saved', codes.reload)}>Save map</Button>
+            </div>
+            <p className="text-[10.5px] text-text-secondary">Only factors pushing towards decline become principal reasons; notices are refused for approvals and for decisions older than 90 days.</p>
           </div>
         )}
       </Panel>
       <Panel title="Decision lookup and adverse-action notice">
         <div className="flex flex-wrap items-end gap-2 p-2">
           <input className={`${FIELD} max-w-xs`} placeholder="Decision reference" value={ref} onChange={(e) => setRef(e.target.value)} />
-          <Button size="xs" variant="secondary" disabled={!ref} onClick={() => void call(async () => setDecision(await api<any>(`/governance/decisions/${encodeURIComponent(ref)}`)), 'Loaded')}>Open decision</Button>
+          <Button size="xs" variant="secondary" disabled={!ref} onClick={() => void call(async () => setDecision(await api<any>(`/governance/decisions/${encodeURIComponent(ref)}${modelId ? `?model_id=${encodeURIComponent(modelId)}` : ''}`)), 'Loaded')}>Open decision</Button>
           <Button size="xs" disabled={!ref || !modelId} title={!modelId ? 'Choose the model above first' : ''} onClick={() => void call(() => post(`/governance/decisions/${encodeURIComponent(ref)}/notices`, { model_id: modelId, channel: 'MAIL' }), 'Notice issued', reloadAll)}>Issue notice</Button>
         </div>
         {decision && <pre className="max-h-64 overflow-auto border-t border-border p-2 text-[10px]">{JSON.stringify(decision, null, 2)}</pre>}
@@ -308,7 +351,19 @@ export function ValidationTab() {
           ])}
         />
         {open && (
+          <Writable>
           <div className="grid grid-cols-3 gap-2 border-t border-border p-2">
+            <div className="col-span-3 space-y-1 text-[11px]">
+              <div>
+                Independence: {open.independent ? <Badge tone="positive">independent</Badge> : <Badge tone="negative">not yet independent</Badge>}
+                {open.independence_attested_by && <span className="ml-2 text-text-secondary">attested by {open.independence_attested_by} on {day(open.independence_attested_at)}</span>}
+              </div>
+              {(open.independence_problems ?? []).length > 0 && <ul className="list-disc pl-4 text-text-secondary">{open.independence_problems.map((p: string) => <li key={p}>{p}</li>)}</ul>}
+              <div className="flex flex-wrap items-end gap-2">
+                <input className={`${FIELD} max-w-lg`} placeholder="Officer's statement: how the validator is separate from the owning team" value={open.attest_statement ?? ''} onChange={(e) => setOpen({ ...open, attest_statement: e.target.value })} />
+                <Button size="xs" variant="secondary" disabled={(open.attest_statement ?? '').trim().length < 20} title="An officer who is not the validator" onClick={() => void call(async () => setOpen({ ...(await post(`/governance/validations/${open.validation_id}/attest-independence`, { statement: open.attest_statement })) }), 'Independence attested', reload)}>Attest independence</Button>
+              </div>
+            </div>
             <Field label="Conceptual soundness"><textarea className={`${FIELD} h-24`} value={open.conceptual_soundness ?? ''} onChange={(e) => setOpen({ ...open, conceptual_soundness: e.target.value })} /></Field>
             <Field label="Implementation review"><textarea className={`${FIELD} h-24`} value={open.implementation_review ?? ''} onChange={(e) => setOpen({ ...open, implementation_review: e.target.value })} /></Field>
             <Field label="Outcomes analysis"><textarea className={`${FIELD} h-24`} value={open.outcomes_analysis ?? ''} onChange={(e) => setOpen({ ...open, outcomes_analysis: e.target.value })} /></Field>
@@ -319,7 +374,31 @@ export function ValidationTab() {
               ))}
               <Button size="xs" variant="ghost" onClick={() => setOpen(null)}>Close</Button>
             </div>
+            <div className="col-span-3 border-t border-border pt-2">
+              <span className={LABEL}>Findings</span>
+              <Table
+                head={['Severity', 'Finding', 'Due', 'Corrective action']}
+                empty="No findings recorded."
+                rows={(open.findings ?? []).map((f: any) => [<Badge key="s" tone={f.severity === 'HIGH' ? 'negative' : f.severity === 'MEDIUM' ? 'warning' : 'neutral'}>{f.severity}</Badge>, f.description, day(f.due_at), f.action_id ? 'raised' : '—'])}
+              />
+              <div className="flex flex-wrap items-end gap-2">
+                <select aria-label="Severity" className={`${FIELD} max-w-[110px]`} value={open.f_severity ?? 'MEDIUM'} onChange={(e) => setOpen({ ...open, f_severity: e.target.value })}>{['LOW', 'MEDIUM', 'HIGH'].map((x) => <option key={x}>{x}</option>)}</select>
+                <input className={`${FIELD} max-w-md`} placeholder="Finding" value={open.f_description ?? ''} onChange={(e) => setOpen({ ...open, f_description: e.target.value })} />
+                <input type="date" aria-label="Due" className={`${FIELD} max-w-[150px]`} value={open.f_due ?? ''} onChange={(e) => setOpen({ ...open, f_due: e.target.value })} />
+                <Button size="xs" variant="secondary" disabled={(open.f_description ?? '').trim().length < 10} onClick={() => void call(async () => setOpen({ ...(await post(`/governance/validations/${open.validation_id}/findings`, { severity: open.f_severity ?? 'MEDIUM', description: open.f_description, due_at: open.f_due || undefined })) }), 'Finding recorded', reload)}>Add finding</Button>
+              </div>
+            </div>
+            <div className="col-span-3 border-t border-border pt-2">
+              <span className={LABEL}>Temporary-use exception (officers; ends when the validation completes or is cancelled)</span>
+              {open.temp_use_exception && <p className="text-[11px]">Granted until <b>{day(open.exception_expires_at)}</b></p>}
+              <div className="flex flex-wrap items-end gap-2">
+                <input className={`${FIELD} max-w-lg`} placeholder="Compensating controls" value={open.x_controls ?? ''} onChange={(e) => setOpen({ ...open, x_controls: e.target.value })} />
+                <input type="date" aria-label="Exception expires" className={`${FIELD} max-w-[150px]`} value={open.x_expires ?? ''} onChange={(e) => setOpen({ ...open, x_expires: e.target.value })} />
+                <Button size="xs" variant="secondary" disabled={(open.x_controls ?? '').trim().length < 20 || !open.x_expires} onClick={() => void call(async () => setOpen({ ...(await post(`/governance/validations/${open.validation_id}/exception`, { compensating_controls: open.x_controls, expires_at: open.x_expires })) }), 'Exception granted', reload)}>Grant exception</Button>
+              </div>
+            </div>
           </div>
+          </Writable>
         )}
       </Panel>
       <Panel title="Aggregate view by project">
@@ -510,7 +589,7 @@ export function TrainingTab() {
             {['ai_literacy', 'responsible_ai', 'policy_ack', 'model_risk', 'fair_lending', 'privacy', 'security', 'au_ethics_principles', 'other'].map((t) => <option key={t}>{t}</option>)}
           </select>
           <input className={`${FIELD} max-w-[90px]`} placeholder="Months valid" value={course.validity_months} onChange={(e) => setCourse({ ...course, validity_months: e.target.value })} />
-          <Button size="xs" disabled={!course.title} onClick={() => void call(() => post('/governance/training/courses', { ...course, validity_months: course.validity_months ? Number(course.validity_months) : null, mandatory: true }), 'Course added', m.reload)}><Plus size={12} /> Add</Button>
+          <Writable><Button size="xs" disabled={!course.title} onClick={() => void call(() => post('/governance/training/courses', { ...course, validity_months: course.validity_months ? Number(course.validity_months) : null, mandatory: true }), 'Course added', m.reload)}><Plus size={12} /> Add</Button></Writable>
           <Button size="xs" variant="secondary" onClick={() => void call(() => download('/governance/training/matrix.csv', 'training-matrix.csv'), 'Downloaded')}><Download size={12} /> Matrix CSV</Button>
         </div>
         <div className="overflow-x-auto">
@@ -529,6 +608,16 @@ export function TrainingTab() {
           />
         </div>
       </Panel>
+      <Panel title="Retire a course">
+        <Writable>
+          <div className="flex flex-wrap gap-1 p-2">
+            {m.data.courses.length === 0 && <span className="text-[11px] text-text-secondary">No active courses.</span>}
+            {m.data.courses.map((c: any) => (
+              <Button key={c.course_id} size="xs" variant="ghost" onClick={() => { if (window.confirm(`Retire "${c.title}"? It stops counting towards compliance.`)) void call(() => post(`/governance/training/courses/${c.course_id}`, { active: false }, 'PATCH'), 'Course retired', m.reload); }}>Retire: {c.title}</Button>
+            ))}
+          </div>
+        </Writable>
+      </Panel>
       <Panel title="Record a completion">
         <div className="flex flex-wrap items-end gap-2 p-2">
           <select aria-label="Course" className={`${FIELD} max-w-xs`} value={rec.course_id} onChange={(e) => setRec({ ...rec, course_id: e.target.value })}>
@@ -539,7 +628,7 @@ export function TrainingTab() {
           </select>
           <input type="date" className={`${FIELD} max-w-[150px]`} value={rec.completed_at} onChange={(e) => setRec({ ...rec, completed_at: e.target.value })} />
           <input className={`${FIELD} max-w-[220px]`} placeholder="Evidence (certificate, LMS ref)" value={rec.evidence_ref} onChange={(e) => setRec({ ...rec, evidence_ref: e.target.value })} />
-          <Button size="xs" disabled={!rec.course_id || !rec.user_id} onClick={() => void call(() => post('/governance/training/records', rec), 'Completion recorded', m.reload)}>Record</Button>
+          <Writable><Button size="xs" disabled={!rec.course_id || !rec.user_id} onClick={() => void call(() => post('/governance/training/records', rec), 'Completion recorded', m.reload)}>Record</Button></Writable>
           {m.data.courses.filter((c: any) => c.kind !== 'COURSE').map((c: any) => (
             <Button key={c.course_id} size="xs" variant="secondary" onClick={() => void call(() => post(`/governance/training/courses/${c.course_id}/acknowledge`, {}), 'Acknowledged', m.reload)}>I acknowledge: {c.title}</Button>
           ))}
@@ -558,6 +647,8 @@ export function DatasetsTab() {
   const [form, setForm] = useState({ name: '', source: '', lawful_basis: '', personal_data: false, provenance: '', retention_until: '' });
   const [link, setLink] = useState({ model_id: '', dataset_id: '', purpose: 'TRAINING' });
   const [order, setOrder] = useState<{ dataset_id: string; kind: string; reason: string; reference: string } | null>(null);
+  const [actions, setActions] = useState<Record<string, string>>({});
+  const [evidence, setEvidence] = useState<Record<string, string>>({});
   const reload = () => {
     void list.reload();
     void retention.reload();
@@ -569,6 +660,7 @@ export function DatasetsTab() {
     <div className="space-y-2">
       <Panel title="Data register">
         <div className="flex flex-wrap items-end gap-2 border-b border-border p-2">
+          <Writable>
           <input className={`${FIELD} max-w-[180px]`} placeholder="Dataset name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <input className={`${FIELD} max-w-[180px]`} placeholder="Source" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} />
           <select aria-label="Lawful basis" className={`${FIELD} max-w-[170px]`} value={form.lawful_basis} onChange={(e) => setForm({ ...form, lawful_basis: e.target.value })}>
@@ -578,6 +670,7 @@ export function DatasetsTab() {
           <input className={`${FIELD} max-w-[200px]`} placeholder="Provenance" value={form.provenance} onChange={(e) => setForm({ ...form, provenance: e.target.value })} />
           <input type="date" aria-label="Retain until" className={`${FIELD} max-w-[150px]`} value={form.retention_until} onChange={(e) => setForm({ ...form, retention_until: e.target.value })} />
           <Button size="xs" disabled={!form.name} onClick={() => void call(() => post('/governance/datasets', { ...form, lawful_basis: form.lawful_basis || undefined, retention_until: form.retention_until || undefined }), 'Dataset registered', reload)}><Plus size={12} /> Register</Button>
+          </Writable>
         </div>
         <Table
           head={['Dataset', 'Source', 'Lawful basis', 'Personal', 'Retain until', 'Deletion', 'Models', 'Gaps', '']}
@@ -601,6 +694,34 @@ export function DatasetsTab() {
           </div>
         )}
       </Panel>
+      {list.data.datasets.some((d: any) => (d.deletion_orders ?? []).some((o: any) => !o.completedAt)) && (
+        <Panel title="Open deletion orders">
+          <Writable>
+            <div className="space-y-2 p-2 text-[11px]">
+              {list.data.datasets.flatMap((d: any) => (d.deletion_orders ?? []).filter((o: any) => !o.completedAt).map((o: any) => (
+                <div key={o.id} className="space-y-1 border-b border-border/60 pb-2">
+                  <div><b>{d.name}</b> · {o.kind}{o.reference ? ` ${o.reference}` : ''} · ordered {day(o.orderedAt)} by {o.orderedBy}{o.dueAt ? ` · due ${day(o.dueAt)}` : ''}</div>
+                  {o.models.map((m: any) => (
+                    <div key={m.model_id} className="flex flex-wrap items-end gap-2">
+                      <span className="min-w-[160px]">{m.name} ({String(m.purpose).toLowerCase()})</span>
+                      {m.done ? <span className="text-text-secondary">{m.action}</span> : (
+                        <>
+                          <input className={`${FIELD} max-w-md`} placeholder="What was done for this model (retrained, unlearned, no action and why)" value={actions[`${o.id}|${m.model_id}`] ?? ''} onChange={(e) => setActions({ ...actions, [`${o.id}|${m.model_id}`]: e.target.value })} />
+                          <Button size="xs" variant="secondary" disabled={(actions[`${o.id}|${m.model_id}`] ?? '').trim().length < 10} onClick={() => void call(() => post(`/governance/datasets/${d.dataset_id}/deletion-orders/${o.id}/model-action`, { model_id: m.model_id, action: actions[`${o.id}|${m.model_id}`] }), 'Action recorded', reload)}>Record action</Button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <input className={`${FIELD} max-w-md`} placeholder="Evidence (deletion certificate, ticket or log reference)" value={evidence[o.id] ?? ''} onChange={(e) => setEvidence({ ...evidence, [o.id]: e.target.value })} />
+                    <Button size="xs" disabled={o.models.some((m: any) => !m.done) || (evidence[o.id] ?? '').trim().length < 5} title={o.models.some((m: any) => !m.done) ? 'Record the action for every model first' : 'Officers only'} onClick={() => void call(() => post(`/governance/datasets/${d.dataset_id}/deletion-orders/${o.id}/complete`, { evidence: evidence[o.id] }), 'Order completed', reload)}>Complete order</Button>
+                  </div>
+                </div>
+              )))}
+            </div>
+          </Writable>
+        </Panel>
+      )}
       <Panel title="Link a dataset to a model">
         <div className="flex flex-wrap items-end gap-2 p-2">
           <ModelSelect value={link.model_id} onChange={(v) => setLink({ ...link, model_id: v })} />
@@ -627,7 +748,7 @@ export function DatasetsTab() {
 export function AssuranceTab() {
   const call = useToastCall();
   const o = useLoad<any>('/governance/assurance');
-  const [rt, setRt] = useState<{ model_id: string; summary: string; performed_at: string } | null>(null);
+  const [rt, setRt] = useState<{ model_id: string; summary: string; performed_at: string; ref: string } | null>(null);
   if (o.error) return <Panel title="Red team and audit"><PanelError onRetry={() => void o.reload()} /></Panel>;
   if (!o.data) return <Skeleton className="h-64 w-full" />;
   const fr = o.data.framework_review;
@@ -648,14 +769,15 @@ export function AssuranceTab() {
             m.red_team_due ? <Badge key="r" tone="negative">due</Badge> : <Badge key="r" tone="positive">done</Badge>,
             m.red_team_reason ?? '—', day(m.last_red_team),
             <span key="a">{day(m.audit_due)} {m.audit_overdue && <Badge tone="negative">overdue</Badge>}</span>,
-            <Button key="b" size="xs" variant="ghost" onClick={() => setRt({ model_id: m.model_id, summary: '', performed_at: new Date().toISOString().slice(0, 10) })}>Record red team</Button>,
+            <Button key="b" size="xs" variant="ghost" onClick={() => setRt({ model_id: m.model_id, summary: '', performed_at: new Date().toISOString().slice(0, 10), ref: '' })}>Record red team</Button>,
           ])}
         />
         {rt && (
           <div className="flex flex-wrap items-end gap-2 border-t border-border p-2">
             <input type="date" className={`${FIELD} max-w-[150px]`} value={rt.performed_at} onChange={(e) => setRt({ ...rt, performed_at: e.target.value })} />
             <input className={`${FIELD} max-w-md`} placeholder="Summary of the exercise and findings" value={rt.summary} onChange={(e) => setRt({ ...rt, summary: e.target.value })} />
-            <Button size="xs" onClick={() => void call(() => post(`/governance/models/${rt.model_id}/red-team`, rt), 'Red team recorded', () => { setRt(null); void o.reload(); })}>Save</Button>
+            <input className={`${FIELD} max-w-[220px]`} placeholder="Report or evidence ref (required for HIGH)" value={rt.ref} onChange={(e) => setRt({ ...rt, ref: e.target.value })} />
+            <Button size="xs" onClick={() => void call(() => post(`/governance/models/${rt.model_id}/red-team`, { ...rt, ref: rt.ref || undefined }), 'Red team recorded', () => { setRt(null); void o.reload(); })}>Save</Button>
             <Button size="xs" variant="ghost" onClick={() => setRt(null)}>Cancel</Button>
           </div>
         )}

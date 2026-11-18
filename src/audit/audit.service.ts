@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { AuditEventsInterceptor } from './audit-events.interceptor';
@@ -10,8 +10,11 @@ import {
   AIModelEntity,
   AuditEventEntity,
   ExplainabilityRecordEntity,
+  ProjectEntity,
 } from '../database/entities';
-import { RiskLevel } from '../common/enums';
+import { RiskLevel, Role } from '../common/enums';
+import { getFeatureFlags } from '../common/feature-flags';
+import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { generateAuditTrailPayload } from '../domain/audit';
 import { AuditChecklistDto, AuditFindingDto, AuditResponse, ExplainabilityDto } from './audit.dto';
 
@@ -31,7 +34,22 @@ export class AuditService {
     @InjectRepository(ExplainabilityRecordEntity)
     private readonly explainability: Repository<ExplainabilityRecordEntity>,
     @InjectRepository(AuditEventEntity) private readonly events: Repository<AuditEventEntity>,
+    @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
   ) {}
+
+  /**
+   * Tenant check for a model (404 when it is in another organisation; ADMIN sees all).
+   * Applied while GOVERNANCE_V2 is on, because governance gates rely on audit and
+   * explanation records; always applied when a caller names a model for a new explanation.
+   */
+  private async assertModelAccess(user: CurrentUser | undefined, modelId: string, always = false): Promise<void> {
+    if (!user || (!always && !getFeatureFlags().governanceV2)) return;
+    const model = await this.models.findOne({ where: { id: modelId }, select: ['id', 'projectId'] });
+    if (!model) throw new NotFoundException('Model not found');
+    if (user.role === Role.ADMIN) return;
+    const project = model.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+    if ((project?.tenantId ?? null) !== (user.tenantId ?? null)) throw new NotFoundException('Model not found');
+  }
 
   /** Query the global audit-event stream (one row per mutating API action). */
   async listEvents(opts: { actor?: string; path?: string; limit?: number }) {
@@ -106,7 +124,8 @@ export class AuditService {
     return { intact: true, chained: chained.length, legacy_unchained: legacy, head_hash: head?.contentHash ?? null, broken_at: null, reason: null };
   }
 
-  async list(modelId: string): Promise<any[]> {
+  async list(modelId: string, user?: CurrentUser): Promise<any[]> {
+    await this.assertModelAccess(user, modelId);
     const rows = await this.audits.find({ where: { modelId }, order: { createdAt: 'DESC' } });
     return rows.map((r) => ({
       audit_id: r.id,
@@ -122,7 +141,8 @@ export class AuditService {
     }));
   }
 
-  async initiate(modelId: string, dto: AuditChecklistDto): Promise<AuditResponse> {
+  async initiate(modelId: string, dto: AuditChecklistDto, user?: CurrentUser): Promise<AuditResponse> {
+    await this.assertModelAccess(user, modelId);
     const model = await this.models.findOne({ where: { id: modelId } });
     if (!model) throw new NotFoundException('Model not found');
 
@@ -206,7 +226,8 @@ export class AuditService {
     };
   }
 
-  async addFinding(modelId: string, auditId: string, dto: AuditFindingDto) {
+  async addFinding(modelId: string, auditId: string, dto: AuditFindingDto, user?: CurrentUser) {
+    await this.assertModelAccess(user, modelId);
     const audit = await this.audits.findOne({ where: { id: auditId } });
     if (!audit || audit.modelId !== modelId) throw new NotFoundException('Audit not found');
 
@@ -235,11 +256,13 @@ export class AuditService {
     return { audit_id: auditId, finding_id: finding.finding_id, verdict: audit.overallVerdict };
   }
 
-  async recordExplainability(dto: ExplainabilityDto) {
+  async recordExplainability(dto: ExplainabilityDto, user?: CurrentUser) {
+    if (dto.model_id) await this.assertModelAccess(user, dto.model_id, true);
     const now = new Date();
     const row = await this.explainability.save(this.explainability.create({
       id: uuidv4(),
       decisionRef: dto.decision_ref,
+      modelId: dto.model_id ?? null,
       decisionOutcome: dto.decision_outcome,
       confidenceScore: dto.confidence_score,
       topFeatures: dto.top_features,
@@ -260,9 +283,17 @@ export class AuditService {
   }
 
   /** List persisted explainability records, newest first (REC 24 evidence). */
-  async listExplainability(decisionRef?: string, limit = 50) {
+  async listExplainability(decisionRef?: string, limit = 50, user?: CurrentUser) {
+    const where: Record<string, any> = decisionRef ? { decisionRef } : {};
+    // With governance on, a non-admin sees only explanations tied to their organisation's models.
+    if (user && getFeatureFlags().governanceV2 && user.role !== Role.ADMIN) {
+      const projectIds = user.tenantId ? (await this.projects.find({ where: { tenantId: user.tenantId }, select: ['id'] })).map((p) => p.id) : [];
+      const modelIds = projectIds.length ? (await this.models.find({ where: { projectId: In(projectIds) }, select: ['id'] })).map((m) => m.id) : [];
+      if (!modelIds.length) return [];
+      where.modelId = In(modelIds);
+    }
     const rows = await this.explainability.find({
-      where: decisionRef ? { decisionRef } : {},
+      where,
       order: { createdAt: 'DESC' },
       take: limit,
     });

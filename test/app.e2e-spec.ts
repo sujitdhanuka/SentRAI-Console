@@ -8,6 +8,7 @@ import { ComplianceService } from '../src/compliance/compliance.service';
 import { NotifierService } from '../src/common/notifier.service';
 import { ScheduledTasksService } from '../src/tasks/scheduled-tasks.service';
 import { RisksService } from '../src/governance/risks/risks.service';
+import { DecisionsService } from '../src/governance/decisions/decisions.service';
 
 describe('SentrAI Console (e2e)', () => {
   let app: INestApplication;
@@ -3337,7 +3338,9 @@ describe('SentrAI Console (e2e)', () => {
     for (const r of routes) await request(http).get(r).set(auth(a.owner)).expect(404);
     await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: 'x', description: 'please reconsider my case' }).expect(404);
     const f = (await request(http).get('/api/v1/governance/features').set(auth(a.viewer)).expect(200)).body;
-    for (const k of ['auPack', 'usKit', 'modelValidation', 'fairLending', 'vendors', 'training', 'dataRegister', 'redTeamAuditRules']) expect(f[k]).toBe(false);
+    // With the master flag off the features list keeps its pre-Phase 2 shape: no Phase 2 keys at all.
+    for (const k of ['auPack', 'usKit', 'modelValidation', 'fairLending', 'vendors', 'training', 'dataRegister', 'redTeamAuditRules']) expect(k in f).toBe(false);
+    expect(f.governanceV2).toBe(false);
     // Under the master flag, a single epic can still be switched off.
     await withEnv({ GOVERNANCE_V2: 'true', GOV_E2_5_VENDORS: 'false' }, async () => {
       await request(http).get('/api/v1/governance/vendors').set(auth(a.owner)).expect(404);
@@ -3409,23 +3412,41 @@ describe('SentrAI Console (e2e)', () => {
       const R = `/api/v1/governance/models/${a.modelId}/reason-codes`;
       await request(http).put(R).set(auth(a.viewer)).send({ map: {} }).expect(403);
       await request(http).put(R).set(auth(a.owner)).send({ map: { dti: { code: 'bad code', text: 'x' } } }).expect(400);
-      await request(http).put(R).set(auth(a.owner)).send({ map: { dti: { code: 'R01', text: 'Debt is high compared with income' }, late: { code: 'R02', text: 'Recent late payments' } } }).expect(200);
+      const map = { dti: { code: 'R01', text: 'Debt is high compared with income' }, late: { code: 'R02', text: 'Recent late payments' } };
+      // The map needs the model's sign convention, so only adverse factors become reasons.
+      await request(http).put(R).set(auth(a.owner)).send({ map }).expect(400);
+      await request(http).put(R).set(auth(a.owner)).send({ map, adverse_sign: 'POSITIVE' }).expect(200);
       expect((await request(http).get(R).set(auth(b.owner))).status).toBe(404);
       const ref = `DEC-${Date.now()}`;
       await request(http).post('/api/v1/audit/explainability/record').set(auth(a.admin)).send({
-        decision_ref: ref, top_features: { dti: 0.6, late: -0.3 }, decision_outcome: 'DECLINED', confidence_score: 0.8, explanation_method: 'SHAP', human_readable_summary: 'Declined', is_contestable: true,
+        model_id: a.modelId, decision_ref: ref, top_features: { dti: 0.6, late: 0.3, tenure: -0.4 }, decision_outcome: 'DECLINED', confidence_score: 0.8, explanation_method: 'SHAP', human_readable_summary: 'Declined', is_contestable: true,
       }).expect(201);
+      // The explanation record is tied to the model, so another org cannot write one against it.
+      await request(http).post('/api/v1/audit/explainability/record').set(auth(b.owner)).send({
+        model_id: a.modelId, decision_ref: `${ref}-X`, top_features: { dti: 0.1 }, decision_outcome: 'DECLINED', confidence_score: 0.5, explanation_method: 'SHAP', human_readable_summary: 'x', is_contestable: true,
+      }).expect(404);
+      // An approval gets no adverse-action notice.
+      const okRef = `${ref}-OK`;
+      await request(http).post('/api/v1/audit/explainability/record').set(auth(a.admin)).send({
+        model_id: a.modelId, decision_ref: okRef, top_features: { dti: 0.1 }, decision_outcome: 'APPROVED', confidence_score: 0.9, explanation_method: 'SHAP', human_readable_summary: 'Approved', is_contestable: false,
+      }).expect(201);
+      await request(http).post(`/api/v1/governance/decisions/${okRef}/notices`).set(auth(a.owner)).send({ model_id: a.modelId }).expect(400);
       // A public request needs a decision tied to this system.
       await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: ref, description: 'Please reconsider my application' }).expect(404);
       const notice = (await request(http).post(`/api/v1/governance/decisions/${ref}/notices`).set(auth(a.owner)).send({ model_id: a.modelId }).expect(201)).body;
       expect(notice.consistent).toBe(true);
+      // tenure pulled towards approval (the favourable sign), so it is not a reason even though it is the second-largest factor.
       expect(notice.reason_codes.map((r: any) => r.code)).toEqual(['R01', 'R02']);
       const bad = (await request(http).post(`/api/v1/governance/decisions/${ref}/notices`).set(auth(a.owner)).send({ model_id: a.modelId, reason_codes: ['R02'] }).expect(201)).body;
       expect(bad.consistent).toBe(false);
       // Another org cannot issue a notice on this model.
       await request(http).post(`/api/v1/governance/decisions/${ref}/notices`).set(auth(b.owner)).send({ model_id: a.modelId }).expect(404);
       const pub = (await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: ref, description: 'Please reconsider my application', complainant: 'applicant@example.test' }).expect(201)).body;
-      expect(pub.reference ?? pub.request_id ?? pub.appeal_id).toBeTruthy();
+      expect(pub).toMatchObject({ status: 'RECEIVED' });
+      expect(pub.respond_by).toBeTruthy();
+      // A second request while the appeal is open gets the same answer and creates nothing.
+      const again = (await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: ref, description: 'Please reconsider my application again' }).expect(201)).body;
+      expect(Object.keys(again).sort()).toEqual(Object.keys(pub).sort());
       const appeals = (await request(http).get('/api/v1/governance/appeals').set(auth(a.ciso)).expect(200)).body.appeals;
       expect(appeals).toHaveLength(1);
       expect((await request(http).get('/api/v1/governance/appeals').set(auth(b.owner)).expect(200)).body.appeals).toHaveLength(0);
@@ -3437,6 +3458,19 @@ describe('SentrAI Console (e2e)', () => {
       expect(decided).toMatchObject({ status: 'DECIDED', outcome: 'UPHELD' });
       expect(decided.reviewer_user_id).toBeTruthy();
       expect(decided.retention_until).toBeTruthy();
+      // Retention: nothing is purged today; once retention has passed the decided records go.
+      expect(await app.get(DecisionsService).purgeExpired()).toMatchObject({ notices: 0, appeals: 0 });
+      const later = new Date(Date.now() + 10 * 365 * 86_400_000);
+      // The grievance filed with the public request is still open, so the decision's records stay.
+      expect(await app.get(DecisionsService).purgeExpired(later)).toMatchObject({ notices: 0, appeals: 0 });
+      const gl = (await request(http).get('/api/v1/grievances').set(auth(a.ciso)).expect(200)).body;
+      for (const g of (Array.isArray(gl) ? gl : gl.grievances ?? []).filter((x: any) => x.model_id === a.modelId)) {
+        await request(http).patch(`/api/v1/grievances/${g.grievance_id}/status`).set(auth(a.ciso)).send({ status: 'REJECTED', notes: 'Decided through the reconsideration' }).expect(200);
+      }
+      const purged = await app.get(DecisionsService).purgeExpired(later);
+      expect(purged.notices).toBeGreaterThanOrEqual(2);
+      expect(purged.appeals).toBeGreaterThanOrEqual(1);
+      expect((await request(http).get('/api/v1/governance/appeals').set(auth(a.ciso)).expect(200)).body.appeals).toHaveLength(0);
     });
   });
 
@@ -3450,15 +3484,32 @@ describe('SentrAI Console (e2e)', () => {
       await request(http).put(`/api/v1/governance/models/${a.modelId}/mrm-scope`).set(auth(a.owner)).send({ in_scope: true }).expect(200);
       await request(http).post('/api/v1/governance/validations').set(auth(a.owner)).send({ model_id: a.modelId, validator_user_id: (await userIds(b.admin, b.orgId)).CISO }).expect(400);
       const v = (await request(http).post('/api/v1/governance/validations').set(auth(a.owner)).send({ model_id: a.modelId, validator_user_id: ids.CISO, scope: 'Full validation' }).expect(201)).body;
-      expect(v.independent).toBe(true);
+      // Separation from the owning team needs an officer's attestation (users carry no team field).
+      expect(v.independent).toBe(false);
+      expect(v.independence_problems.join(' ')).toMatch(/attested/);
       const V = `/api/v1/governance/validations/${v.validation_id}`;
+      const statement = { statement: 'The CISO sits in second-line risk, outside the credit modelling team' };
+      await request(http).post(`${V}/attest-independence`).set(auth(a.ciso)).send(statement).expect(403);
+      await request(http).post(`${V}/attest-independence`).set(auth(a.viewer)).send(statement).expect(403);
+      const attested = (await request(http).post(`${V}/attest-independence`).set(auth(a.orgAdmin)).send(statement).expect(200)).body;
+      expect(attested).toMatchObject({ independent: true, independence_problems: [] });
+      expect(attested.independence_attested_by).toBeTruthy();
+      // A temporary-use exception counts only while the validation is open.
+      const exp = new Date(Date.now() + 30 * 86_400_000).toISOString();
+      await request(http).post(`${V}/exception`).set(auth(a.orgAdmin)).send({ compensating_controls: 'Manual credit officer review of every decline', expires_at: exp }).expect(200);
+      const rowOf = async () => (await request(http).get('/api/v1/governance/validations/aggregate').set(auth(a.viewer)).expect(200)).body.projects.flatMap((p: any) => p.rows).find((r: any) => r.model_id === a.modelId);
+      expect((await rowOf()).exception_until).toBeTruthy();
       const analysis = { conceptual_soundness: 'Logistic scorecard suits the portfolio', implementation_review: 'Code matches the documented specification', outcomes_analysis: 'Back-testing within tolerance over two years' };
       await request(http).patch(V).set(auth(a.owner)).send(analysis).expect(403);
+      // Completion needs the implementation review as well.
+      await request(http).patch(V).set(auth(a.ciso)).send({ ...analysis, implementation_review: '' }).expect(200);
+      await request(http).post(`${V}/complete`).set(auth(a.ciso)).send({ result: 'REJECTED' }).expect(400);
       await request(http).patch(V).set(auth(a.ciso)).send(analysis).expect(200);
       await request(http).post(`${V}/complete`).set(auth(a.owner)).send({ result: 'APPROVED' }).expect(403);
       const done = (await request(http).post(`${V}/complete`).set(auth(a.ciso)).send({ result: 'APPROVED' }).expect(200)).body;
-      expect(done).toMatchObject({ status: 'COMPLETED', result: 'APPROVED' });
+      expect(done).toMatchObject({ status: 'COMPLETED', result: 'APPROVED', independent: true });
       expect(done.expires_at).toBeTruthy();
+      expect((await rowOf()).exception_until).toBeNull();
       await request(http).post(`${V}/exception`).set(auth(a.viewer)).send({}).expect(403);
       await request(http).get(V).set(auth(b.owner)).expect(404);
       const agg = (await request(http).get('/api/v1/governance/validations/aggregate').set(auth(a.viewer)).expect(200)).body;
@@ -3503,6 +3554,7 @@ describe('SentrAI Console (e2e)', () => {
       await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers: { audit_rights: 'YES' } }).expect(400);
       const as1 = (await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers: { ...answers, audit_rights: 'NO' } }).expect(201)).body;
       expect(as1).toMatchObject({ version: 1, result: 'UNSATISFACTORY' });
+      await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers: { ...answers, audit_rights: 'NA' } }).expect(400);
       const as2 = (await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers }).expect(201)).body;
       expect(as2).toMatchObject({ version: 2, result: 'SATISFACTORY', score: 100 });
       // Lowering criticality is for officers.
@@ -3517,7 +3569,11 @@ describe('SentrAI Console (e2e)', () => {
       await request(http).patch(`/api/v1/governance/bom/${item.item_id}`).set(auth(b.owner)).send({ version: '3' }).expect(404);
       const bom = (await request(http).get(B).set(auth(a.viewer)).expect(200)).body;
       expect(bom.components).toHaveLength(1);
-      expect(bom.facts).toMatchObject({ components: 1, unsatisfactory: 0 });
+      expect(bom.facts).toMatchObject({ components: 1, unsatisfactory: 0, exitedInUse: 0 });
+      // Exiting a vendor whose component is still in the BOM is a gap.
+      await request(http).patch(`/api/v1/governance/vendors/${v.vendor_id}`).set(auth(a.owner)).send({ status: 'EXITED' }).expect(200);
+      expect((await request(http).get(B).set(auth(a.viewer)).expect(200)).body.facts.exitedInUse).toBe(1);
+      await request(http).patch(`/api/v1/governance/vendors/${v.vendor_id}`).set(auth(a.owner)).send({ status: 'ACTIVE' }).expect(200);
       const list = (await request(http).get('/api/v1/governance/vendors').set(auth(a.viewer)).expect(200)).body.vendors;
       expect(list[0].models.map((m: any) => m.model_id)).toEqual([a.modelId]);
       expect((await request(http).get('/api/v1/governance/vendors').set(auth(b.owner)).expect(200)).body.vendors).toEqual([]);
@@ -3537,6 +3593,8 @@ describe('SentrAI Console (e2e)', () => {
       await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: (await userIds(b.admin, b.orgId)).OWNER }).expect(400);
       await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: ids.VIEWER, completed_at: '2099-01-01' }).expect(400);
       const r = (await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: ids.VIEWER, evidence_ref: 'LMS-1' }).expect(201)).body;
+      // Recording your own completion needs evidence.
+      await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: ids.OWNER }).expect(400);
       expect(r.expires_at).toBeTruthy();
       // A course needs a recorded completion; a policy can be self-acknowledged.
       await request(http).post(`${T}/courses/${course.course_id}/acknowledge`).set(auth(a.viewer)).expect(403);
@@ -3577,11 +3635,22 @@ describe('SentrAI Console (e2e)', () => {
       expect(order.models.map((m: any) => m.model_id)).toEqual([a.modelId]);
       await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/complete`).set(auth(a.ciso)).send({ evidence: 'Ticket DEL-9' }).expect(400);
       await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/model-action`).set(auth(a.owner)).send({ model_id: a.modelId, action: 'Retrained without the record on 2026-11-01' }).expect(200);
+      // A model linked while the order is open joins the order and needs its own action.
+      const m2 = (await request(http).post('/api/v1/inventory/models').set(auth(a.owner)).send({
+        name: 'DsOrgA Collections', model_type: 'MACHINE_LEARNING', functional_area: 'collections', use_case_description: 'Prioritises collections outreach.',
+        human_oversight_required: true, board_policy_ref: 'BP-1', project_id: a.projectId,
+      }).expect(201)).body;
+      await request(http).post(`/api/v1/governance/models/${m2.model_id}/datasets`).set(auth(a.owner)).send({ dataset_id: ds.dataset_id, purpose: 'VALIDATION' }).expect(201);
+      await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/complete`).set(auth(a.ciso)).send({ evidence: 'Ticket DEL-9' }).expect(400);
+      await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/model-action`).set(auth(a.owner)).send({ model_id: m2.model_id, action: 'Evaluation set rebuilt without the record' }).expect(200);
       const done = (await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/complete`).set(auth(a.ciso)).send({ evidence: 'Ticket DEL-9' }).expect(200)).body;
       expect(done.deletion_status).toBe('DELETED');
+      expect(done.deletion_orders[0].models.map((m: any) => m.model_id).sort()).toEqual([a.modelId, m2.model_id].sort());
+      // A deleted dataset no longer counts as the model's registered data.
+      expect((await request(http).get(`/api/v1/governance/models/${a.modelId}/datasets`).set(auth(a.viewer)).expect(200)).body.facts.linked).toBe(0);
       await request(http).get(`${D}/${ds.dataset_id}`).set(auth(b.owner)).expect(404);
       const lineage = (await request(http).get(`${D}/lineage`).set(auth(a.viewer)).expect(200)).body;
-      expect(lineage.edges).toEqual([{ from: ds.dataset_id, to: a.modelId, purpose: 'TRAINING' }]);
+      expect(lineage.edges).toEqual(expect.arrayContaining([{ from: ds.dataset_id, to: a.modelId, purpose: 'TRAINING' }]));
     });
   });
 
@@ -3597,7 +3666,9 @@ describe('SentrAI Console (e2e)', () => {
       expect(ov.framework_review).toMatchObject({ overdue: true, interval_months: 24 });
       await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.viewer)).send({ summary: 'Prompt-injection exercise' }).expect(403);
       await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.owner)).send({ summary: 'short' }).expect(400);
-      const rec = (await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.owner)).send({ summary: 'Adversarial exercise on the scorecard inputs' }).expect(200)).body;
+      // The credit model is HIGH, so the record must point at the report.
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.owner)).send({ summary: 'Adversarial exercise on the scorecard inputs' }).expect(400);
+      const rec = (await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.owner)).send({ summary: 'Adversarial exercise on the scorecard inputs', ref: 'RT-REPORT-2026-01' }).expect(200)).body;
       expect(rec.red_team.last_red_team).toBeTruthy();
 
       // A CI scan that sees the code escalate above the registered tier makes red teaming due.
@@ -3607,6 +3678,10 @@ describe('SentrAI Console (e2e)', () => {
       }).expect(201)).body;
       expect(m.risk_level).not.toBe('HIGH');
       const tok = (await request(http).post('/api/v1/ci/tokens').set(auth(a.admin)).send({ project_id: a.projectId, label: 'rt' }).expect(201)).body.token;
+      const escalating = [{ path: 'svc/credit/rank.py', content: 'import openai\n\ndef score(applicant):\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n' }];
+      // A pull-request scan is of unmerged code and does not arm the rule.
+      await request(http).post('/api/v1/ci/scan').set({ Authorization: `Bearer ${tok}` }).send({ commit_sha: 'rt0', pr_number: '7', files: escalating }).expect(200);
+      expect((await request(http).get(`/api/v1/governance/models/${m.model_id}/assurance`).set(auth(a.viewer)).expect(200)).body.red_team.satisfied).toBe(true);
       await request(http).post('/api/v1/ci/scan').set({ Authorization: `Bearer ${tok}` })
         .send({ commit_sha: 'rt1', files: [{ path: 'svc/credit/rank.py', content: 'import openai\n\ndef score(applicant):\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n' }] }).expect(200);
       const due = (await request(http).get(`/api/v1/governance/models/${m.model_id}/assurance`).set(auth(a.viewer)).expect(200)).body;
@@ -3618,6 +3693,9 @@ describe('SentrAI Console (e2e)', () => {
       const ctl = (await request(http).get(`/api/v1/governance/models/${m.model_id}/controls`).set(auth(a.viewer)).expect(200)).body;
       expect(ctl.controls.find((c: any) => c.control_id === 'CTL-RT-02').status).toBe('FAIL');
       await request(http).post(`/api/v1/governance/models/${m.model_id}/red-team`).set(auth(a.owner)).send({ summary: 'Red team after the escalation' }).expect(200);
+      expect((await request(http).get(`/api/v1/governance/models/${m.model_id}/assurance`).set(auth(a.viewer)).expect(200)).body.red_team.satisfied).toBe(true);
+      // The same escalation on the next scan does not re-arm a satisfied requirement.
+      await request(http).post('/api/v1/ci/scan').set({ Authorization: `Bearer ${tok}` }).send({ commit_sha: 'rt2', files: escalating }).expect(200);
       expect((await request(http).get(`/api/v1/governance/models/${m.model_id}/assurance`).set(auth(a.viewer)).expect(200)).body.red_team.satisfied).toBe(true);
     });
     await withEnv({ GOVERNANCE_V2: 'true', GOV_E2_8_REDTEAM_AUDIT: 'false' }, async () => {

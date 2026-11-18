@@ -169,7 +169,12 @@ export class TrainingService implements OnModuleInit {
     const c = await this.courseInOrg(user, String(body.course_id ?? ''));
     const person = await orgMember(this.users, c.orgId, body.user_id, 'user_id');
     const completedAt = optDate(body.completed_at, 'completed_at') ?? new Date();
-    const r = await this.save(c, person.id, completedAt, user.email, await this.parseDoc(c.orgId, body.evidence_doc_id), optText(body.evidence_ref, 'evidence_ref', 500));
+    const docId = await this.parseDoc(c.orgId, body.evidence_doc_id);
+    const ref = optText(body.evidence_ref, 'evidence_ref', 500);
+    // A maintainer recording their own completion must point at evidence someone else can check.
+    if (person.email?.toLowerCase() === user.email.toLowerCase() && !docId && !ref) throw new BadRequestException('Recording your own completion needs evidence (evidence_doc_id or evidence_ref)');
+    if (completedAt.getTime() > Date.now() + 86_400_000) throw new BadRequestException('completed_at cannot be in the future');
+    const r = await this.save(c, person.id, completedAt, user.email, docId, ref);
     if (req) req.auditSummary = { training_recorded: { course_id: c.id, user_id: person.id, completed_at: completedAt } };
     return this.recordView(r);
   }
@@ -247,19 +252,23 @@ export class TrainingService implements OnModuleInit {
     if (!this.flags.isEnabled('training')) return 0;
     let sent = 0;
     for (const org of await this.orgs.find()) {
-      const { courses, people, records } = await this.load(org.id);
-      if (!courses.some((c) => c.active && c.mandatory)) continue;
-      const latest = latestRecords(records);
-      const due: Array<{ user_id: string; email: string; course: string; status: string }> = [];
-      for (const p of people.filter((x) => x.isActive)) {
-        for (const c of courses.filter((x) => x.active && x.mandatory && (!x.targetRoles?.length || x.targetRoles.includes(p.role)))) {
-          const s = statusOf(latest.get(`${c.id}|${p.id}`), now);
-          if (s !== 'CURRENT') due.push({ user_id: p.id, email: p.email, course: c.title, status: s });
+      try {
+        const { courses, people, records } = await this.load(org.id);
+        if (!courses.some((c) => c.active && c.mandatory)) continue;
+        const latest = latestRecords(records);
+        const due: Array<{ user_id: string; email: string; course: string; status: string }> = [];
+        for (const p of people.filter((x) => x.isActive)) {
+          for (const c of courses.filter((x) => x.active && x.mandatory && (!x.targetRoles?.length || x.targetRoles.includes(p.role)))) {
+            const s = statusOf(latest.get(`${c.id}|${p.id}`), now);
+            if (s !== 'CURRENT') due.push({ user_id: p.id, email: p.email, course: c.title, status: s });
+          }
         }
+        if (!due.length) continue;
+        await this.notifier.notify('training_due', { tenant_id: org.id, due: due.slice(0, 500), total: due.length });
+        sent++;
+      } catch (e) {
+        this.logger.warn(`Training reminder skipped for org ${org.id}: ${String(e).slice(0, 200)}`);
       }
-      if (!due.length) continue;
-      await this.notifier.notify('training_due', { tenant_id: org.id, due: due.slice(0, 500), total: due.length });
-      sent++;
     }
     if (sent) this.logger.log(`Training reminders sent to ${sent} org(s)`);
     return sent;

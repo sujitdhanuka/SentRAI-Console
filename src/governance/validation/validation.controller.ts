@@ -61,6 +61,13 @@ export class ValidationController {
     return this.v.complete(user, id, body, req);
   }
 
+  @Post('validations/:id/attest-independence')
+  @HttpCode(HttpStatus.OK)
+  @Roles(...OFFICERS)
+  attest(@CurrentUser() user: CurrentUserType, @Param('id') id: string, @Body() body: Record<string, any>, @Req() req: any) {
+    return this.v.attestIndependence(user, id, body, req);
+  }
+
   @Post('validations/:id/exception')
   @HttpCode(HttpStatus.OK)
   @Roles(...OFFICERS)

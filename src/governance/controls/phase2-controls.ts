@@ -12,7 +12,7 @@
  *   appeals      { open, overdue, decided, correctionPath }
  *   validation   { inScope, exclusionReason, status, result, independent, expiresAt, exceptionUntil, overdueFindings, vendorModel }
  *   fairLending  { applicable, proxyHits, disparateImpact, ldaSearch, minRatio }
- *   vendors      { components, unassessed, unsatisfactory, highWithoutExit, contractGaps, unknownLicences, restrictedLicences }
+ *   vendors      { components, unassessed, unsatisfactory, stale, exitedInUse, highWithoutExit, contractGaps, unknownLicences, restrictedLicences }
  *   datasets     { linked, missingLawfulBasis, missingProvenance, pendingDeletion }
  *   redTeam      { requiredSince, reason, satisfied }
  * ORG facts (ctx.org):
@@ -264,6 +264,7 @@ export const PHASE2_CONTROLS: ControlDefinition[] = [
 
   /* ------------------------------------------------------- E2.5 vendors */
   {
+    // Upstream versions are tracked by hand in the BOM (discovery does not re-read repositories), so a stale version is not detected here.
     id: 'CTL-VENDOR-01',
     title: 'Third-party components assessed, licensed and covered by contract terms',
     scope: 'MODEL',
@@ -276,6 +277,8 @@ export const PHASE2_CONTROLS: ControlDefinition[] = [
       const gapKeys: string[] = [];
       if (v.unassessed) gapKeys.push('unassessed');
       if (v.unsatisfactory) gapKeys.push('unsatisfactory');
+      if (v.stale) gapKeys.push('stale');
+      if (v.exitedInUse) gapKeys.push('exited');
       if (i.opts.contract && v.contractGaps) gapKeys.push('contract');
       if (v.highWithoutExit) gapKeys.push('exit');
       if (v.restrictedLicences || v.unknownLicences) gapKeys.push('licence');

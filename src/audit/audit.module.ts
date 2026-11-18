@@ -7,6 +7,7 @@ import {
   AIModelEntity,
   AuditEventEntity,
   ExplainabilityRecordEntity,
+  ProjectEntity,
 } from '../database/entities';
 import { AuditController } from './audit.controller';
 import { AuditService } from './audit.service';
@@ -19,6 +20,7 @@ import { AuditEventsInterceptor } from './audit-events.interceptor';
       AIModelEntity,
       ExplainabilityRecordEntity,
       AuditEventEntity,
+      ProjectEntity,
     ]),
   ],
   controllers: [AuditController],

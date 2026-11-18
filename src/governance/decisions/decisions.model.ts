@@ -31,20 +31,37 @@ export function validateReasonCodeMap(map: unknown): string[] {
   const problems: string[] = [];
   if (!map || typeof map !== 'object' || Array.isArray(map)) return ['map must be an object of feature → { code, text }'];
   const entries = Object.entries(map as Record<string, any>);
-  if (entries.length > 500) problems.push('at most 500 features');
+  if (entries.length > MAX_MAPPED_FEATURES) problems.push(`at most ${MAX_MAPPED_FEATURES} features`);
   for (const [feature, rc] of entries) {
-    if (!feature.trim() || feature.length > 200) problems.push(`feature name "${feature.slice(0, 40)}" is empty or too long`);
+    if (!feature.trim() || feature.length > 120) problems.push(`feature name "${feature.slice(0, 40)}" is empty or too long`);
     if (!rc || typeof rc !== 'object') { problems.push(`${feature}: needs { code, text }`); continue; }
     if (typeof rc.code !== 'string' || !/^[A-Za-z0-9._-]{1,20}$/.test(rc.code)) problems.push(`${feature}: code must be 1-20 letters, digits, dot, dash or underscore`);
-    if (typeof rc.text !== 'string' || rc.text.trim().length < 5 || rc.text.length > 300) problems.push(`${feature}: text must be 5-300 characters`);
+    if (typeof rc.text !== 'string' || rc.text.trim().length < 5 || rc.text.length > 200) problems.push(`${feature}: text must be 5-200 characters`);
   }
   return problems;
 }
 
-/** The decision's principal factors: largest absolute contribution first. */
-export function topFactors(features: Record<string, number> | null | undefined, n = MAX_PRINCIPAL_REASONS): Array<{ feature: string; weight: number }> {
+export const ADVERSE_SIGNS = ['POSITIVE', 'NEGATIVE'] as const;
+export type AdverseSign = (typeof ADVERSE_SIGNS)[number];
+
+/** Largest reason-code map SentRAI accepts (keeps the stored JSON well under the column size). */
+export const MAX_MAPPED_FEATURES = 300;
+
+/**
+ * The decision's principal reasons: the factors that pushed towards the adverse
+ * outcome, largest first. `sign` says which contribution sign is adverse for the
+ * model (POSITIVE for a default-risk score, NEGATIVE for an approval score);
+ * favourable factors are never principal reasons. Without a sign every factor
+ * ranks by size (used only for display).
+ */
+export function topFactors(
+  features: Record<string, number> | null | undefined,
+  n = MAX_PRINCIPAL_REASONS,
+  sign?: AdverseSign | null,
+): Array<{ feature: string; weight: number }> {
   return Object.entries(features ?? {})
     .filter(([, w]) => typeof w === 'number' && Number.isFinite(w) && w !== 0)
+    .filter(([, w]) => !sign || (sign === 'POSITIVE' ? w > 0 : w < 0))
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0].localeCompare(b[0]))
     .slice(0, n)
     .map(([feature, weight]) => ({ feature, weight }));
@@ -53,7 +70,7 @@ export function topFactors(features: Record<string, number> | null | undefined, 
 export interface NoticeCheck {
   reasonCodes: ReasonCode[];
   consistent: boolean;
-  mismatches: Array<{ kind: 'NOT_A_TOP_FACTOR' | 'TOP_FACTOR_NOT_STATED' | 'NO_CODE_MAPPED' | 'UNKNOWN_CODE'; code?: string; feature?: string }>;
+  mismatches: Array<{ kind: 'NOT_A_TOP_FACTOR' | 'TOP_FACTOR_NOT_STATED' | 'NO_CODE_MAPPED' | 'UNKNOWN_CODE' | 'TOO_MANY_REASONS'; code?: string; feature?: string }>;
 }
 
 /**
@@ -76,6 +93,7 @@ export function checkNotice(map: ReasonCodeMap, factors: Array<{ feature: string
     codes = [...topCodes.keys()];
   } else {
     codes = [...new Set(stated.map(String))];
+    if (codes.length > MAX_PRINCIPAL_REASONS) mismatches.push({ kind: 'TOO_MANY_REASONS' });
     for (const c of codes) {
       if (!byCode.has(c)) mismatches.push({ kind: 'UNKNOWN_CODE', code: c });
       else if (!topCodes.has(c)) mismatches.push({ kind: 'NOT_A_TOP_FACTOR', code: c });
@@ -84,4 +102,11 @@ export function checkNotice(map: ReasonCodeMap, factors: Array<{ feature: string
   }
   const reasonCodes = codes.filter((c) => byCode.has(c)).map((c) => byCode.get(c)!);
   return { reasonCodes, consistent: mismatches.length === 0 && reasonCodes.length > 0, mismatches };
+}
+
+/** Outcomes that are not adverse: no adverse-action notice is issued for them. */
+export function isFavourableOutcome(outcome: string | null | undefined): boolean {
+  const o = String(outcome ?? '').toLowerCase();
+  if (/declin|deni|deny|reject|adverse|counter|refus|withdraw|fail/.test(o)) return false;
+  return /approv|accept|grant|pass|allow/.test(o);
 }

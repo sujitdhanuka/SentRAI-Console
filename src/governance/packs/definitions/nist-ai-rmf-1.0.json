@@ -277,6 +277,8 @@
       "gap": {
         "unassessed": "Govern 6.1 needs third-party AI risks assessed: assess this model's vendors.",
         "unsatisfactory": "A vendor assessment is unsatisfactory.",
+        "stale": "A vendor's due-diligence review date has passed; reassess it.",
+        "exited": "A component still comes from a vendor marked as exited.",
         "exit": "A HIGH-criticality vendor has no contingency (exit or failover) plan (GOVERN 6.2).",
         "licence": "A component has a restricted or unknown licence (MAP 4.1).",
         "not_assessed": "The vendor register is not switched on."

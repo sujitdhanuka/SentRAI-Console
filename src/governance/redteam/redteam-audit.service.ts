@@ -60,10 +60,13 @@ export function auditDue(
   intervalDays: number,
 ): Date | null {
   if (!isHigh(m.riskLevel) || !LIVE.includes(m.lifecycleStage)) return null;
-  if (m.nextAuditDue) return new Date(m.nextAuditDue);
-  if (lastAudit?.nextAuditDue) return new Date(lastAudit.nextAuditDue);
+  // The configured interval is a ceiling: an earlier explicit date (model or audit record) wins, a later one does not.
   const anchor = lastAudit?.createdAt ?? m.deploymentDate ?? m.registeredAt;
-  return anchor ? new Date(new Date(anchor).getTime() + intervalDays * DAY_MS) : null;
+  const candidates: number[] = [];
+  if (anchor) candidates.push(new Date(anchor).getTime() + intervalDays * DAY_MS);
+  if (m.nextAuditDue) candidates.push(new Date(m.nextAuditDue).getTime());
+  if (lastAudit?.nextAuditDue) candidates.push(new Date(lastAudit.nextAuditDue).getTime());
+  return candidates.length ? new Date(Math.min(...candidates)) : null;
 }
 
 @Injectable()
@@ -90,7 +93,7 @@ export class RedTeamAuditService implements OnModuleInit {
   onModuleInit(): void {
     governanceHooks.onRiskEscalation = async (modelId, detail) => {
       if (!this.on()) return;
-      await this.markRequired(modelId, `risk escalation ${detail.from} → ${detail.to} (${detail.source})`.slice(0, 500));
+      await this.markRequired(modelId, `risk escalation ${detail.from} → ${detail.to} (${detail.source})`.slice(0, 500), true, `risk escalation ${detail.from} → ${detail.to}`);
     };
     // A risk escalation reported through the model-event hook counts the same way.
     this.risks.onEvent(async (modelId, event, detail) => {
@@ -151,11 +154,13 @@ export class RedTeamAuditService implements OnModuleInit {
     return auditDue(thirdParty ? { ...model, nextAuditDue: null } : model, last, interval);
   }
 
-  private async markRequired(modelId: string, reason: string, emit = true): Promise<void> {
+  private async markRequired(modelId: string, reason: string, emit = true, key?: string): Promise<void> {
     const m = await this.models.findOne({ where: { id: modelId } });
     if (!m) return;
     // An open requirement keeps its original date until a red team satisfies it.
     if (m.redTeamRequiredAt && !redTeamState(m, false).satisfied) return;
+    // The same escalation seen again on every later scan (the tier was not re-triaged) does not re-arm a satisfied requirement.
+    if (key && m.redTeamRequiredAt && m.redTeamRequiredReason?.startsWith(key)) return;
     m.redTeamRequiredAt = new Date();
     m.redTeamRequiredReason = reason;
     await this.models.save(m);
@@ -186,8 +191,11 @@ export class RedTeamAuditService implements OnModuleInit {
     const at = body.performed_at ? new Date(String(body.performed_at)) : new Date();
     if (Number.isNaN(at.getTime()) || at.getTime() > Date.now() + 60_000) throw new BadRequestException('performed_at must be a past date');
     const summary = reqText(body.summary, 'summary', 10, 2000);
+    // For HIGH and CRITICAL systems the record clears a blocking gate, so it must point at the report.
+    const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim().slice(0, 500) : null;
+    if (isHigh(model.riskLevel) && (!ref || ref.length < 5)) throw new BadRequestException('A red team on a HIGH or CRITICAL system needs ref: the report, ticket or evidence reference');
     model.lastRedTeamDate = at;
-    model.evidenceArtifacts = [...(model.evidenceArtifacts ?? []), { type: 'red_team', ref: String(body.ref ?? `sentrai:red-team:${modelId}:${at.toISOString()}`).slice(0, 500), added_at: at.toISOString(), description: summary } as any];
+    model.evidenceArtifacts = [...(model.evidenceArtifacts ?? []), { type: 'red_team', ref: ref ?? `sentrai:red-team:${modelId}:${at.toISOString()}`, added_at: at.toISOString(), description: summary, recorded_by: user.email } as any];
     model.updatedAt = new Date();
     await this.models.save(model);
     if (req) req.auditSummary = { red_team_recorded: { model_id: modelId, performed_at: at, by: user.email } };
@@ -235,10 +243,16 @@ export class RedTeamAuditService implements OnModuleInit {
     if (!this.on()) return 0;
     let sent = 0;
     for (const org of await this.orgs.find()) {
-      const fr = await this.frameworkReview(org.id, now);
-      if (fr.overdue || (fr.nextDueAt && fr.nextDueAt.getTime() - now.getTime() < 30 * DAY_MS)) {
-        await this.notifier.notify('framework_review_due', { tenant_id: org.id, last_review_at: fr.lastReviewAt, next_due_at: fr.nextDueAt, overdue: fr.overdue });
-        sent++;
+      try {
+        // Only organisations that keep AIMS records are reminded; the rest have no framework to review here.
+        if (!(await this.aims.count({ where: { orgId: org.id } }))) continue;
+        const fr = await this.frameworkReview(org.id, now);
+        if (fr.overdue || (fr.nextDueAt && fr.nextDueAt.getTime() - now.getTime() < 30 * DAY_MS)) {
+          await this.notifier.notify('framework_review_due', { tenant_id: org.id, last_review_at: fr.lastReviewAt, next_due_at: fr.nextDueAt, overdue: fr.overdue });
+          sent++;
+        }
+      } catch (e) {
+        this.logger.warn(`Framework review reminder skipped for org ${org.id}: ${String(e).slice(0, 200)}`);
       }
     }
     return sent;

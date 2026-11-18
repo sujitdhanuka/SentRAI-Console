@@ -101,7 +101,14 @@ export class ValidationService implements OnModuleInit {
     const m = await this.models.findOne({ where: { id: modelId } });
     const latest = await this.rows.findOne({ where: { modelId, status: Not('CANCELLED') }, order: { version: 'DESC' } });
     const completed = await this.rows.findOne({ where: { modelId, status: 'COMPLETED' }, order: { completedAt: 'DESC' } });
-    const exception = await this.rows.findOne({ where: { modelId, tempUseException: true }, order: { exceptionExpiresAt: 'DESC' } });
+    // H3: an exception only counts on the latest validation while it is still open; completing or cancelling ends it.
+    const exceptionUntil = latest && OPEN_STATUSES.includes(latest.status) && latest.tempUseException ? latest.exceptionExpiresAt : null;
+    // Independence is re-checked now (owner, developer or registrant may have changed since completion).
+    let independentNow = false;
+    if (completed && m && completed.independenceAttestedBy) {
+      const v = completed.validatorUserId ? await this.users.findOne({ where: { id: completed.validatorUserId } }) : null;
+      independentNow = !!v && independenceProblems(v, m, await this.registeredBy(modelId)).length === 0;
+    }
     const overdueFindings = await this.cas.count({ where: { modelId, source: 'VALIDATION', status: In(['OPEN', 'IN_PROGRESS', 'AWAITING_EFFECTIVENESS']), dueAt: LessThan(new Date()) } });
     const basis = completed ?? latest;
     return {
@@ -109,9 +116,9 @@ export class ValidationService implements OnModuleInit {
       exclusionReason: m?.mrmExclusionReason ?? null,
       status: basis?.status ?? null,
       result: completed?.result ?? null,
-      independent: basis?.independent ?? false,
+      independent: completed ? independentNow : basis?.independent ?? false,
       expiresAt: completed?.expiresAt ?? null,
-      exceptionUntil: exception?.exceptionExpiresAt ?? null,
+      exceptionUntil,
       overdueFindings,
       vendorModel: basis?.vendorModel ?? false,
       openValidation: latest && OPEN_STATUSES.includes(latest.status) ? latest.id : null,
@@ -125,6 +132,8 @@ export class ValidationService implements OnModuleInit {
     requireRole(user, MAINTAINERS, 'set model-risk scope');
     const { model } = await modelForUser(this.models, this.projects, user, modelId);
     if (typeof body.in_scope !== 'boolean') throw new BadRequestException('in_scope must be true or false');
+    // Excluding a model removes the validation gate, so it is an officer's decision.
+    if (body.in_scope === false) requireRole(user, OFFICERS, 'exclude a model from model-risk management');
     model.mrmInScope = body.in_scope;
     model.mrmExclusionReason = body.in_scope ? null : reqText(body.exclusion_reason, 'exclusion_reason', 10, 500);
     model.updatedAt = new Date();
@@ -148,7 +157,7 @@ export class ValidationService implements OnModuleInit {
     return {
       validation_id: r.id, model_id: r.modelId, version: r.version, status: r.status, result: r.result,
       validator_user_id: r.validatorUserId, validator_email: r.validatorEmail, independent: r.independent,
-      independence_problems: r.independenceReasons ?? [], scope: r.scope, conceptual_soundness: r.conceptualSoundness,
+      independence_problems: r.independenceReasons ?? [], independence_attested_by: r.independenceAttestedBy, independence_attested_at: r.independenceAttestedAt, scope: r.scope, conceptual_soundness: r.conceptualSoundness,
       implementation_review: r.implementationReview, outcomes_analysis: r.outcomesAnalysis, vendor_model: r.vendorModel,
       temp_use_exception: r.tempUseException, compensating_controls: r.compensatingControls, exception_expires_at: r.exceptionExpiresAt,
       exception_active: r.tempUseException && !!r.exceptionExpiresAt && r.exceptionExpiresAt.getTime() > now,
@@ -177,6 +186,8 @@ export class ValidationService implements OnModuleInit {
       return;
     }
     const problems = independenceProblems(validator, model, await this.registeredBy(model.id));
+    // Users carry no team field, so separation from the owning team is attested by an officer who is not the validator.
+    if (!r.independenceAttestedBy) problems.push('no officer has attested that the validator is outside the owning team');
     r.independent = problems.length === 0;
     r.independenceReasons = problems;
     r.validatorEmail = validator.email;
@@ -194,7 +205,7 @@ export class ValidationService implements OnModuleInit {
     const now = new Date();
     const r = this.rows.create({
       id: uuidv4(), orgId, modelId: model.id, version: (last?.version ?? 0) + 1, status: 'PLANNED', result: null,
-      validatorUserId: validator.id, validatorEmail: validator.email, independent: false, independenceReasons: null,
+      validatorUserId: validator.id, validatorEmail: validator.email, independent: false, independenceReasons: null, independenceAttestedBy: null, independenceAttestedAt: null,
       scope: optText(body.scope, 'scope'), conceptualSoundness: null, implementationReview: null, outcomesAnalysis: null,
       vendorModel: body.vendor_model === true, tempUseException: false, compensatingControls: null, exceptionExpiresAt: null,
       expiresAt: null, findings: [], completedAt: null, createdBy: user.email, createdAt: now, updatedAt: now,
@@ -228,6 +239,10 @@ export class ValidationService implements OnModuleInit {
     if (analysis && r.validatorEmail?.toLowerCase() !== user.email.toLowerCase()) throw new ForbiddenException('Only the named validator can record the analysis');
     if (body.validator_user_id !== undefined) {
       const v = await orgMember(this.users, r.orgId, body.validator_user_id, 'validator_user_id');
+      if (v.id !== r.validatorUserId) {
+        r.independenceAttestedBy = null;
+        r.independenceAttestedAt = null;
+      }
       r.validatorUserId = v.id;
     }
     if (body.scope !== undefined) r.scope = optText(body.scope, 'scope');
@@ -237,7 +252,10 @@ export class ValidationService implements OnModuleInit {
     if (body.vendor_model !== undefined) r.vendorModel = body.vendor_model === true;
     if (body.status !== undefined) {
       if (!['PLANNED', 'IN_PROGRESS', 'CANCELLED'].includes(body.status)) throw new BadRequestException('Use /complete to complete a validation');
-      if (body.status === 'CANCELLED') requireRole(user, OFFICERS, 'cancel a validation');
+      if (body.status === 'CANCELLED') {
+        requireRole(user, OFFICERS, 'cancel a validation');
+        if (r.tempUseException && r.exceptionExpiresAt && r.exceptionExpiresAt.getTime() > Date.now()) r.exceptionExpiresAt = new Date();
+      }
       r.status = body.status;
     }
     await this.checkIndependence(r);
@@ -252,8 +270,9 @@ export class ValidationService implements OnModuleInit {
     requireRole(user, MAINTAINERS, 'record findings');
     const r = await this.load(user, id);
     if (r.status === 'CANCELLED') throw new BadRequestException('The validation was cancelled');
+    if ((r.findings ?? []).length >= 200) throw new BadRequestException('A validation holds at most 200 findings; raise the rest as corrective actions');
     const severity = oneOf(body.severity, ['LOW', 'MEDIUM', 'HIGH'] as const, 'severity', 'MEDIUM');
-    const description = reqText(body.description, 'description', 10);
+    const description = reqText(body.description, 'description', 10, 2000);
     const dueAt = optDate(body.due_at, 'due_at');
     let actionId: string | null = null;
     if (this.flags.isEnabled('correctiveActions')) {
@@ -278,6 +297,7 @@ export class ValidationService implements OnModuleInit {
     await this.checkIndependence(r);
     if (!r.independent) throw new ForbiddenException(`The validator is not independent: ${(r.independenceReasons ?? []).join('; ')}`);
     if (!r.conceptualSoundness || r.conceptualSoundness.length < 20) throw new BadRequestException('Record the conceptual-soundness review first');
+    if (!r.implementationReview || r.implementationReview.length < 20) throw new BadRequestException('Record the implementation review first');
     if (!r.outcomesAnalysis || r.outcomesAnalysis.length < 20) throw new BadRequestException('Record the outcomes analysis first');
     const result = oneOf(body.result, VALIDATION_RESULTS, 'result');
     const params = await orgParams(this.packs, r.orgId);
@@ -291,9 +311,28 @@ export class ValidationService implements OnModuleInit {
     r.result = result;
     r.completedAt = now;
     r.expiresAt = result === 'REJECTED' ? null : requested ?? maxExpiry;
+    // A completed validation ends any temporary-use exception granted while it was open.
+    if (r.tempUseException && r.exceptionExpiresAt && r.exceptionExpiresAt.getTime() > now.getTime()) r.exceptionExpiresAt = now;
     r.updatedAt = now;
     await this.rows.save(r);
     if (req) req.auditSummary = { model_validation_completed: { validation_id: r.id, model_id: r.modelId, result, validator: user.email, expires_at: r.expiresAt } };
+    return this.view(r);
+  }
+
+  /** An officer (not the validator) attests that the validator sits outside the owning team and its reporting line. */
+  async attestIndependence(user: CurrentUser, id: string, body: Record<string, any>, req?: any) {
+    this.assert();
+    requireRole(user, OFFICERS, 'attest validator independence');
+    const r = await this.load(user, id);
+    if (!OPEN_STATUSES.includes(r.status)) throw new BadRequestException('Independence is attested while the validation is open');
+    if (r.validatorEmail?.toLowerCase() === user.email.toLowerCase()) throw new ForbiddenException('The validator cannot attest their own independence');
+    const statement = reqText(body.statement, 'statement (how the validator is separate from the owning team)', 20, 2000);
+    r.independenceAttestedBy = user.email;
+    r.independenceAttestedAt = new Date();
+    await this.checkIndependence(r);
+    r.updatedAt = new Date();
+    await this.rows.save(r);
+    if (req) req.auditSummary = { validator_independence_attested: { validation_id: r.id, validator: r.validatorEmail, attested_by: user.email, statement } };
     return this.view(r);
   }
 

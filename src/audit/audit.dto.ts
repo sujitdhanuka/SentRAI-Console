@@ -40,6 +40,8 @@ export class AuditFindingDto {
 
 export class ExplainabilityDto {
   @IsString() decision_ref!: string;
+  /** Optional: the model that made the decision. Adverse-action notices (governance E2.2) only use explanations tied to their model. */
+  @IsOptional() @IsString() model_id?: string;
   @IsObject() top_features!: Record<string, number>;
   @IsString() decision_outcome!: string;
   @IsNumber() @Min(0) @Max(1) confidence_score!: number;

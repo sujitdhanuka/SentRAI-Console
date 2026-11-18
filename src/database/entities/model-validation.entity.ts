@@ -36,6 +36,13 @@ export class ModelValidationEntity {
   @Column('simple-json', { nullable: true })
   independenceReasons!: any | null;
 
+  /** An officer's attestation that the validator is outside the owning team and reporting line (users carry no team field). */
+  @Column('varchar', { length: 255, nullable: true })
+  independenceAttestedBy!: string | null;
+
+  @Column('datetime', { nullable: true })
+  independenceAttestedAt!: Date | null;
+
   @Column('text', { nullable: true })
   scope!: string | null;
 

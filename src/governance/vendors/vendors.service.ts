@@ -81,6 +81,10 @@ export class VendorsService implements OnModuleInit {
       // A component with a named provider but no vendor record has not been through due diligence.
       unassessed: live.filter((v) => !latest.has(v.id)).length + items.filter((i) => !i.vendorId && i.provider).length,
       unsatisfactory: live.filter((v) => latest.get(v.id)?.result === 'UNSATISFACTORY').length,
+      // An assessment stops counting once its review date has passed.
+      stale: live.filter((v) => latest.has(v.id) && !!v.nextReviewAt && v.nextReviewAt.getTime() < Date.now()).length,
+      // A component still sourced from a vendor the bank has exited.
+      exitedInUse: vendors.filter((v) => v.status === 'EXITED').length,
       highWithoutExit: live.filter((v) => v.criticality === 'HIGH' && (!v.exitPlan || !v.failoverPlan)).length,
       contractGaps: live.filter((v) => v.kind !== 'OPEN_SOURCE' && contractGaps(v.contractTerms).length > 0).length,
       unknownLicences: items.filter((i) => i.licenceClass === 'UNKNOWN' && i.kind !== 'API' && i.kind !== 'PLATFORM').length,
@@ -196,7 +200,12 @@ export class VendorsService implements OnModuleInit {
       if (VENDOR_CRITICALITY.indexOf(next) < VENDOR_CRITICALITY.indexOf(v.criticality as any)) requireRole(user, OFFICERS, 'lower a vendor’s criticality');
       v.criticality = next;
     }
-    if (body.status !== undefined) v.status = oneOf(body.status, VENDOR_STATUSES, 'status');
+    if (body.status !== undefined) {
+      const next = oneOf(body.status, VENDOR_STATUSES, 'status');
+      // Clearing a review hold or exiting a vendor changes what the controls demand; keep it with the officers.
+      if (next !== v.status && (v.status === 'UNDER_REVIEW' || next === 'EXITED')) requireRole(user, OFFICERS, next === 'EXITED' ? 'exit a vendor' : 'take a vendor off review');
+      v.status = next;
+    }
     if (body.contact !== undefined) v.contact = optText(body.contact, 'contact', 255);
     if (body.services !== undefined) v.services = optText(body.services, 'services', 4000);
     if (body.contract_terms !== undefined) v.contractTerms = this.parseTerms(body.contract_terms);

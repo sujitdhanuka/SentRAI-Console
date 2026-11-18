@@ -172,6 +172,10 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   reasonCodeMap!: Record<string, { code: string; text: string }> | null;
 
+  /** Which sign of a feature contribution pushes this model towards the adverse outcome: POSITIVE or NEGATIVE (governance E2.2). */
+  @Column('varchar', { length: 10, nullable: true })
+  reasonCodeSign!: string | null;
+
   /** SR 26-2 model-risk scope (governance E2.3); null until decided. */
   @Column('boolean', { nullable: true })
   mrmInScope!: boolean | null;

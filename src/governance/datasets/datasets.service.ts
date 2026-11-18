@@ -70,7 +70,9 @@ export class DatasetsService implements OnModuleInit {
 
   async modelFacts(modelId: string, now = new Date()) {
     const links = await this.links.find({ where: { modelId } });
-    const ds = links.length ? await this.datasets.find({ where: { id: In([...new Set(links.map((l) => l.datasetId))]) } }) : [];
+    const all = links.length ? await this.datasets.find({ where: { id: In([...new Set(links.map((l) => l.datasetId))]) } }) : [];
+    // A deleted dataset stays on record but no longer counts as the model's registered data.
+    const ds = all.filter((d) => d.deletionStatus !== 'DELETED');
     return {
       linked: ds.length,
       missingLawfulBasis: ds.filter((d) => d.personalData && !d.lawfulBasis).length,
@@ -121,7 +123,7 @@ export class DatasetsService implements OnModuleInit {
     if (body.source !== undefined) d.source = optText(body.source, 'source', 500);
     if (body.acquisition !== undefined) d.acquisition = body.acquisition ? oneOf(body.acquisition, ACQUISITION, 'acquisition') : null;
     if (body.lawful_basis !== undefined) d.lawfulBasis = body.lawful_basis ? oneOf(body.lawful_basis, LAWFUL_BASES, 'lawful_basis') : null;
-    if (body.consent_ref !== undefined) d.consentRef = optText(body.consent_ref, 'consent_ref', 500);
+    if (body.consent_ref !== undefined) d.consentRef = optText(body.consent_ref, 'consent_ref', 255);
     if (body.personal_data !== undefined) d.personalData = body.personal_data === true;
     if (body.sensitive_data !== undefined) d.sensitiveData = body.sensitive_data === true;
     if (d.sensitiveData) d.personalData = true;
@@ -216,7 +218,32 @@ export class DatasetsService implements OnModuleInit {
     const existing = await this.links.findOne({ where: { modelId, datasetId: d.id, purpose } });
     if (existing) return { linked: true, model_id: modelId, dataset_id: d.id, purpose };
     await this.links.save(this.links.create({ id: uuidv4(), orgId: d.orgId, modelId, datasetId: d.id, purpose, linkedBy: user.email, linkedAt: new Date() }));
+    // A model linked while a deletion order is open is added to that order, so it needs its own action too.
+    if (await this.traceNewLinks(d)) await emitModelEvent(modelId, 'DATA_DELETION_ORDER', { ref: d.name, dataset_id: d.id });
     return { linked: true, model_id: modelId, dataset_id: d.id, purpose };
+  }
+
+  /** Adds models linked since an open order was recorded; returns true when an order changed. */
+  private async traceNewLinks(d: DatasetEntity): Promise<boolean> {
+    const orders = (d.deletionOrders ?? []) as DeletionOrder[];
+    const open = orders.filter((o) => !o.completedAt);
+    if (!open.length) return false;
+    const links = await this.links.find({ where: { datasetId: d.id } });
+    const names = await this.modelNames(links.map((l) => l.modelId));
+    let changed = false;
+    for (const o of open) {
+      for (const l of links) {
+        if (o.models.some((m) => m.model_id === l.modelId)) continue;
+        o.models.push({ model_id: l.modelId, name: names.get(l.modelId) ?? l.modelId, purpose: l.purpose, action: null, done: false });
+        changed = true;
+      }
+    }
+    if (changed) {
+      d.deletionOrders = [...orders];
+      d.updatedAt = new Date();
+      await this.datasets.save(d);
+    }
+    return changed;
   }
 
   async unlink(user: CurrentUser, modelId: string, datasetId: string) {
@@ -245,6 +272,7 @@ export class DatasetsService implements OnModuleInit {
       models: links.map((l) => ({ model_id: l.modelId, name: names.get(l.modelId) ?? l.modelId, purpose: l.purpose, action: null, done: false })),
       completedAt: null, completedBy: null, evidence: null,
     };
+    if ((d.deletionOrders ?? []).length >= 100) throw new BadRequestException('This dataset has 100 deletion orders on record; register its remaining records as a new dataset');
     d.deletionOrders = [...(d.deletionOrders ?? []), order];
     d.deletionStatus = 'ORDERED';
     d.updatedAt = new Date();
@@ -282,6 +310,8 @@ export class DatasetsService implements OnModuleInit {
     const o = orders.find((x) => x.id === orderId);
     if (!o) throw new NotFoundException('Deletion order not found');
     if (o.completedAt) throw new BadRequestException('The order is already complete');
+    // Re-read the links so a model linked after the order was raised cannot slip through.
+    await this.traceNewLinks(d);
     const open = o.models.filter((m) => !m.done);
     if (open.length) throw new BadRequestException(`Record the action for every model first: ${open.map((m) => m.name).join(', ')}`);
     o.evidence = reqText(body.evidence, 'evidence (deletion certificate, ticket or log reference)', 5, 2000);

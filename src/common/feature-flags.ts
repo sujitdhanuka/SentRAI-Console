@@ -58,6 +58,9 @@ export const EPIC_FLAGS = {
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
 
+/** The Phase 2 epics (E2.1 to E2.8). */
+export const PHASE2_FLAGS: readonly EpicFlag[] = ['auPack', 'usKit', 'modelValidation', 'fairLending', 'vendors', 'training', 'dataRegister', 'redTeamAuditRules'];
+
 export interface FeatureFlags {
   governanceV2: boolean;
   redTeamIntervals: boolean;

@@ -5,6 +5,7 @@
 import { checkNotice, isCreditDecisioning, topFactors, validateReasonCodeMap } from './decisions/decisions.model';
 import { normaliseFeature, scanFeatures } from './decisions/proxy-scan';
 import { auHighRiskArea } from './disclosures/au-reference';
+import { PackRegistry } from './packs/pack-loader';
 import { buildXlsx, readXlsxStrings } from './disclosures/xlsx';
 import { csvCell, toCsv } from './phase2-util';
 import { auditDue, lastRedTeam, redTeamState } from './redteam/redteam-audit.service';
@@ -92,6 +93,20 @@ describe('E2.4 proxy scan', () => {
   it('adds organisation terms', () => {
     expect(scanFeatures(['branch_region'], [{ term: 'branch region', basis: 'national origin' }])).toHaveLength(1);
   });
+
+  it('handles digits, qualifiers and the extra terms', () => {
+    const k = (f: string) => scanFeatures([f]).map((h) => `${h.term}:${h.kind}`);
+    expect(k('zip5')).toEqual(['zip:PROXY']);
+    expect(k('accountAge')).toEqual(['age:PROXY']);
+    expect(k('applicant_age')).toEqual(['age:DIRECT']);
+    expect(k('job_title')).toEqual([]);
+    expect(k('loanTitle')).toEqual([]);
+    expect(k('title')).toEqual(['title:PROXY']);
+    expect(k('sexOffender')).toEqual([]);
+    expect(k('applicant_sex')).toEqual(['sex:DIRECT']);
+    for (const f of ['PostCode', 'birth_date', 'year_of_birth', 'isMarried', 'female', 'fname', 'ethnicGroup', 'religiousAffiliation']) expect(k(f).length).toBeGreaterThan(0);
+    for (const f of ['email', 'message', 'usage', 'malware_score']) expect(k(f)).toEqual([]);
+  });
 });
 
 describe('E2.5 vendors', () => {
@@ -107,6 +122,8 @@ describe('E2.5 vendors', () => {
     expect(checkAnswers(all('YES'))).toBeNull();
     expect(checkAnswers({ ...all('YES'), audit_rights: 'MAYBE' })).toMatch(/audit_rights/);
     expect(checkAnswers({ ...all('YES'), extra: 'YES' })).toMatch(/Unknown/);
+    expect(checkAnswers({ ...all('YES'), audit_rights: 'NA' })).toMatch(/critical/);
+    expect(checkAnswers({ ...all('YES'), ip_indemnity: 'NA' })).toBeNull();
   });
   it('lists missing contract terms', () => {
     expect(contractGaps(null)).toHaveLength(6);
@@ -121,6 +138,13 @@ describe('E2.5 vendors', () => {
     expect(classifyLicence('Proprietary')).toBe('PROPRIETARY');
     expect(classifyLicence('')).toBe('UNKNOWN');
     expect(classifyLicence('something-else')).toBe('UNKNOWN');
+    expect(classifyLicence('MIT License')).toBe('PERMISSIVE');
+    expect(classifyLicence('Apache License 2.0')).toBe('PERMISSIVE');
+    expect(classifyLicence('BSL-1.0')).toBe('PERMISSIVE');
+    expect(classifyLicence('BSL-1.1')).toBe('RESTRICTED');
+    expect(classifyLicence('MIT OR GPL-3.0')).toBe('PERMISSIVE');
+    expect(classifyLicence('MIT AND GPL-3.0')).toBe('COPYLEFT');
+    expect(classifyLicence('GPL-2.0 WITH Classpath-exception-2.0')).toBe('COPYLEFT');
   });
   it('infers BOM components from the inventory record', () => {
     const c = inferComponents({ developedBy: 'Acme AI', dependencies: ['xgboost==2.0.3', { name: 'gpt-4o', kind: 'model', provider: 'OpenAI', licence: 'Proprietary' }], detectionSignals: ['llm_api_call', 'scoring_logic'] });
@@ -128,6 +152,9 @@ describe('E2.5 vendors', () => {
     expect(c[1].version).toBe('2.0.3');
     expect(c[2]).toMatchObject({ kind: 'MODEL', provider: 'OpenAI' });
     expect(inferComponents({ developedBy: 'internal', dependencies: [], detectionSignals: [] })).toEqual([]);
+    expect(inferComponents({ dependencies: ['@scope/pkg@1.2.0', '@scope/other', 'torch>=2.0', 'lodash@4.17.21'] }).map((x) => [x.component, x.version])).toEqual([
+      ['@scope/pkg', '1.2.0'], ['@scope/other', null], ['torch', '>=2.0'], ['lodash', '4.17.21'],
+    ]);
   });
 });
 
@@ -159,6 +186,18 @@ describe('E2.6 training', () => {
     expect(f.topics.ai_literacy).toEqual({ courses: 1, completed: 1, overdue: 1 });
     expect(f.topics.au_ethics_principles.completed).toBe(1);
   });
+  it('counts competence from evidenced courses and awareness from any policy acknowledgement', () => {
+    const typed = [
+      { id: 'k1', mandatory: true, active: true, targetRoles: [], topic: 'ai_literacy', kind: 'COURSE' },
+      { id: 'k2', mandatory: false, active: true, targetRoles: [], topic: 'privacy', kind: 'POLICY_ACK' },
+    ];
+    const records = [
+      { ...rec('k1', 'a', 5, null), evidenceRef: 'LMS-123' },
+      { ...rec('k1', 'b', 5, null), evidenceRef: null },
+      { ...rec('k2', 'b', 1, null), evidenceRef: 'self-acknowledged' },
+    ];
+    expect(trainingFacts(typed, people, records, now)).toMatchObject({ competence: 1, awareness: 1 });
+  });
 });
 
 describe('E2.8 red team and audit rules', () => {
@@ -181,8 +220,33 @@ describe('E2.8 red team and audit rules', () => {
     const m = { riskLevel: 'HIGH', lifecycleStage: 'DEPLOYED', nextAuditDue: null, deploymentDate: new Date('2025-01-01'), registeredAt: new Date('2024-01-01') } as any;
     expect(auditDue(m, null, 365)?.toISOString().slice(0, 10)).toBe('2026-01-01');
     expect(auditDue(m, { createdAt: new Date('2025-06-01'), nextAuditDue: null }, 365)?.toISOString().slice(0, 10)).toBe('2026-06-01');
-    expect(auditDue({ ...m, nextAuditDue: new Date('2027-01-01') }, null, 365)?.toISOString().slice(0, 10)).toBe('2027-01-01');
+    // A later explicit date cannot stretch the configured interval; an earlier one brings it forward.
+    expect(auditDue({ ...m, nextAuditDue: new Date('2027-01-01') }, null, 365)?.toISOString().slice(0, 10)).toBe('2026-01-01');
+    expect(auditDue({ ...m, nextAuditDue: new Date('2025-09-01') }, null, 365)?.toISOString().slice(0, 10)).toBe('2025-09-01');
+    expect(auditDue({ ...m, riskLevel: 'CRITICAL' }, { createdAt: new Date('2025-06-01'), nextAuditDue: new Date('2028-01-01') }, 365)?.toISOString().slice(0, 10)).toBe('2026-06-01');
     expect(auditDue({ ...m, lifecycleStage: 'DESIGN' }, null, 365)).toBeNull();
     expect(auditDue({ ...m, riskLevel: 'MEDIUM' }, null, 365)).toBeNull();
+  });
+});
+
+describe('Phase 2 pack content hashes', () => {
+  it('match the pre-Phase 2 hashes while Phase 2 is off, and change when it is on', () => {
+    const before = process.env.GOVERNANCE_V2;
+    delete process.env.GOVERNANCE_V2;
+    const r = new PackRegistry();
+    const hash = (id: string) => r.versions(id)[0].contentHash;
+    const pinned: Record<string, string> = {
+      'rbi-free-ai': 'db2ecafde7f81efa05f30066a99839743ff6370e558c4d16950962330cbbbc7f',
+      'iso-42001': '03b78e7c1a311753900c27da7c74defe213699527d8f8cc4466c016568eb26ec',
+      'nist-ai-rmf': 'd8ef94a362fa98f87f81cdc7c3e0135dc3994445908fd492b5b4b22f5d5d8270',
+    };
+    try {
+      for (const [id, h] of Object.entries(pinned)) expect([id, hash(id)]).toEqual([id, h]);
+      process.env.GOVERNANCE_V2 = 'true';
+      expect(hash('nist-ai-rmf')).not.toBe(pinned['nist-ai-rmf']);
+    } finally {
+      if (before === undefined) delete process.env.GOVERNANCE_V2;
+      else process.env.GOVERNANCE_V2 = before;
+    }
   });
 });

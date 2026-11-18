@@ -77,6 +77,8 @@ export function checkAnswers(answers: unknown): string | null {
   for (const item of VENDOR_CHECKLIST) {
     const v = String(a[item.id] ?? '').toUpperCase();
     if (!['YES', 'NO', 'PARTIAL', 'NA'].includes(v)) return `Answer every checklist item (missing or invalid: ${item.id})`;
+    // A critical item always applies; NA would let it drop out of the score.
+    if (v === 'NA' && item.critical) return `${item.id} is a critical item and cannot be marked NA`;
   }
   return null;
 }
@@ -86,20 +88,44 @@ export function contractGaps(terms: Record<string, unknown> | null | undefined):
   return CONTRACT_TERMS.filter((t) => !terms?.[t]);
 }
 
-const PERMISSIVE = [/^mit$/, /^apache/, /^bsd/, /^isc$/, /^unlicense$/, /^cc0/, /^cc-by(-\d|$)/, /^zlib$/, /^python-2/, /^psf/];
+const PERMISSIVE = [/^bsl-1\.0$/, /^boost/, /^mit$/, /^apache/, /^bsd/, /^isc$/, /^unlicense$/, /^cc0/, /^cc-by(-\d|$)/, /^zlib$/, /^python-2/, /^psf/];
 const COPYLEFT = [/^l?gpl/, /^agpl/, /^mpl/, /^epl/, /^cc-by-sa/, /^eupl/];
 const RESTRICTED = [/-nc\b/, /non-?commercial/, /^cc-by-nc/, /openrail/, /^llama/, /research[- ]only/, /^gemma/, /^bigscience/, /^sspl/, /^busl/, /^bsl-1\.1/];
 const PROPRIETARY = [/^proprietary$/, /^commercial$/, /^saas$/, /terms of (service|use)/, /^api terms$/, /^enterprise/];
 
 /** Classifies an SPDX id or free-text licence. Unknown and empty strings are UNKNOWN. */
 export function classifyLicence(licence: string | null | undefined): LicenceClass {
-  const l = String(licence ?? '').trim().toLowerCase();
+  const l = String(licence ?? '').trim().toLowerCase().replace(/^\(|\)$/g, '');
   if (!l || l === 'unknown' || l === 'noassertion') return 'UNKNOWN';
-  if (RESTRICTED.some((r) => r.test(l))) return 'RESTRICTED';
-  if (COPYLEFT.some((r) => r.test(l))) return 'COPYLEFT';
-  if (PERMISSIVE.some((r) => r.test(l))) return 'PERMISSIVE';
-  if (PROPRIETARY.some((r) => r.test(l))) return 'PROPRIETARY';
+  // SPDX expressions: OR lets the user pick the friendliest licence, AND / WITH bind them to the strictest.
+  const ORDER: LicenceClass[] = ['PERMISSIVE', 'PROPRIETARY', 'COPYLEFT', 'UNKNOWN', 'RESTRICTED'];
+  if (/\s+or\s+/.test(l)) {
+    const parts = l.split(/\s+or\s+/).map(classifyLicence);
+    return parts.reduce((a, b) => (ORDER.indexOf(b) < ORDER.indexOf(a) ? b : a));
+  }
+  if (/\s+and\s+/.test(l)) {
+    const parts = l.split(/\s+and\s+/).map(classifyLicence);
+    return parts.reduce((a, b) => (ORDER.indexOf(b) > ORDER.indexOf(a) ? b : a));
+  }
+  // "MIT License", "Apache License 2.0", "GPL-3.0 WITH Classpath-exception-2.0".
+  const id = l.split(/\s+with\s+/)[0].replace(/\blicen[cs]e\b/g, '').replace(/\s*(version|v)\s*/g, '-').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  for (const x of [l, id]) {
+    if (RESTRICTED.some((r) => r.test(x))) return 'RESTRICTED';
+    if (COPYLEFT.some((r) => r.test(x))) return 'COPYLEFT';
+    if (PERMISSIVE.some((r) => r.test(x))) return 'PERMISSIVE';
+    if (PROPRIETARY.some((r) => r.test(x))) return 'PROPRIETARY';
+  }
   return 'UNKNOWN';
+}
+
+/** "xgboost==2.0.3", "torch>=2.0", "@scope/pkg@1.2.0", "requests" → name and version (or constraint). */
+export function parseDependency(d: string): { name: string; version: string | null } {
+  const t = d.trim();
+  const py = /^([A-Za-z0-9_.\-\[\]]+)\s*(==|>=|<=|~=|!=|>|<)\s*(.+)$/.exec(t);
+  if (py) return { name: py[1], version: py[2] === '==' ? py[3] : `${py[2]}${py[3]}` };
+  const at = t.lastIndexOf('@');
+  if (at > 0) return { name: t.slice(0, at), version: t.slice(at + 1) || null };
+  return { name: t, version: null };
 }
 
 export interface InferredComponent {
@@ -132,7 +158,7 @@ export function inferComponents(model: { developedBy?: string | null; dependenci
   if (dev && !/^(internal|in-house|inhouse)$/i.test(dev)) add({ component: dev.slice(0, 200), kind: 'MODEL', provider: dev.slice(0, 100), version: null, licence: null });
   for (const d of model.dependencies ?? []) {
     if (typeof d === 'string' && d.trim()) {
-      const [name, version] = d.trim().split(/@(?=[^@]+$)|==/);
+      const { name, version } = parseDependency(d);
       add({ component: name.slice(0, 200), kind: 'LIBRARY', provider: null, version: version?.slice(0, 100) ?? null, licence: null });
     } else if (d && typeof d === 'object' && typeof d.name === 'string' && d.name.trim()) {
       const kind = String(d.kind ?? d.type ?? '').toUpperCase();

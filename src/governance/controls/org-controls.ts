@@ -34,7 +34,7 @@ function peopleControl(id: string, title: string, type: string, item: string): C
       const r = i.ctx.org?.records?.[type] ?? { approved: 0 };
       // E2.6: training records (competence) and policy acknowledgements (awareness) count as retained evidence.
       const t = i.ctx.org?.training;
-      const fromTraining = !t ? 0 : item === 'awareness' ? Number(t.topics?.policy_ack?.completed ?? 0) : Number(t.completions ?? 0);
+      const fromTraining = !t ? 0 : item === 'awareness' ? Number(t.awareness ?? t.topics?.policy_ack?.completed ?? 0) : Number(t.competence ?? t.completions ?? 0);
       const n = r.approved + fromTraining;
       return out(n > 0, { approved: n }, n > 0 ? 'pass' : 'missing');
     },

@@ -229,6 +229,8 @@
       "gap": {
         "unassessed": "Assess every vendor behind this model.",
         "unsatisfactory": "A vendor assessment is unsatisfactory.",
+        "stale": "A vendor's due-diligence review date has passed; reassess it.",
+        "exited": "A component still comes from a vendor marked as exited.",
         "contract": "Contract terms are missing monitoring rights, data use limits or a no-training clause.",
         "exit": "A HIGH-criticality vendor has no exit or failover plan.",
         "licence": "A component has a restricted or unknown licence.",

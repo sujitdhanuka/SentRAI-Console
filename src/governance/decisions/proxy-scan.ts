@@ -62,30 +62,64 @@ export const BUILT_IN_TERMS: ProxyTerm[] = [
   { term: 'photo', basis: 'race / color / sex / age', kind: 'PROXY' },
   { term: 'pregnan', basis: 'sex', kind: 'PROXY' },
   { term: 'dispute', basis: 'exercise of consumer credit rights', kind: 'PROXY' },
+  { term: 'ethnic', basis: 'race', kind: 'DIRECT' },
+  { term: 'religious', basis: 'religion', kind: 'DIRECT' },
+  { term: 'female', basis: 'sex', kind: 'DIRECT' },
+  { term: 'male', basis: 'sex', kind: 'DIRECT' },
+  { term: 'married', basis: 'marital status', kind: 'DIRECT' },
+  { term: 'post code', basis: 'race / national origin', kind: 'PROXY' },
+  { term: 'birth date', basis: 'age', kind: 'PROXY' },
+  { term: 'year of birth', basis: 'age', kind: 'PROXY' },
+  { term: 'fname', basis: 'sex / race / national origin', kind: 'PROXY' },
 ];
+
+/**
+ * Words that, right before a term, mean it is about something else:
+ * "account age" is the age of an account (still worth a look, so it drops to PROXY),
+ * "job title" and "loan title" are not salutations, "sex offender" is not the applicant's sex.
+ */
+const QUALIFIERS: Record<string, { before?: Record<string, 'PROXY' | 'SKIP'>; after?: Record<string, 'PROXY' | 'SKIP'> }> = {
+  age: { before: { account: 'PROXY', credit: 'PROXY', loan: 'PROXY', mortgage: 'PROXY', file: 'PROXY', vehicle: 'PROXY', property: 'PROXY' } },
+  title: { before: { job: 'SKIP', loan: 'SKIP', property: 'SKIP', vehicle: 'SKIP', deed: 'SKIP', land: 'SKIP' } },
+  sex: { after: { offender: 'SKIP', offence: 'SKIP', offense: 'SKIP' } },
+};
 
 /** "applicantZipCode" / "applicant-zip_code" → "applicant zip code". */
 export function normaliseFeature(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    // "zip5", "postcode2" and "3digitzip" split at letter/digit boundaries.
+    .replace(/([a-zA-Z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([a-zA-Z])/g, '$1 $2')
     .replace(/[_\-.\/]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
 
-/** Whole-word match of a term in a normalised name; stems of six letters or more ("pregnan") match as prefixes. */
-function matches(normalised: string, term: string): boolean {
+/**
+ * Whole-word match of a term in a normalised name; stems of six letters or more ("pregnan") match as prefixes.
+ * Returns the kind to record ('SKIP' when a qualifier rules the hit out), or null for no match.
+ */
+function matchKind(normalised: string, term: string, kind: 'DIRECT' | 'PROXY'): 'DIRECT' | 'PROXY' | 'SKIP' | null {
   const t = normaliseFeature(term);
   const words = normalised.split(' ');
   const tw = t.split(' ');
+  const q = QUALIFIERS[t];
   const wordMatch = (w: string, x: string) => w === x || w === `${x}s` || (x.length >= 6 && w.startsWith(x));
+  let found: 'DIRECT' | 'PROXY' | 'SKIP' | null = null;
   for (let i = 0; i + tw.length <= words.length; i++) {
-    if (tw.every((w, j) => wordMatch(words[i + j], w))) return true;
+    if (!tw.every((w, j) => wordMatch(words[i + j], w))) continue;
+    const qual = q?.before?.[words[i - 1]] ?? q?.after?.[words[i + tw.length]];
+    const k = qual === 'SKIP' ? 'SKIP' : qual === 'PROXY' ? 'PROXY' : kind;
+    if (k !== 'SKIP') return k;
+    found = 'SKIP';
   }
+  if (found) return found;
   // Compact forms in one word: "zipcode", "dateofbirth", "firstname".
   const compact = t.replace(/ /g, '');
-  return words.some((w) => w === compact || w === `${compact}s` || w === `${compact}code`);
+  return words.some((w) => w === compact || w === `${compact}s` || w === `${compact}code`) ? kind : null;
 }
 
 export interface ProxyHit {
@@ -102,11 +136,12 @@ export function scanFeatures(features: string[], extra: Array<{ term: string; ba
   for (const f of [...new Set(features.filter((x) => typeof x === 'string' && x.trim()))]) {
     const n = normaliseFeature(f);
     for (const t of terms) {
-      if (!matches(n, t.term)) continue;
+      const k = matchKind(n, t.term, t.kind);
+      if (!k || k === 'SKIP') continue;
       const key = `${f}|${t.basis}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      hits.push({ feature: f, term: t.term, basis: t.basis, kind: t.kind });
+      hits.push({ feature: f, term: t.term, basis: t.basis, kind: k });
     }
   }
   return hits;

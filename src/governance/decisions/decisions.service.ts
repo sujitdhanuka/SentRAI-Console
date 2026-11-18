@@ -32,11 +32,15 @@ import { phase2Param } from '../packs/parameter-resolver';
 import { PacksService } from '../packs/packs.service';
 import { addMonths, DAY_MS, MAINTAINERS, oneOf, optText, orgFor, orgOfModel, orgParams, reqText, requireRole } from '../phase2-util';
 import {
+  ADVERSE_SIGNS,
+  AdverseSign,
   APPEAL_OUTCOMES,
   APPEAL_TYPES,
   AppealType,
   checkNotice,
   isCreditDecisioning,
+  isFavourableOutcome,
+  MAX_PRINCIPAL_REASONS,
   NOTICE_CHANNELS,
   REG_B_RETENTION_MONTHS,
   ReasonCodeMap,
@@ -130,24 +134,25 @@ export class DecisionsService implements OnModuleInit {
   async getReasonCodes(user: CurrentUser, modelId: string) {
     this.assert();
     const { model } = await modelForUser(this.models, this.projects, user, modelId);
-    return { model_id: modelId, credit_decisioning: isCreditDecisioning(model.functionalArea), map: model.reasonCodeMap ?? {} };
+    return { model_id: modelId, credit_decisioning: isCreditDecisioning(model.functionalArea), adverse_sign: model.reasonCodeSign, map: model.reasonCodeMap ?? {} };
   }
 
   async putReasonCodes(user: CurrentUser, modelId: string, body: Record<string, any>, req?: any) {
     this.assert();
     requireRole(user, MAINTAINERS, 'edit reason codes');
     const { model } = await modelForUser(this.models, this.projects, user, modelId);
-    const map = body.map ?? body;
+    const map = body.map;
     const problems = validateReasonCodeMap(map);
     if (problems.length) throw new BadRequestException(problems);
     const clean: ReasonCodeMap = {};
     for (const [f, rc] of Object.entries(map as Record<string, any>)) clean[f.trim()] = { code: rc.code, text: rc.text.trim() };
     model.reasonCodeMap = clean;
+    model.reasonCodeSign = oneOf(body.adverse_sign ?? model.reasonCodeSign, ADVERSE_SIGNS, 'adverse_sign (which contribution sign pushes towards the adverse outcome)');
     model.updatedAt = new Date();
     await this.models.save(model);
     await this.ledgerEvent(modelId, 'REASON_CODES_UPDATED', { features: Object.keys(clean).length }, user.email);
     if (req) req.auditSummary = { reason_codes_updated: { model_id: modelId, features: Object.keys(clean).length } };
-    return { model_id: modelId, map: clean };
+    return { model_id: modelId, adverse_sign: model.reasonCodeSign, map: clean };
   }
 
   /* --------------------------------------------------------------- notices */
@@ -160,9 +165,13 @@ export class DecisionsService implements OnModuleInit {
     };
   }
 
-  /** The newest explanation recorded for a decision. */
-  private async explanation(decisionRef: string) {
-    return this.explanations.findOne({ where: { decisionRef }, order: { createdAt: 'DESC' } });
+  /**
+   * The newest explanation recorded for a decision BY THIS MODEL. Explanations
+   * that name no model are never used: decision references are not unique across
+   * organisations, so an untied record could belong to anyone.
+   */
+  private async explanation(decisionRef: string, modelId: string) {
+    return this.explanations.findOne({ where: { decisionRef, modelId }, order: { createdAt: 'DESC' } });
   }
 
   /** POST /governance/decisions/:ref/notices: build a notice from the decision's explanation and the model's map. */
@@ -172,16 +181,21 @@ export class DecisionsService implements OnModuleInit {
     const ref = reqText(decisionRef, 'decision_ref', 1, 255);
     const { model, orgId } = await modelForUser(this.models, this.projects, user, reqText(body.model_id, 'model_id'));
     if (!orgId) throw new BadRequestException('The model is not in an organization');
-    const exp = await this.explanation(ref);
-    if (!exp) throw new NotFoundException('No explanation is recorded for this decision; record one with POST /audit/explainability/record first');
+    const exp = await this.explanation(ref, model.id);
+    if (!exp) throw new NotFoundException('No explanation is recorded for this decision by this model; record one with POST /audit/explainability/record and its model_id first');
+    if (isFavourableOutcome(exp.decisionOutcome)) throw new BadRequestException(`The decision's outcome is ${exp.decisionOutcome}; adverse-action notices are for adverse decisions`);
     const map = (model.reasonCodeMap ?? {}) as ReasonCodeMap;
     if (!Object.keys(map).length) throw new BadRequestException('Map this model’s features to reason codes first (PUT /governance/models/:id/reason-codes)');
-    const factors = topFactors(exp.topFeatures);
+    const sign = model.reasonCodeSign as AdverseSign | null;
+    if (!sign) throw new BadRequestException('Set which contribution sign is adverse for this model (adverse_sign on PUT /governance/models/:id/reason-codes)');
+    const factors = topFactors(exp.topFeatures, MAX_PRINCIPAL_REASONS, sign);
     const stated = Array.isArray(body.reason_codes) ? body.reason_codes.map(String) : null;
     const check = checkNotice(map, factors, stated);
     if (!check.reasonCodes.length) throw new BadRequestException({ message: 'None of the decision’s top factors has a reason code', mismatches: check.mismatches });
     const sentAt = body.sent_at ? new Date(body.sent_at) : new Date();
     if (Number.isNaN(sentAt.getTime())) throw new BadRequestException('sent_at must be a date');
+    // A notice is recorded when it is sent: no future dates, and no back-dating beyond 90 days (which would also shorten retention).
+    if (sentAt.getTime() > Date.now() + DAY_MS || sentAt.getTime() < Date.now() - 90 * DAY_MS) throw new BadRequestException('sent_at must be within the last 90 days');
     const p = await this.params(orgId);
     const now = new Date();
     const n = await this.notices.save({
@@ -214,14 +228,17 @@ export class DecisionsService implements OnModuleInit {
     const grievances = await this.grievances.find({ where: { tenantId: orgId, decisionRef }, order: { createdAt: 'DESC' } });
     // The explanation itself is shown only when the decision is already tied to
     // this organisation (a notice, appeal or grievance), or to a model the caller can see.
-    let tied = notices.length + appeals.length + grievances.length > 0;
-    if (!tied && q.model_id) tied = (await modelForUser(this.models, this.projects, user, q.model_id)).orgId === orgId;
-    const exp = tied ? await this.explanation(decisionRef) : null;
-    if (!tied) throw new NotFoundException('No record of this decision in your organization');
+    let modelId = notices[0]?.modelId ?? appeals[0]?.modelId ?? grievances[0]?.modelId ?? null;
+    if (q.model_id && (await modelForUser(this.models, this.projects, user, q.model_id)).orgId === orgId) modelId = q.model_id;
+    if (!modelId) throw new NotFoundException('No record of this decision in your organization');
+    const exp = await this.explanation(decisionRef, modelId);
+    if (!exp && !notices.length && !appeals.length && !grievances.length) throw new NotFoundException('No record of this decision in your organization');
+    const sign = (await this.models.findOne({ where: { id: modelId }, select: ['id', 'reasonCodeSign'] }))?.reasonCodeSign as AdverseSign | null;
     return {
       decision_ref: decisionRef,
+      model_id: modelId,
       explanation: exp
-        ? { record_id: exp.id, outcome: exp.decisionOutcome, confidence: exp.confidenceScore, top_factors: topFactors(exp.topFeatures), summary: exp.humanReadableSummary, contestable: exp.isContestable, created_at: exp.createdAt }
+        ? { record_id: exp.id, outcome: exp.decisionOutcome, confidence: exp.confidenceScore, top_factors: topFactors(exp.topFeatures, MAX_PRINCIPAL_REASONS, sign), summary: exp.humanReadableSummary, contestable: exp.isContestable, created_at: exp.createdAt }
         : null,
       notices: notices.map((n) => this.noticeView(n)),
       appeals: appeals.map((a) => this.appealView(a)),
@@ -252,7 +269,7 @@ export class DecisionsService implements OnModuleInit {
     const g = await this.grievanceForUser(user, grievanceId);
     const ref = reqText(body.decision_ref, 'decision_ref', 1, 255);
     if (g.decisionRef && g.decisionRef !== ref) throw new BadRequestException('This grievance is already linked to another decision');
-    if (!(await this.explanation(ref))) throw new NotFoundException('No explanation is recorded for this decision');
+    if (!(await this.explanation(ref, g.modelId))) throw new NotFoundException('No explanation is recorded for this decision by this model');
     g.decisionRef = ref;
     g.updatedAt = new Date();
     await this.grievances.save(g);
@@ -391,7 +408,7 @@ export class DecisionsService implements OnModuleInit {
     const type = oneOf(body.type, APPEAL_TYPES, 'type', 'RECONSIDERATION');
     const ref = reqText(body.decision_ref, 'decision_ref', 1, 255);
     const description = reqText(body.description, 'description', 10);
-    const exp = await this.explanation(ref);
+    const exp = await this.explanation(ref, modelId);
     // Ties the decision to this model: a notice was issued, or a grievance was filed, about it.
     const known = exp && ((await this.notices.count({ where: { modelId, decisionRef: ref } })) > 0 || (await this.grievances.count({ where: { modelId, decisionRef: ref } })) > 0);
     if (!known) throw new NotFoundException('Decision not found for this system; use the reference on your notice');
@@ -404,6 +421,9 @@ export class DecisionsService implements OnModuleInit {
       if (g.status !== 'REJECTED') throw new BadRequestException('An appeal follows a rejected grievance');
       if (await this.grievances.findOne({ where: { appealOf: g.id } })) throw new BadRequestException('This rejection has already been appealed');
     }
+    // A request that is already open gets the same answer and creates nothing, so repeats cannot fill the grievance queue.
+    const open = await this.appeals.findOne({ where: { decisionRef: ref, modelId, type, status: In(OPEN_APPEAL) } });
+    if (open) return { type, status: 'RECEIVED', respond_by: open.dueAt };
     const p = await this.params(orgId);
     const now = new Date();
     const g = await this.grievances.save(this.grievances.create({
@@ -414,20 +434,75 @@ export class DecisionsService implements OnModuleInit {
       acknowledgedAt: null, resolvedAt: null, decisionRef: ref, appealOf: type === 'APPEAL' ? String(body.grievance_id) : null,
     }));
     const a = await this.openAppeal(orgId, modelId, g.id, ref, type, description, masked ?? 'consumer', 'public');
-    return { request_id: a.id, grievance_id: g.id, type, status: 'RECEIVED', respond_by: a.dueAt };
+    return { type, status: 'RECEIVED', respond_by: a.dueAt };
   }
 
   /* -------------------------------------------------------------- retention */
 
-  /** Daily: delete notices and decided appeal records past their retention date. */
+  /**
+   * Daily: delete notices and decided appeal records past their retention date.
+   * Retention is worked out again at purge time from the organisation's current
+   * parameters (strictest of the stored date and the current period), and nothing
+   * is purged while the decision still has an open request or an unresolved grievance.
+   * Linked grievances stay in the grievance register; their complainant details are
+   * removed once the decision's records are gone.
+   */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
-  async purgeExpired(now = new Date()): Promise<{ notices: number; appeals: number }> {
-    if (!this.flags.isEnabled('usKit')) return { notices: 0, appeals: 0 };
-    const n = await this.notices.find({ where: { retentionUntil: LessThan(now) } });
-    const a = await this.appeals.find({ where: { status: Not('OPEN'), retentionUntil: LessThan(now) } });
-    if (n.length) await this.notices.remove(n);
-    if (a.length) await this.appeals.remove(a);
-    if (n.length + a.length) this.logger.log(`Decision records past retention purged: ${n.length} notice(s), ${a.length} appeal(s)`);
-    return { notices: n.length, appeals: a.length };
+  async purgeExpired(now = new Date()): Promise<{ notices: number; appeals: number; anonymised: number }> {
+    if (!this.flags.isEnabled('usKit')) return { notices: 0, appeals: 0, anonymised: 0 };
+    const months = new Map<string, number>();
+    const monthsFor = async (orgId: string) => {
+      if (!months.has(orgId)) {
+        try {
+          months.set(orgId, (await this.params(orgId)).retentionMonths);
+        } catch {
+          months.set(orgId, Number.POSITIVE_INFINITY); // unreadable settings: keep everything
+        }
+      }
+      return months.get(orgId)!;
+    };
+    const busy = new Map<string, boolean>();
+    const inUse = async (modelId: string, decisionRef: string) => {
+      const k = `${modelId}|${decisionRef}`;
+      if (!busy.has(k)) {
+        const openAppeals = await this.appeals.count({ where: { modelId, decisionRef, status: In(OPEN_APPEAL) } });
+        const openGrievances = await this.grievances.count({ where: { modelId, decisionRef, status: Not(In(['RESOLVED', 'REJECTED', 'CLOSED'])) } });
+        busy.set(k, openAppeals + openGrievances > 0);
+      }
+      return busy.get(k)!;
+    };
+    const expired = async (orgId: string, stored: Date | null, from: Date | null) => {
+      const m = await monthsFor(orgId);
+      if (!Number.isFinite(m)) return false;
+      const recomputed = from ? addMonths(from, m) : null;
+      const until = [stored, recomputed].filter((d): d is Date => !!d).sort((x, y) => y.getTime() - x.getTime())[0];
+      return !!until && until.getTime() < now.getTime();
+    };
+    const notices: AdverseActionNoticeEntity[] = [];
+    for (const n of await this.notices.find({ where: { retentionUntil: LessThan(now) } })) {
+      if ((await expired(n.orgId, n.retentionUntil, n.sentAt)) && !(await inUse(n.modelId, n.decisionRef))) notices.push(n);
+    }
+    const appeals: DecisionAppealEntity[] = [];
+    for (const a of await this.appeals.find({ where: { status: Not('OPEN'), retentionUntil: LessThan(now) } })) {
+      if ((await expired(a.orgId, a.retentionUntil, a.decidedAt)) && !(await inUse(a.modelId, a.decisionRef))) appeals.push(a);
+    }
+    if (notices.length) await this.notices.remove(notices);
+    if (appeals.length) await this.appeals.remove(appeals);
+    let anonymised = 0;
+    const done = new Set([...notices, ...appeals].map((r) => `${r.modelId}|${r.decisionRef}`));
+    for (const k of done) {
+      const [modelId, decisionRef] = k.split('|');
+      if ((await this.notices.count({ where: { modelId, decisionRef } })) + (await this.appeals.count({ where: { modelId, decisionRef } }))) continue;
+      for (const g of await this.grievances.find({ where: { modelId, decisionRef } })) {
+        if (!g.complainant) continue;
+        g.complainant = null;
+        g.updatedAt = now;
+        await this.grievances.save(g);
+        anonymised++;
+      }
+    }
+    if (notices.length + appeals.length) this.logger.log(`Decision records past retention purged: ${notices.length} notice(s), ${appeals.length} appeal(s); ${anonymised} grievance(s) anonymised`);
+    return { notices: notices.length, appeals: appeals.length, anonymised };
   }
+
 }

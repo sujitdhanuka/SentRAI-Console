@@ -173,11 +173,12 @@ export class CiEvaluationService {
 
       // Risk escalation: only the blocking tiers count, matching the default
       // policy. Re-triaging the model at the new tier clears this.
-      if (policy.gates.risk_escalation?.enforce && matched) {
+      if (matched) {
         const registeredRank = RISK_RANK[String(matched.riskLevel).toUpperCase()];
-        if (RISK_RANK[severity] >= RISK_RANK.HIGH && registeredRank !== undefined && RISK_RANK[severity] > registeredRank) {
-          escalations?.push({ modelId: matched.id, from: String(matched.riskLevel), to: severity, source: candidate.filePath });
-          gaps.push({
+        const escalated = RISK_RANK[severity] >= RISK_RANK.HIGH && registeredRank !== undefined && RISK_RANK[severity] > registeredRank;
+        // E2.8 records the escalation whether or not this gate blocks on it; the gate result itself is unchanged.
+        if (escalated) escalations?.push({ modelId: matched.id, from: String(matched.riskLevel), to: severity, source: candidate.filePath });
+        if (escalated && policy.gates.risk_escalation?.enforce) gaps.push({
             model_name: candidate.suggestedName,
             severity,
             file_location: candidate.filePath,
@@ -191,7 +192,6 @@ export class CiEvaluationService {
               category: s.category,
             })),
           });
-        }
       }
 
       // Static tool authorization (Pillar 2 — Control): an agent that invokes a
@@ -344,7 +344,8 @@ export class CiEvaluationService {
     const escalations: Array<{ modelId: string; from: string; to: string; source: string }> = [];
     const blockingGaps = this.evaluate(candidates, registered, policy, escalations);
     // E2.8: a risk escalation means red teaming is due (no-op unless the governance rule is on).
-    for (const e of escalations) {
+    // A pull-request scan is of code that has not merged, so it does not arm the rule.
+    for (const e of dto.pr_number ? [] : escalations) {
       try {
         await governanceHooks.onRiskEscalation?.(e.modelId, { from: e.from, to: e.to, source: e.source });
       } catch {

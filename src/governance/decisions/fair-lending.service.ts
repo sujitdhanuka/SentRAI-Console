@@ -73,11 +73,16 @@ export class FairLendingService implements OnModuleInit {
     for (const n of await this.notices.find({ where: { modelId: m.id } })) for (const f of (n.topFactors ?? []) as Array<{ feature: string }>) out.add(f.feature);
     const prev = latestOf(m, 'proxy_scan');
     (prev?.data?.declared_features ?? []).forEach((f: string) => out.add(f));
-    return [...out];
+    return [...out].slice(0, 5000);
   }
 
   private async save(m: AIModelEntity, artifact: EvidenceArtifact, actor: string) {
-    m.evidenceArtifacts = [...(m.evidenceArtifacts ?? []), artifact];
+    // Each scan re-issues the whole result, so only the latest few of a type are kept on the model (the ledger keeps every ref).
+    const keep = artifact.type === 'proxy_scan' ? 3 : 10;
+    const all = [...(m.evidenceArtifacts ?? []), artifact];
+    const sameType = all.filter((a) => a.type === artifact.type);
+    const drop = new Set(sameType.slice(0, Math.max(0, sameType.length - keep)));
+    m.evidenceArtifacts = all.filter((a) => !drop.has(a));
     m.updatedAt = new Date();
     await this.models.save(m);
     await this.ledger.save(this.ledger.create({ id: uuidv4(), modelId: m.id, eventType: 'EVIDENCE_ATTACHED', eventData: { type: artifact.type, ref: artifact.ref }, actor, occurredAt: new Date() }));
@@ -93,7 +98,7 @@ export class FairLendingService implements OnModuleInit {
     const prev = latestOf(model, 'proxy_scan');
     const justifications: Record<string, any> = { ...(prev?.data?.justifications ?? {}) };
     const hits = scanFeatures(features, extra).map((h) => ({ ...h, justified: Boolean(justifications[h.feature]), justification: justifications[h.feature]?.text ?? null }));
-    const declared = [...new Set([...(prev?.data?.declared_features ?? []), ...(Array.isArray(body.features) ? body.features : [])])];
+    const declared = [...new Set([...(prev?.data?.declared_features ?? []), ...(Array.isArray(body.features) ? body.features : [])].map((f: string) => f.trim().slice(0, 200)).filter(Boolean))].slice(-2000);
     const artifact: EvidenceArtifact = {
       type: 'proxy_scan', ref: `sentrai:proxy-scan:${uuidv4()}`, added_at: new Date().toISOString(),
       description: hits.length ? `${hits.length} prohibited-basis or proxy match(es) over ${features.length} input(s)` : `No prohibited-basis or proxy matches over ${features.length} input(s)`,

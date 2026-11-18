@@ -18,12 +18,15 @@ export interface CourseLike {
   active: boolean;
   targetRoles: string[] | null;
   topic: string | null;
+  kind?: string;
 }
 export interface RecordLike {
   courseId: string;
   userId: string;
   completedAt: Date;
   expiresAt: Date | null;
+  evidenceDocId?: string | null;
+  evidenceRef?: string | null;
 }
 export interface PersonLike {
   id: string;
@@ -81,6 +84,8 @@ export function trainingFacts(courses: CourseLike[], people: PersonLike[], recor
   const rows = matrix(courses, people, records, now);
   const latest = latestRecords(records);
   const activeIds = new Set(people.filter((p) => p.isActive).map((p) => p.id));
+  const kindOf = new Map(courses.map((c) => [c.id, c.kind ?? 'COURSE']));
+  const hasEvidence = (r: RecordLike) => !!r.evidenceDocId || (!!r.evidenceRef && r.evidenceRef !== 'self-acknowledged');
   const topics: Record<string, { courses: number; completed: number; overdue: number }> = {};
   for (const c of courses.filter((x) => x.active && x.topic)) {
     const t = (topics[c.topic!] ??= { courses: 0, completed: 0, overdue: 0 });
@@ -97,6 +102,10 @@ export function trainingFacts(courses: CourseLike[], people: PersonLike[], recor
     compliant: rows.filter((r) => r.compliant).length,
     overdue: rows.filter((r) => !r.compliant).length,
     completions: [...latest.values()].filter((r) => activeIds.has(r.userId) && statusOf(r, now) !== 'EXPIRED').length,
+    // ISO 7.2 competence: current course completions backed by evidence (a certificate, LMS export or document).
+    competence: [...latest.values()].filter((r) => activeIds.has(r.userId) && statusOf(r, now) !== 'EXPIRED' && kindOf.get(r.courseId) === 'COURSE' && hasEvidence(r)).length,
+    // ISO 7.3 awareness: current policy acknowledgements, whatever their topic.
+    awareness: [...latest.values()].filter((r) => activeIds.has(r.userId) && statusOf(r, now) !== 'EXPIRED' && kindOf.get(r.courseId) === 'POLICY_ACK').length,
     topics,
   };
 }
