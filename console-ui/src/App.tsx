@@ -8,6 +8,7 @@ import { CiLedger } from './pages/CiLedger';
 import { ComplianceRollup } from './pages/ComplianceRollup';
 import { Docs } from './pages/Docs';
 import { Grievances } from './pages/Grievances';
+import { Governance } from './pages/Governance';
 import { Incidents } from './pages/Incidents';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { Lineage } from './pages/Lineage';
@@ -40,6 +41,7 @@ const PAGES: Record<Route, () => JSX.Element> = {
   users: Users,
   orgs: Organizations,
   docs: Docs,
+  governance: Governance,
 };
 
 export default function App() {

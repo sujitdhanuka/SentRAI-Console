@@ -8,11 +8,11 @@
 import golden from '../../../test/fixtures/compliance-golden.json';
 import { COMPLIANCE_FIXTURES } from '../../../test/fixtures/compliance-fixtures';
 import { ModelType, RiskLevel } from '../../common/enums';
-import { FeatureFlags } from '../../common/feature-flags';
+import { FeatureFlags, flagSet } from '../../common/feature-flags';
 import { validateEuAiAct, validateIso42001, validateNistRmf } from '../../compliance/frameworks.validator';
 import { validateSutrasCompliance } from '../../compliance/sutras.validator';
 
-const combos: Array<Omit<FeatureFlags, 'packEngine'>> = [
+const combos: Array<Partial<FeatureFlags>> = [
   { governanceV2: true, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false },
   { governanceV2: true, redTeamIntervals: true, bcpDrills: false, nistPrivacy: false },
   { governanceV2: true, redTeamIntervals: false, bcpDrills: true, nistPrivacy: true },
@@ -36,8 +36,8 @@ const variants = COMPLIANCE_FIXTURES.flatMap((f) => [
 describe('E1.1 pack engine reproduces the validators exactly', () => {
   for (const flags of combos) {
     const label = Object.entries(flags).filter(([, v]) => v).map(([k]) => k).join('+');
-    const legacy: FeatureFlags = { ...flags, packEngine: false };
-    const packed: FeatureFlags = { ...flags, packEngine: true };
+    const legacy: FeatureFlags = flagSet(false, { ...flags, packEngine: false });
+    const packed: FeatureFlags = flagSet(false, { ...flags, packEngine: true });
     it.each(variants.map((v) => [v.id, v] as const))(`[${label}] %s`, (_id, v) => {
       for (const fn of [validateNistRmf, validateEuAiAct, validateIso42001]) {
         expect(fn(v.entry, { ...v.ctx, flags: packed })).toEqual(fn(v.entry, { ...v.ctx, flags: legacy }));
@@ -51,7 +51,7 @@ describe('E1.1 pack engine reproduces the validators exactly', () => {
   it('matches the E0.1 golden baseline pass/fail apart from the documented Phase 0 code corrections', () => {
     // Golden is the pre-Phase-0 flags-off output; Phase 0 relabelled codes but kept every verdict,
     // except AIMS-8.2 (now AIMS-8.4, NOT ASSESSED). Compare verdict sequences per framework.
-    const flags: FeatureFlags = { governanceV2: true, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false, packEngine: true };
+    const flags: FeatureFlags = flagSet(false, { governanceV2: true, packEngine: true });
     for (const fx of COMPLIANCE_FIXTURES) {
       const g = (golden as any[]).find((x) => x.id === fx.id);
       const ctx = { ...fx.ctx, flags };

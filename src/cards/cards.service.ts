@@ -1,3 +1,4 @@
+import { governanceHooks } from '../governance/hooks';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -31,6 +32,8 @@ export class CardsService {
     const m = await this.model(modelId);
     const grievances = await this.grievances.publicSummaryForModel(modelId);
     const regimes = operationalRegimes();
+    // Governance E1.3/E1.5: residual risks and known limitations (NIST MANAGE 1.4), only while those flags are on.
+    const governance = await governanceHooks.cardGovernance?.(modelId);
     return {
       model_id: m.id,
       name: m.name,
@@ -51,6 +54,7 @@ export class CardsService {
         file_url: `/grievance/file/${m.id}`,
         grievances,
       },
+      ...(governance ?? {}),
       generated_at: new Date().toISOString(),
     };
   }
@@ -189,6 +193,12 @@ export class CardsService {
   <p class="sub">${esc(c.functional_area)} · <span class="tier">${esc(c.risk_tier)} risk</span></p>
 
   <div class="card"><h2>What this system does</h2><p>${esc(c.purpose)}</p></div>
+
+  ${(c as any).known_limitations?.length || (c as any).residual_risks?.length ? `<div class="card"><h2>Limitations and residual risks</h2>
+    ${(c as any).known_limitations?.length ? `<p><strong>Known limitations</strong></p><ul>${(c as any).known_limitations.map((l: string) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+    ${(c as any).out_of_scope_uses?.length ? `<p><strong>Not intended for</strong></p><ul>${(c as any).out_of_scope_uses.map((l: string) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+    ${(c as any).residual_risks?.length ? `<table><tr><th>Risk</th><th>Residual</th><th>Status</th></tr>${(c as any).residual_risks.map((r: any) => `<tr><td>${esc(r.title)}</td><td>${esc(r.residual_band)}</td><td>${esc(r.status)}</td></tr>`).join('')}</table>` : ''}
+  </div>` : ''}
 
   <div class="card"><h2>How it is governed</h2>
     <div class="grid">

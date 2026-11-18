@@ -1,8 +1,9 @@
-import { FeatureFlagsService, getFeatureFlags } from './feature-flags';
+import { FeatureFlagsService, flagSet, getFeatureFlags } from './feature-flags';
 
 describe('feature flags', () => {
   it('everything is off with no environment variables', () => {
-    expect(getFeatureFlags({})).toEqual({ governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false, packEngine: false });
+    expect(getFeatureFlags({})).toEqual(flagSet(false));
+    expect(Object.values(getFeatureFlags({})).every((v) => v === false)).toBe(true);
   });
 
   it('epic flags cannot turn on without the master switch', () => {
@@ -12,9 +13,7 @@ describe('feature flags', () => {
   });
 
   it('the master switch enables every epic, and each can be turned off', () => {
-    expect(getFeatureFlags({ GOVERNANCE_V2: 'true' })).toEqual({
-      governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true, packEngine: true,
-    });
+    expect(getFeatureFlags({ GOVERNANCE_V2: 'true' })).toEqual(flagSet(true));
     const f = getFeatureFlags({ GOVERNANCE_V2: 'on', GOV_E0_4_BCP_DRILLS: 'false' });
     expect(f.bcpDrills).toBe(false);
     expect(f.redTeamIntervals).toBe(true);

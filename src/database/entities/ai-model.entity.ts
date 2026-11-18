@@ -164,6 +164,14 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   mergeHistory!: Array<{ source_ref: string; merged_at: string; matched_on: string }> | null;
 
+  /** Structured context profile (intended users, limitations, oversight pattern, ...) — governance E1.5. */
+  @Column('simple-json', { nullable: true })
+  contextProfile!: Record<string, any> | null;
+
+  /** Named accountable owner (a user) in addition to ownerTeam — governance E1.9. */
+  @Column('varchar', { length: 36, nullable: true })
+  ownerUserId!: string | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

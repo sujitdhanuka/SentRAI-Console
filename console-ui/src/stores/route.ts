@@ -22,6 +22,7 @@ export const ROUTES = [
   'users',
   'orgs',
   'docs',
+  'governance',
 ] as const;
 
 export type Route = (typeof ROUTES)[number];

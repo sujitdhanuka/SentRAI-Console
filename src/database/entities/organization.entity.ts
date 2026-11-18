@@ -20,6 +20,18 @@ export class OrganizationEntity {
   @Column('datetime', { nullable: true })
   limitNotifiedAt!: Date | null;
 
+  /** Accountable official for AI (Chief AI Officer in the US) — governance E1.9. */
+  @Column('varchar', { length: 36, nullable: true })
+  accountableOfficialUserId!: string | null;
+
+  /** AI governance board members: [{ user_id?, name, title }] — governance E1.9. */
+  @Column('simple-json', { nullable: true })
+  governanceBoard!: Array<{ user_id?: string | null; name: string; title?: string | null }> | null;
+
+  /** Append-only history of accountability changes (who, when, from, to, reason). */
+  @Column('simple-json', { nullable: true })
+  accountabilityHistory!: Array<Record<string, any>> | null;
+
   @Column('datetime')
   createdAt!: Date;
 

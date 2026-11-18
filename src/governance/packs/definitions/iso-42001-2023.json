@@ -13,41 +13,87 @@
   "tierClassifier": "iso",
   "source": "ISO/IEC 42001:2023 clauses 4–10 and Annex A",
   "changelog": [
-    "2023.1.0: migrated from frameworks.validator.ts with the Phase 0 corrected codes; results unchanged."
+    "2023.1.0: migrated from frameworks.validator.ts with the Phase 0 corrected codes; results unchanged.",
+    "2023.1.0 (Phase 1): AIMS-8.4 gap text distinguishes no workflow from no signed assessment; register-backed 6.1.3 and context-profile A.6.2.2 / A.8.2 clauses behind their flags (advisory).",
+    "2023.1.0 (Phase 1): organisation-level clauses 4.1–4.3, 5.2, 6.2, 7.2, 7.3, 7.5, 9.2, 9.3 and 10.2 read the AIMS workspace, document control and the corrective-action register (ORG scope, behind their flags).",
+    "2023.1.0 (Phase 1 review): AIMS-9.2 reports auditors who are not independent with its own evidence text instead of the passing text."
   ],
   "parameters": {},
   "clauses": [
     {
-      "code": "AIMS-6.1.2", "clause": "6.1.2", "name": "AI System Risk Assessment",
-      "control": "CTL-RISK-01", "opts": { "requirePolicy": false }, "mandatory": true,
-      "evidence": { "pass": "System evaluated risk tier: {riskLevel}", "fail": "Risk level unclassified" },
+      "code": "AIMS-6.1.2",
+      "clause": "6.1.2",
+      "name": "AI System Risk Assessment",
+      "control": "CTL-RISK-01",
+      "opts": {
+        "requirePolicy": false
+      },
+      "mandatory": true,
+      "evidence": {
+        "pass": "System evaluated risk tier: {riskLevel}",
+        "fail": "Risk level unclassified"
+      },
       "gap": "ISO 42001 requires systematic risk classification for each AI system."
     },
     {
-      "code": "AIMS-8.4", "clause": "8.4", "name": "AI System Impact Assessment (6.1.4 / 8.4)",
-      "control": "CTL-IMPACT-01", "mandatory": false, "alsoEvidences": ["6.1.4", "A.5.2", "A.5.3", "A.5.4", "A.5.5"],
+      "code": "AIMS-8.4",
+      "clause": "8.4",
+      "name": "AI System Impact Assessment (6.1.4 / 8.4)",
+      "control": "CTL-IMPACT-01",
+      "mandatory": false,
+      "alsoEvidences": [
+        "6.1.4",
+        "A.5.2",
+        "A.5.3",
+        "A.5.4",
+        "A.5.5"
+      ],
       "evidence": {
         "not_assessed": "NOT ASSESSED: SentRAI does not yet record AI system impact assessments; a use-case description is not one",
         "missing": "No AI system impact assessment recorded for this model",
         "not_final": "Impact assessment v{version} is {status}, not FINAL",
         "pass": "Impact assessment v{version} signed {signedAt}"
       },
-      "gap": "Clauses 6.1.4 and 8.4 require documented AI system impact assessments; keep yours outside SentRAI until the impact-assessment workflow ships."
+      "gap": {
+        "not_assessed": "Clauses 6.1.4 and 8.4 require documented AI system impact assessments; keep yours outside SentRAI until the impact-assessment workflow ships.",
+        "missing": "Clauses 6.1.4 and 8.4 require a signed AI system impact assessment: complete and finalise one for this model."
+      }
     },
     {
-      "code": "AIMS-A.7.5", "clause": "A.7.5", "name": "Data & Codebase Provenance",
-      "control": "CTL-PROV-01", "mandatory": true,
-      "evidence": { "pass": "Source/data references tracked: {provenanceOrList}", "fail": "No codebase or data dependencies registered" },
+      "code": "AIMS-A.7.5",
+      "clause": "A.7.5",
+      "name": "Data & Codebase Provenance",
+      "control": "CTL-PROV-01",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Source/data references tracked: {provenanceOrList}",
+        "fail": "No codebase or data dependencies registered"
+      },
       "gap": "Annex A.7.5 requires recorded provenance: track the source repository or third-party dependencies."
     },
     {
-      "code": "AIMS-9.1", "clause": "9.1", "name": "Performance Monitoring & Measurement",
-      "control": "CTL-MON-01", "mandatory": { "riskIn": ["MEDIUM", "HIGH", "CRITICAL"] },
+      "code": "AIMS-9.1",
+      "clause": "9.1",
+      "name": "Performance Monitoring & Measurement",
+      "control": "CTL-MON-01",
+      "mandatory": {
+        "riskIn": [
+          "MEDIUM",
+          "HIGH",
+          "CRITICAL"
+        ]
+      },
       "gap": "Clause 9.1 requires active performance monitoring of deployed AI systems."
     },
     {
-      "code": "AIMS-9.2", "clause": "9.2", "name": "Internal Audit Cadence",
-      "control": "CTL-AUD-01", "opts": { "requireFuture": true }, "mandatory": false,
+      "code": "AIMS-9.2",
+      "clause": "9.2",
+      "name": "Internal Audit Cadence",
+      "control": "CTL-AUD-01",
+      "opts": {
+        "requireFuture": true
+      },
+      "mandatory": false,
       "evidence": {
         "pass": "Next audit scheduled for {nextAuditDue}",
         "past_due": "Audit is past due",
@@ -56,22 +102,271 @@
       "gap": "Clause 9.2 requires internal audits at planned intervals; schedule the next audit."
     },
     {
-      "code": "AIMS-10.2", "clause": "10.2", "name": "Nonconformity & Corrective Action",
-      "control": "CTL-INC-01", "mandatory": false,
-      "evidence": { "pass": "No overdue incident reports", "fail": "{overdue} incident(s) past reporting deadline" },
+      "code": "AIMS-10.2",
+      "clause": "10.2",
+      "name": "Nonconformity & Corrective Action",
+      "control": "CTL-INC-01",
+      "mandatory": false,
+      "evidence": {
+        "pass": "No overdue incident reports",
+        "fail": "{overdue} incident(s) past reporting deadline"
+      },
       "gap": "Clause 10.2 requires timely handling of nonconformities: report overdue incidents."
     },
     {
-      "code": "AIMS-5.3", "clause": "5.3", "name": "Roles, Responsibilities & Accountability",
-      "control": "CTL-ACC-01", "opts": { "rule": "prefix" }, "mandatory": true,
-      "evidence": { "pass": "Accountable team assigned: {ownerTeam}", "fail": "No accountable team assigned to this AI system" },
+      "code": "AIMS-5.3",
+      "clause": "5.3",
+      "name": "Roles, Responsibilities & Accountability",
+      "control": "CTL-ACC-01",
+      "opts": {
+        "rule": "prefix"
+      },
+      "mandatory": true,
+      "evidence": {
+        "pass": "Accountable team assigned: {ownerTeam}",
+        "fail": "No accountable team assigned to this AI system"
+      },
       "gap": "Clause 5.3 requires assigned roles and responsibilities: assign a named owner team."
     },
     {
-      "code": "AIMS-A.6.2.7", "clause": "A.6.2.7", "name": "AI System Technical Documentation",
-      "control": "CTL-DOC-02", "mandatory": false,
-      "evidence": { "pass": "Model card / system documentation artifact attached", "fail": "No model card attached" },
+      "code": "AIMS-A.6.2.7",
+      "clause": "A.6.2.7",
+      "name": "AI System Technical Documentation",
+      "control": "CTL-DOC-02",
+      "mandatory": false,
+      "evidence": {
+        "pass": "Model card / system documentation artifact attached",
+        "fail": "No model card attached"
+      },
       "gap": "Annex A.6.2.7 recommends technical documentation for relevant parties (attach a model_card artifact)."
+    },
+    {
+      "code": "AIMS-6.1.3",
+      "clause": "6.1.3",
+      "name": "AI Risk Treatment (Risk Register)",
+      "control": "CTL-RISK-02",
+      "mandatory": false,
+      "flag": "riskRegister",
+      "alsoEvidences": [
+        "8.2",
+        "8.3"
+      ],
+      "evidence": {
+        "pass": "{assessed} risk(s) assessed; all accepted or within appetite",
+        "fail": "{unaccepted} of {total} risk(s) not accepted and above appetite",
+        "empty": "No assessed risks in the register"
+      },
+      "gap": {
+        "empty": "Clauses 6.1.2–6.1.3 and 8.2–8.3 need an assessed risk register: record and assess this system's risks.",
+        "unaccepted": "Clause 6.1.3 needs every risk treated: accept residual risks above appetite or reduce them."
+      }
+    },
+    {
+      "code": "AIMS-A.6.2.2",
+      "clause": "A.6.2.2",
+      "name": "AI System Requirements and Specification",
+      "control": "CTL-CTX-03",
+      "opts": {
+        "fields": [
+          "intendedUsers",
+          "outOfScopeUses",
+          "systemRequirements"
+        ]
+      },
+      "mandatory": false,
+      "flag": "contextProfile",
+      "evidence": {
+        "pass": "Intended users, out-of-scope uses and system requirements recorded",
+        "fail": "Context profile incomplete: missing {missing}"
+      },
+      "gap": "Annex A.6.2.2 needs the system's requirements and intended use specified: complete the context profile."
+    },
+    {
+      "code": "AIMS-A.8.2",
+      "clause": "A.8.2",
+      "name": "System Documentation and Information for Users",
+      "control": "CTL-CTX-03",
+      "opts": {
+        "fields": [
+          "intendedUsers",
+          "knownLimitations",
+          "oversightPattern"
+        ]
+      },
+      "mandatory": false,
+      "flag": "contextProfile",
+      "evidence": {
+        "pass": "Intended users, known limitations and oversight pattern documented for users",
+        "fail": "Information for users incomplete: missing {missing}"
+      },
+      "gap": "Annex A.8.2 needs information for users, including limitations: complete the context profile."
+    },
+    {
+      "code": "AIMS-4.1",
+      "clause": "4.1",
+      "name": "Context of the Organisation",
+      "control": "CTL-ORG-CONTEXT",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "Approved {type} record(s): {approved}",
+        "missing": "No approved record",
+        "review_overdue": "{overdue} record(s) past their review date"
+      },
+      "gap": "Clause 4.1 needs the internal and external issues relevant to AI determined: record the organisation's context."
+    },
+    {
+      "code": "AIMS-4.2",
+      "clause": "4.2",
+      "name": "Interested Parties",
+      "control": "CTL-ORG-PARTIES",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "Approved {type} record(s): {approved}",
+        "missing": "No approved record",
+        "review_overdue": "{overdue} record(s) past their review date"
+      },
+      "gap": "Clause 4.2 needs interested parties and their requirements recorded."
+    },
+    {
+      "code": "AIMS-4.3",
+      "clause": "4.3",
+      "name": "AIMS Scope",
+      "control": "CTL-ORG-SCOPE",
+      "mandatory": false,
+      "flag": "aims",
+      "alsoEvidences": [
+        "4.4"
+      ],
+      "evidence": {
+        "pass": "Approved {type} record(s): {approved}",
+        "missing": "No approved record",
+        "review_overdue": "{overdue} record(s) past their review date"
+      },
+      "gap": "Clause 4.3 needs the AIMS scope determined and documented."
+    },
+    {
+      "code": "AIMS-5.2",
+      "clause": "5.2",
+      "name": "AI Policy",
+      "control": "CTL-ORG-POLICY",
+      "mandatory": false,
+      "flag": "aims",
+      "alsoEvidences": [
+        "A.2.2",
+        "A.2.3",
+        "A.2.4"
+      ],
+      "evidence": {
+        "pass": "AI policy approved {approved_at} by {approved_by}",
+        "missing": "No approved AI policy record",
+        "review_overdue": "AI policy is past its review date"
+      },
+      "gap": "Clause 5.2 needs an approved AI policy, reviewed on its cycle."
+    },
+    {
+      "code": "AIMS-6.2",
+      "clause": "6.2",
+      "name": "AI Objectives",
+      "control": "CTL-ORG-OBJECTIVES",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "Approved {type} record(s): {approved}",
+        "missing": "No approved record",
+        "review_overdue": "{overdue} record(s) past their review date"
+      },
+      "gap": "Clause 6.2 needs AI objectives with measures and targets."
+    },
+    {
+      "code": "AIMS-7.2",
+      "clause": "7.2",
+      "name": "Competence",
+      "control": "CTL-ORG-COMPETENCE",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "{approved} competence record(s)",
+        "missing": "No competence records",
+        "customer": "Customer responsibility (owner: {owner})"
+      },
+      "gap": "Clause 7.2 needs retained evidence of competence."
+    },
+    {
+      "code": "AIMS-7.3",
+      "clause": "7.3",
+      "name": "Awareness",
+      "control": "CTL-ORG-AWARENESS",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "{approved} awareness record(s)",
+        "missing": "No awareness records",
+        "customer": "Customer responsibility (owner: {owner})"
+      },
+      "gap": "Clause 7.3 needs evidence that people are aware of the AI policy."
+    },
+    {
+      "code": "AIMS-7.5",
+      "clause": "7.5",
+      "name": "Documented Information",
+      "control": "CTL-ORG-DOCS",
+      "mandatory": false,
+      "flag": "documentControl",
+      "evidence": {
+        "pass": "{approved} approved controlled document(s), none past review",
+        "fail": "{review_overdue} controlled document(s) past their review date",
+        "missing": "No approved controlled documents",
+        "not_assessed": "Document control not switched on"
+      },
+      "gap": "Clause 7.5 needs documented information approved, versioned and reviewed."
+    },
+    {
+      "code": "AIMS-9.2",
+      "clause": "9.2",
+      "name": "Internal Audit Programme",
+      "control": "CTL-ORG-AUDIT",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "{planned} audit(s) planned, all with independent auditors",
+        "fail": "Audit programme has auditors who are not independent",
+        "not_independent": "{not_independent} of {planned} planned audit(s) have an auditor who is not independent",
+        "missing": "No approved internal audit programme"
+      },
+      "gap": "Clause 9.2 needs an internal audit programme with objective, impartial auditors."
+    },
+    {
+      "code": "AIMS-9.3",
+      "clause": "9.3",
+      "name": "Management Review",
+      "control": "CTL-ORG-MGMT-REVIEW",
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "Management review held {date}",
+        "stale": "Last management review {date} ({age} days ago)",
+        "missing": "No approved management review"
+      },
+      "gap": "Clause 9.3 needs top management to review the AIMS at planned intervals."
+    },
+    {
+      "code": "AIMS-10.2",
+      "clause": "10.2",
+      "name": "Nonconformity and Corrective Action (Register)",
+      "control": "CTL-ORG-CA",
+      "mandatory": false,
+      "flag": "correctiveActions",
+      "alsoEvidences": [
+        "10.1"
+      ],
+      "evidence": {
+        "pass": "{open} open corrective action(s), none overdue; {closed} closed",
+        "fail": "{overdue} corrective action(s) overdue",
+        "not_assessed": "Corrective-action register not switched on"
+      },
+      "gap": "Clause 10.2 needs nonconformities acted on in time and their effectiveness reviewed."
     }
   ]
 }

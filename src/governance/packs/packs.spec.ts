@@ -4,7 +4,7 @@
  * evidence reuse across packs, and the plugin adapter.
  */
 import { RiskLevel, SutraAlignment } from '../../common/enums';
-import { FeatureFlags } from '../../common/feature-flags';
+import { FeatureFlags, flagSet } from '../../common/feature-flags';
 import { COMPLIANCE_FIXTURES } from '../../../test/fixtures/compliance-fixtures';
 import { getControl, listControls } from '../controls/control-library';
 import { diffPacks } from './pack-diff';
@@ -14,7 +14,7 @@ import { PackDefinition } from './pack.types';
 import { atLeastAsStrict, packFloors, PLATFORM_DEFAULTS, resolveParameters } from './parameter-resolver';
 import { evaluatePluginViaPack } from './plugin-adapter';
 
-const ON: FeatureFlags = { governanceV2: true, redTeamIntervals: true, bcpDrills: true, nistPrivacy: true, packEngine: true };
+const ON: FeatureFlags = flagSet(true);
 const nist = BUILT_IN_PACKS.find((p) => p.id === 'nist-ai-rmf')!;
 const clone = (p: PackDefinition): PackDefinition => JSON.parse(JSON.stringify(p));
 
@@ -176,5 +176,23 @@ describe('evidence reuse and the plugin adapter', () => {
     const ia = r.minorGaps.find((c) => c.controlId === 'AIMS-8.4');
     expect(ia).toBeDefined();
     expect(r.passedControls.map((c) => c.controlId)).toContain('AIMS-5.3');
+  });
+});
+
+describe('parameter enforcement (review fix M1, M2)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { parameterEnforcement, parameterCatalog } = require('./parameter-enforcement');
+
+  it('marks parameters that no control or platform feature reads as not enforced', () => {
+    expect(parameterEnforcement('incidentReportHours')).toEqual({ enforced: false, enforcedBy: [] });
+    expect(parameterEnforcement('fairnessRatioMin').enforced).toBe(false);
+    expect(parameterEnforcement('driftRecencyDays')).toMatchObject({ enforced: true, enforcedBy: expect.arrayContaining(['CTL-MON-01']) });
+    expect(parameterEnforcement('euHighRiskDomains').enforced).toBe(true);
+    expect(parameterCatalog().map((p: any) => p.name)).toContain('incidentReportHours');
+  });
+
+  it('the EU pack uses the AI Act Art. 73 deadline, not GDPR', () => {
+    const eu = BUILT_IN_PACKS.find((p) => p.id === 'eu-ai-act')!;
+    expect(eu.parameters.incidentReportHours).toBe(360);
   });
 });

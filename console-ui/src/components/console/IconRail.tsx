@@ -15,10 +15,13 @@ import {
   Stamp,
   Cpu,
   Users,
+  Landmark,
 } from 'lucide-react';
 
 import { navigate, Route, useRoute } from '../../stores/route';
 import { useSession } from '../../stores/session';
+import { useGovernanceFeatures } from '../../stores/governanceFeatures';
+import { useEffect } from 'react';
 
 interface NavItem {
   route: Route;
@@ -27,6 +30,8 @@ interface NavItem {
   /** Roles allowed to see it; omitted = everyone. */
   roles?: string[];
   globalAdminOnly?: boolean;
+  /** Shown only while this governance feature flag is on. */
+  flag?: string;
 }
 
 const NAV: NavItem[] = [
@@ -45,6 +50,7 @@ const NAV: NavItem[] = [
   { route: 'ai-usage', icon: Activity, label: 'LLM Usage', roles: ['ADMIN', 'CISO', 'OWNER'] },
   { route: 'users', icon: Users, label: 'Users', roles: ['ADMIN', 'OWNER'] },
   { route: 'orgs', icon: MessageSquareWarning, label: 'Organizations', globalAdminOnly: true },
+  { route: 'governance', icon: Landmark, label: 'Governance', flag: 'governanceSettings' },
   { route: 'docs', icon: Settings, label: 'Docs' },
 ];
 
@@ -66,8 +72,14 @@ export function IconRail() {
   const user = useSession((s) => s.user);
   const role = user?.role ?? 'VIEWER';
   const isGlobalAdmin = role === 'ADMIN' && !user?.tenant_id;
+  const features = useGovernanceFeatures((s) => s.features);
+  const loadFeatures = useGovernanceFeatures((s) => s.load);
+  useEffect(() => {
+    void loadFeatures();
+  }, [loadFeatures]);
 
   const visible = NAV.filter((n) => {
+    if (n.flag && !features?.[n.flag]) return false;
     if (n.globalAdminOnly) return isGlobalAdmin;
     if (n.roles) return n.roles.includes(role);
     return true;

@@ -126,12 +126,14 @@ export function evaluateDrift(
   liveScores: number[],
   baselineAccuracy: number,
   currentAccuracy: number,
+  /** Organisation's PSI alert threshold from governance settings (E1.2); the platform default otherwise. */
+  psiAlertThreshold: number = PSI_ALERT_THRESHOLD,
 ): DriftReport {
   const psi = computePsi(trainingScores, liveScores);
   const wDist = wasserstein1d(trainingScores, liveScores);
   const accDelta = currentAccuracy - baselineAccuracy;
 
-  const circuitBreaker = psi > PSI_ALERT_THRESHOLD || accDelta < -0.05;
+  const circuitBreaker = psi > psiAlertThreshold || accDelta < -0.05;
 
   let status: DriftStatus;
   if (circuitBreaker) status = DriftStatus.CIRCUIT_BREAKER_TRIPPED;

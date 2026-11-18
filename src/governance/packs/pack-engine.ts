@@ -28,6 +28,8 @@ export interface EngineOptions {
   /** Regenerate as of this date: pack versions in force then. */
   asOf?: Date;
   now?: Date;
+  /** 'MODEL' (default) evaluates per-model controls; 'ORG' evaluates organisation-level controls (E1.6). */
+  scope?: 'MODEL' | 'ORG';
 }
 
 export interface ClauseResult {
@@ -109,6 +111,7 @@ export function evaluatePack(
     if (clause.flag && !flags[clause.flag]) continue;
     if (clause.appliesWhenTier && !clause.appliesWhenTier.includes(tier)) continue;
     const control = getControl(clause.control)!;
+    if (control.scope !== (opts.scope ?? 'MODEL')) continue;
     const out = control.evaluate({ entry, ctx, params, flags, opts: clause.opts ?? {}, now });
     outcomes.set(`${clause.control}|${JSON.stringify(clause.opts ?? {})}`, out);
     const facts = out.facts ?? {};

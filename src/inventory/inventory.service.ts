@@ -6,6 +6,7 @@ import {
   OnModuleInit,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { emitModelEvent, governanceHooks } from '../governance/hooks';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -166,7 +167,24 @@ export class InventoryService implements OnModuleInit {
       bcpConfigured: Boolean(bcpState),
       bcpDrillLastConducted: lastDrill,
       euHighRiskDomains: this.config.get<string[]>('euAiActHighRiskDomains'),
+      // Governance E1.2: the organisation's enabled packs and risk appetite
+      // (strictest wins). Only while the governance hooks are registered and
+      // their flags are on; otherwise the validators use their defaults.
+      ...(await this.governanceContext(modelId)),
     };
+  }
+
+  private async governanceContext(modelId: string): Promise<Pick<ValidationContext, 'packParams' | 'governance'>> {
+    if (!governanceHooks.orgPackParams && !governanceHooks.modelGovernanceFacts) return {};
+    const model = await this.models.findOne({ where: { id: modelId }, select: ['id', 'projectId'] });
+    const project = model?.projectId ? await this.projects.findOne({ where: { id: model.projectId } }) : null;
+    const orgId = project?.tenantId ?? null;
+    const out: Pick<ValidationContext, 'packParams' | 'governance'> = {};
+    const params = await governanceHooks.orgPackParams?.(orgId);
+    if (params) out.packParams = params;
+    const facts = await governanceHooks.modelGovernanceFacts?.(modelId, orgId);
+    if (facts) out.governance = facts;
+    return out;
   }
 
   /** `lastDrill` is the model's latest successful BCP drill (E0.4); pass it from
@@ -641,6 +659,7 @@ export class InventoryService implements OnModuleInit {
 
   async updateLifecycle(modelId: string, dto: LifecycleUpdateDto) {
     const orm = await this.getOrThrow(modelId);
+    let governanceWarnings: string[] | null = null;
     const liveStages = [ModelLifecycleStage.DEPLOYED, ModelLifecycleStage.MONITORING];
     if (liveStages.includes(dto.stage)) {
       const missing = this.governanceGaps(orm);
@@ -657,6 +676,11 @@ export class InventoryService implements OnModuleInit {
           );
         }
       }
+      // Governance E1.3/E1.4: residual risk and impact-assessment gate, block or
+      // warn per the organisation's settings for the model's tier.
+      const gate = await governanceHooks.gateCheck?.(modelId);
+      for (const f of gate?.block ?? []) missing.push(`${f.code} — ${f.message}`);
+      if (gate?.warn.length) governanceWarnings = gate.warn.map((f) => `${f.code} — ${f.message}`);
       if (missing.length > 0) {
         throw new UnprocessableEntityException({
           message: `Model cannot move to ${dto.stage} until governance is complete.`,
@@ -676,7 +700,7 @@ export class InventoryService implements OnModuleInit {
       actor: dto.actor,
       occurredAt: new Date(),
     }));
-    return { model_id: modelId, stage: dto.stage, actor: dto.actor };
+    return { model_id: modelId, stage: dto.stage, actor: dto.actor, ...(governanceWarnings ? { governance_warnings: governanceWarnings } : {}) };
   }
 
   async remove(user: CurrentUser, modelId: string, permanent: boolean, actor: string): Promise<void> {
@@ -797,6 +821,8 @@ export class InventoryService implements OnModuleInit {
     }
 
     await this.models.save(orm);
+    // Governance E1.3: a tier change is a material change that re-opens risk review.
+    if (changes.risk_level) await emitModelEvent(orm.id, 'MATERIAL_CHANGE', { ref: `risk ${changes.risk_level[0]}→${changes.risk_level[1]}` });
 
     if (Object.keys(changes).length > 0) {
       const eventData: Record<string, any> = {};
@@ -838,7 +864,7 @@ export class InventoryService implements OnModuleInit {
   }
 
   /** Attach an evidence artifact (bias-test report, red-team report, ...). */
-  async addEvidence(modelId: string, dto: { type: string; ref: string; description?: string }, actor: string) {
+  async addEvidence(modelId: string, dto: { type: string; ref: string; description?: string; document_id?: string }, actor: string) {
     const orm = await this.getOrThrow(modelId);
     const artifact: EvidenceArtifact = {
       type: dto.type,
@@ -846,10 +872,17 @@ export class InventoryService implements OnModuleInit {
       description: dto.description,
       added_at: new Date().toISOString(),
     };
+    // Governance E1.8: link the artifact to a controlled document (version + hash) when document control is on.
+    if (dto.document_id && governanceHooks.evidenceDocument) {
+      const doc = await governanceHooks.evidenceDocument(modelId, dto.document_id);
+      if (doc) Object.assign(artifact, { document_id: doc.document_id, document_version: doc.version, document_hash: doc.hash });
+    }
     orm.evidenceArtifacts = [...(orm.evidenceArtifacts ?? []), artifact];
     orm.updatedAt = new Date();
     await this.models.save(orm);
     await this.recordLedger(modelId, 'EVIDENCE_ATTACHED', { type: dto.type, ref: dto.ref }, actor);
+    // Governance E1.3: new red-team results re-open the model's risk review.
+    if (dto.type === 'red_team') await emitModelEvent(modelId, 'RED_TEAM_FINDING', { ref: dto.ref });
     return { model_id: modelId, evidence_count: orm.evidenceArtifacts.length, artifact };
   }
 
@@ -1074,6 +1107,7 @@ export class InventoryService implements OnModuleInit {
         m.updatedAt = new Date();
         await this.models.save(m);
         if (riskChanged) summary.risk_changed += 1;
+        if (riskChanged) await emitModelEvent(m.id, 'MATERIAL_CHANGE', { ref: `re-scan ${oldRisk}→${finalRisk}` });
       }
       // Record a ledger event only for material changes — a risk update, or a
       // source file that no longer flags as AI — to keep the audit trail clean.

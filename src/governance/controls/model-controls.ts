@@ -265,7 +265,9 @@ export const MODEL_CONTROLS: ControlDefinition[] = [
     title: 'Incidents reported within their deadlines',
     scope: 'MODEL',
     evidenceTypes: [],
-    parameters: ['incidentReportHours'],
+    // Uses each incident's own severity SLA clock; the incidentReportHours
+    // pack parameter is recorded but does not drive this check yet.
+    parameters: [],
     evaluate: (i) => {
       const overdue = i.ctx.overdueIncidentCount ?? 0;
       return outcome(overdue === 0, { overdue });
@@ -448,10 +450,45 @@ export const MODEL_CONTROLS: ControlDefinition[] = [
       // Becomes register-backed in E1.4: ctx.governance.impactAssessment carries the latest FINAL record.
       const ia = i.ctx.governance?.impactAssessment;
       if (ia === undefined) {
-        return { ...outcome(false, {}, '', 'not_assessed'), notAssessed: true };
+        return { ...outcome(false, {}, '', 'not_assessed'), notAssessed: true, gapKeys: ['not_assessed'] };
       }
-      if (!ia) return outcome(false, {}, '', 'missing');
-      return { ...outcome(ia.status === 'FINAL', { version: ia.version, signedAt: ia.signedAt ?? null, status: ia.status }, '', ia.status === 'FINAL' ? 'pass' : 'not_final'), evidenceRefs: [`impact_assessment:${ia.id}`] };
+      if (!ia) return { ...outcome(false, {}, '', 'missing'), gapKeys: ['missing'] };
+      const ok = ia.status === 'FINAL';
+      return {
+        ...outcome(ok, { version: ia.version, signedAt: ia.signedAt ?? null, status: ia.status }, '', ok ? 'pass' : 'not_final'),
+        gapKeys: ['missing'],
+        evidenceRefs: [`impact_assessment:${ia.id}`],
+      };
+    },
+  },
+  {
+    id: 'CTL-RISK-02',
+    title: 'Risks assessed, treated and accepted or within appetite (risk register)',
+    scope: 'MODEL',
+    evidenceTypes: ['risk_register'],
+    parameters: [],
+    evaluate: (i) => {
+      // Register-backed (E1.3): ctx.governance.riskRegister = { total, assessed, unaccepted }.
+      const reg = i.ctx.governance?.riskRegister;
+      if (!reg) return { ...outcome(false, {}, 'NOT ASSESSED: the risk register is not available for this model', 'not_assessed'), notAssessed: true, gapKeys: ['empty'] };
+      if (!reg.assessed) return { ...outcome(false, reg, '', 'empty'), gapKeys: ['empty'] };
+      return { ...outcome(reg.unaccepted === 0, reg, '', reg.unaccepted === 0 ? 'pass' : 'fail'), gapKeys: ['unaccepted'] };
+    },
+  },
+  {
+    id: 'CTL-CTX-03',
+    title: 'Structured context profile complete',
+    scope: 'MODEL',
+    evidenceTypes: [],
+    parameters: [],
+    evaluate: (i) => {
+      const p = i.entry.contextProfile ?? {};
+      const fields: string[] = i.opts.fields ?? ['intendedUsers', 'knownLimitations', 'outOfScopeUses', 'oversightPattern', 'costOfErrors'];
+      const missing = fields.filter((f) => {
+        const v = p[f];
+        return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+      });
+      return outcome(missing.length === 0, { missing: missing.join(', '), fields: fields.join(', ') });
     },
   },
   {

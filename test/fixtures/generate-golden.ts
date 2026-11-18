@@ -9,9 +9,10 @@ import { join } from 'path';
 import { validateEuAiAct, validateIso42001, validateNistRmf } from '../../src/compliance/frameworks.validator';
 import { validateSutrasCompliance } from '../../src/compliance/sutras.validator';
 import { COMPLIANCE_FIXTURES } from './compliance-fixtures';
+import { flagSet } from '../../src/common/feature-flags';
 
 // Pinned: the baseline is the flags-off output, whatever the shell environment says.
-const OFF = { governanceV2: false, redTeamIntervals: false, bcpDrills: false, nistPrivacy: false, packEngine: false };
+const OFF = flagSet(false);
 
 const out = COMPLIANCE_FIXTURES.map(({ id, entry, ctx: base }) => {
   const ctx = { ...base, flags: OFF };

@@ -4,9 +4,10 @@
  */
 import { ControlDefinition } from './control.types';
 import { MODEL_CONTROLS } from './model-controls';
+import { ORG_CONTROLS } from './org-controls';
 
 const LIBRARY = new Map<string, ControlDefinition>();
-for (const c of MODEL_CONTROLS) LIBRARY.set(c.id, c);
+for (const c of [...MODEL_CONTROLS, ...ORG_CONTROLS]) LIBRARY.set(c.id, c);
 
 export function getControl(id: string): ControlDefinition | undefined {
   return LIBRARY.get(id);

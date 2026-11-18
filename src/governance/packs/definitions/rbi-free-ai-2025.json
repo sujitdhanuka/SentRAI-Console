@@ -13,7 +13,8 @@
   "tierClassifier": "none",
   "source": "Reserve Bank of India, FREE-AI Committee Report (August 2025): 7 Sutras, 26 recommendations",
   "changelog": [
-    "2025.1.0: migrated from sutras.validator.ts with the Phase 0 corrected recommendation references; results unchanged."
+    "2025.1.0: migrated from sutras.validator.ts with the Phase 0 corrected recommendation references; results unchanged.",
+    "2025.1.0 (Phase 1): organisation-level Rec 14 policy-contents clause (ORG scope, behind the AIMS flag)."
   ],
   "parameters": {
     "incidentReportHours": 24,
@@ -21,26 +22,55 @@
   },
   "clauses": [
     {
-      "code": "TRUST_IS_THE_FOUNDATION", "clause": "Sutra 1; Rec 14", "name": "Trust is the Foundation",
-      "control": "CTL-POL-01", "opts": { "match": "notEmptyString" }, "mandatory": true,
-      "evidence": { "pass": "Board policy ref: {boardPolicyRef}" },
+      "code": "TRUST_IS_THE_FOUNDATION",
+      "clause": "Sutra 1; Rec 14",
+      "name": "Trust is the Foundation",
+      "control": "CTL-POL-01",
+      "opts": {
+        "match": "notEmptyString"
+      },
+      "mandatory": true,
+      "evidence": {
+        "pass": "Board policy ref: {boardPolicyRef}"
+      },
       "gap": "No board-approved AI policy reference. REC 14 mandates a board-approved AI policy."
     },
     {
-      "code": "PEOPLE_FIRST", "clause": "Sutra 2", "name": "People First",
-      "control": "CTL-HUM-01", "opts": { "mode": "unlessLow" }, "mandatory": true,
-      "evidence": { "pass": "Human oversight configured" },
+      "code": "PEOPLE_FIRST",
+      "clause": "Sutra 2",
+      "name": "People First",
+      "control": "CTL-HUM-01",
+      "opts": {
+        "mode": "unlessLow"
+      },
+      "mandatory": true,
+      "evidence": {
+        "pass": "Human oversight configured"
+      },
       "gap": "MEDIUM/HIGH risk model without human oversight. REC 16 requires human-in-the-loop."
     },
     {
-      "code": "INNOVATION_OVER_RESTRAINT", "clause": "Sutra 3", "name": "Innovation over Restraint",
-      "control": "CTL-AUTO-01", "mandatory": true,
-      "evidence": { "pass": "Autonomous scope defined" },
+      "code": "INNOVATION_OVER_RESTRAINT",
+      "clause": "Sutra 3",
+      "name": "Innovation over Restraint",
+      "control": "CTL-AUTO-01",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Autonomous scope defined"
+      },
       "gap": "Autonomous model without defined scope boundary. REC 16 requires clear autonomous action limits."
     },
     {
-      "code": "FAIRNESS_AND_EQUITY", "clause": "Sutra 4", "name": "Fairness and Equity",
-      "control": "CTL-FAIR-01", "mandatory": { "riskIn": ["MEDIUM", "HIGH"] },
+      "code": "FAIRNESS_AND_EQUITY",
+      "clause": "Sutra 4",
+      "name": "Fairness and Equity",
+      "control": "CTL-FAIR-01",
+      "mandatory": {
+        "riskIn": [
+          "MEDIUM",
+          "HIGH"
+        ]
+      },
       "evidence": {
         "bias_test": "Bias-test report attached as evidence artifact",
         "declared": "Fairness sutra declared in model registration"
@@ -51,26 +81,65 @@
       }
     },
     {
-      "code": "ACCOUNTABILITY", "clause": "Sutra 5; Rec 14", "name": "Accountability",
-      "control": "CTL-ACC-01", "opts": { "rule": "contains" }, "mandatory": true,
-      "evidence": { "pass": "Owner team: {ownerTeam}" },
+      "code": "ACCOUNTABILITY",
+      "clause": "Sutra 5; Rec 14",
+      "name": "Accountability",
+      "control": "CTL-ACC-01",
+      "opts": {
+        "rule": "contains"
+      },
+      "mandatory": true,
+      "evidence": {
+        "pass": "Owner team: {ownerTeam}"
+      },
       "gap": "No accountability chain (owner team) defined. REC 14 requires the AI policy to set out accountability."
     },
     {
-      "code": "UNDERSTANDABLE_BY_DESIGN", "clause": "Sutra 6", "name": "Understandable by Design",
-      "control": "CTL-EXPL-01", "mandatory": { "riskIn": ["MEDIUM", "HIGH"] },
-      "evidence": { "pass": "Explainability declared" },
+      "code": "UNDERSTANDABLE_BY_DESIGN",
+      "clause": "Sutra 6",
+      "name": "Understandable by Design",
+      "control": "CTL-EXPL-01",
+      "mandatory": {
+        "riskIn": [
+          "MEDIUM",
+          "HIGH"
+        ]
+      },
+      "evidence": {
+        "pass": "Explainability declared"
+      },
       "gap": "No explainability mechanism declared for MEDIUM/HIGH risk model (Sutra 6: Understandable by Design)."
     },
     {
-      "code": "SAFETY_RESILIENCE_SUSTAINABILITY", "clause": "Sutra 7; Rec 20; Rec 21", "name": "Safety, Resilience & Sustainability",
-      "control": "CTL-RES-01", "mandatory": true,
+      "code": "SAFETY_RESILIENCE_SUSTAINABILITY",
+      "clause": "Sutra 7; Rec 20; Rec 21",
+      "name": "Safety, Resilience & Sustainability",
+      "control": "CTL-RES-01",
+      "mandatory": true,
       "gap": {
         "no_red_team": "{tier} risk model with no red-team exercise on record. REC 20 asks for red teaming at a frequency proportionate to risk, and after material changes.",
         "red_team_stale": "{tier} risk model last red teamed {redTeamAge} days ago; REC 20 interval for {tier} risk is {redTeamInterval} days.",
         "no_drill": "{tier} risk model with no passed BCP drill on record. REC 21 requires business-continuity plans for AI systems to be tested.",
         "drill_overdue": "{tier} risk model's last passed BCP drill was {drillAge} days ago; the drill interval is {drillInterval} days (REC 21)."
       }
+    },
+    {
+      "code": "REC-14",
+      "clause": "Rec 14",
+      "name": "Board-approved AI Policy Contents",
+      "control": "CTL-ORG-POLICY",
+      "opts": {
+        "rec14": true
+      },
+      "mandatory": false,
+      "flag": "aims",
+      "evidence": {
+        "pass": "AI policy approved {approved_at} with every Rec 14 section",
+        "missing": "No approved AI policy record",
+        "review_overdue": "AI policy is past its review date",
+        "rec14_missing": "AI policy lacks Rec 14 sections: {missing}"
+      },
+      "gap": "Rec 14 asks for a board-approved AI policy covering governance, accountability, risk appetite, safeguards, auditability, consumer protection, disclosures, lifecycle and liability."
     }
   ]
 }

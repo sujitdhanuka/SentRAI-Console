@@ -23,6 +23,15 @@ import { AgentActionEventEntity } from './agent-action-event.entity';
 import { GrievanceEntity } from './grievance.entity';
 import { PackVersionEntity } from './pack-version.entity';
 import { ControlResultEntity } from './control-result.entity';
+import { GovernanceSettingsEntity } from './governance-settings.entity';
+import { RiskEntity } from './risk.entity';
+import { RiskAssessmentEntity } from './risk-assessment.entity';
+import { RiskActionEntity } from './risk-action.entity';
+import { RiskAcceptanceEntity } from './risk-acceptance.entity';
+import { ImpactAssessmentEntity } from './impact-assessment.entity';
+import { AimsRecordEntity } from './aims-record.entity';
+import { CorrectiveActionEntity } from './corrective-action.entity';
+import { ControlledDocumentEntity } from './controlled-document.entity';
 
 export {
   OrganizationEntity,
@@ -50,6 +59,15 @@ export {
   GrievanceEntity,
   PackVersionEntity,
   ControlResultEntity,
+  GovernanceSettingsEntity,
+  RiskEntity,
+  RiskAssessmentEntity,
+  RiskActionEntity,
+  RiskAcceptanceEntity,
+  ImpactAssessmentEntity,
+  AimsRecordEntity,
+  CorrectiveActionEntity,
+  ControlledDocumentEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -78,4 +96,13 @@ export const ALL_ENTITIES = [
   GrievanceEntity,
   PackVersionEntity,
   ControlResultEntity,
+  GovernanceSettingsEntity,
+  RiskEntity,
+  RiskAssessmentEntity,
+  RiskActionEntity,
+  RiskAcceptanceEntity,
+  ImpactAssessmentEntity,
+  AimsRecordEntity,
+  CorrectiveActionEntity,
+  ControlledDocumentEntity,
 ];

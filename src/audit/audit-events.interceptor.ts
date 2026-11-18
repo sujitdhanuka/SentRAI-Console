@@ -76,7 +76,10 @@ export class AuditEventsInterceptor implements NestInterceptor {
       path: String(req.originalUrl ?? req.url ?? '').slice(0, 512),
       statusCode,
       outcome,
-      payloadSummary: this.summarize(req.body),
+      // A handler may attach a curated summary (e.g. a governance settings change
+      // with its reason and field-level diff) so the ledger entry is complete
+      // even when the raw body would be truncated.
+      payloadSummary: req.auditSummary && typeof req.auditSummary === 'object' ? maskDict(req.auditSummary) : this.summarize(req.body),
       occurredAt: new Date(),
     };
     // Fire-and-forget for the REQUEST path, but chained writes are serialized
