@@ -159,7 +159,7 @@ describe('E0.4 BCP drill check (flagged)', () => {
 
   it('fails a HIGH model with no drill or a stale drill, passes a fresh one', () => {
     expect(safety(entry(), null).passed).toBe(false);
-    expect(safety(entry(), null).gap).toMatch(/no BCP drill/);
+    expect(safety(entry(), null).gap).toMatch(/no passed BCP drill/);
     expect(safety(entry(), daysAgo(366)).passed).toBe(false);
     expect(safety(entry(), daysAgo(366)).gap).toMatch(/REC 21/);
     expect(safety(entry(), daysAgo(365)).passed).toBe(true);
@@ -211,5 +211,70 @@ describe('golden baseline (E0.1): flags off changes labels only', () => {
     // text; it is reported NOT ASSESSED (not passed, not blocking).
     const expectedIso = remap(base.iso, ISO_MAP).map((r) => (r.code === 'AIMS-8.4' ? { ...r, passed: false, mandatory: false } : r));
     expect(shape(validateIso42001(e, c).checks)).toEqual(expectedIso);
+  });
+});
+
+describe('review fixes (Phase 0 follow-up)', () => {
+  it('CRITICAL models get the drill and red-team interval checks with flags on, and keep the old scope with flags off', () => {
+    const crit = entry({ riskLevel: RiskLevel.CRITICAL, lastRedTeamDate: null, evidenceArtifacts: [] });
+    const safety = (flags: FeatureFlags, e = crit, drill: Date | null = null) =>
+      validateSutrasCompliance(e, { flags, bcpDrillLastConducted: drill }).checks.find((c) => c.sutra === SutraAlignment.SAFETY)!;
+    expect(safety(OFF).passed).toBe(true); // unchanged flag-off behaviour
+    expect(safety(ON).passed).toBe(false);
+    expect(safety(ON).gap).toMatch(/CRITICAL risk model with no red-team/);
+    expect(safety(ON).gap).toMatch(/no passed BCP drill/);
+    const fresh = entry({ riskLevel: RiskLevel.CRITICAL, lastRedTeamDate: daysAgo(10) });
+    expect(safety(ON, fresh, daysAgo(5)).passed).toBe(true);
+    expect(safety(ON, entry({ riskLevel: RiskLevel.CRITICAL, lastRedTeamDate: daysAgo(100) }), daysAgo(5)).gap).toContain('interval for CRITICAL risk is 90 days');
+  });
+
+  it('red-team recency uses the newer of the recorded date and an attached report', () => {
+    const e = entry({
+      lastRedTeamDate: daysAgo(200),
+      evidenceArtifacts: [{ type: 'red_team', ref: 'doc', added_at: daysAgo(5).toISOString() }],
+    });
+    expect(validateNistRmf(e, { ...healthy, flags: ON }).checks.find((c) => c.controlCode === 'MEASURE-2.7')!.passed).toBe(true);
+  });
+
+  it('the coverage page does not claim MEASURE 2.11 and counts distinct subcategories', () => {
+    const nist = getCoverage(OFF).find((f) => f.id === 'nist_ai_rmf')!;
+    expect(JSON.stringify(nist)).not.toContain('2.11');
+    expect(nist.statement).toMatch(/^14 per-model checks cover 13 of the playbook/);
+    expect(getCoverage(ON).find((f) => f.id === 'nist_ai_rmf')!.statement).toMatch(/^15 per-model checks cover 14 of/);
+    expect(validateNistRmf(entry(), { ...healthy, flags: OFF }).checks.find((c) => c.controlCode === 'MEASURE-2.7')!.name).not.toMatch(/bias/i);
+  });
+
+  it('golden with GOVERNANCE_V2 on: only the explained differences appear', () => {
+    // Fixtures carry no drill date, so every HIGH/CRITICAL model fails Sutra 7
+    // on the drill (E0.4); the 200-day red team breaches the HIGH 90-day
+    // interval (E0.3); every model gains MEASURE-2.10, passing only with dpia (E0.5).
+    const expected: Record<string, string[]> = {
+      'high-governed': ['SUTRA:SAFETY_RESILIENCE_SUSTAINABILITY true->false', '+NIST:MEASURE-2.10=true'],
+      'high-ungoverned': ['+NIST:MEASURE-2.10=false'],
+      'high-redteam-200d': ['SUTRA:SAFETY_RESILIENCE_SUSTAINABILITY true->false', 'NIST:MEASURE-2.7 true->false', '+NIST:MEASURE-2.10=true'],
+      'high-redteam-400d': ['SUTRA:SAFETY_RESILIENCE_SUSTAINABILITY true->false', '+NIST:MEASURE-2.10=true'],
+      'high-report-only': ['SUTRA:SAFETY_RESILIENCE_SUSTAINABILITY true->false', '+NIST:MEASURE-2.10=true'],
+      'medium-partial': ['+NIST:MEASURE-2.10=false'],
+      'medium-short-usecase': ['+NIST:MEASURE-2.10=false'],
+      'low-minimal': ['+NIST:MEASURE-2.10=false'],
+      'genai-chatbot': ['+NIST:MEASURE-2.10=false'],
+      'critical-no-oversight': ['SUTRA:SAFETY_RESILIENCE_SUSTAINABILITY true->false', '+NIST:MEASURE-2.10=false'],
+    };
+    for (const { id, entry: e, ctx } of COMPLIANCE_FIXTURES) {
+      const run = (flags: FeatureFlags) => new Map<string, boolean>([
+        ...validateSutrasCompliance(e, { flags }).checks.map((c) => [`SUTRA:${c.sutra}`, c.passed] as [string, boolean]),
+        ...validateNistRmf(e, { ...ctx, flags }).checks.map((c, i) => [`NIST:${c.controlCode}#${i}`, c.passed] as [string, boolean]),
+        ...validateEuAiAct(e, { ...ctx, flags }).checks.map((c) => [`EU:${c.controlCode}`, c.passed] as [string, boolean]),
+        ...validateIso42001(e, { ...ctx, flags }).checks.map((c) => [`ISO:${c.controlCode}`, c.passed] as [string, boolean]),
+      ]);
+      const off = run(OFF);
+      const diffs: string[] = [];
+      for (const [k, v] of run(ON)) {
+        const key = k.replace(/#\d+$/, '');
+        if (!off.has(k)) diffs.push(`+${key}=${v}`);
+        else if (off.get(k) !== v) diffs.push(`${key} ${off.get(k)}->${v}`);
+      }
+      expect({ id, diffs }).toEqual({ id, diffs: expected[id] });
+    }
   });
 });

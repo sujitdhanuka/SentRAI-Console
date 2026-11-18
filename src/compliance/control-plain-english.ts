@@ -27,7 +27,7 @@ const CONTROL_REQUIREMENT: Record<string, string> = {
   'MAP-4.1': 'source or dependency provenance',
   'MEASURE-2.3': 'recorded performance benchmarks',
   'MEASURE-2.4': 'recent performance-drift measurement',
-  'MEASURE-2.7': 'a recent bias audit / red-team review',
+  'MEASURE-2.7': 'a recent red-team review',
   'MEASURE-2.10': 'a DPIA or privacy review',
   'MEASURE-3.1': 'a risk-tracking ledger history',
   'MANAGE-2.1': 'a named, resourced risk-response owner',

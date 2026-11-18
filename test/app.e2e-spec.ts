@@ -5,6 +5,8 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Role } from '../src/common/enums';
 import { ComplianceService } from '../src/compliance/compliance.service';
+import { NotifierService } from '../src/common/notifier.service';
+import { ScheduledTasksService } from '../src/tasks/scheduled-tasks.service';
 
 describe('SentrAI Console (e2e)', () => {
   let app: INestApplication;
@@ -2364,7 +2366,7 @@ describe('SentrAI Console (e2e)', () => {
       const before = await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200);
       const safetyBefore = before.body.checks.find((c: any) => c.sutra === 'SAFETY_RESILIENCE_SUSTAINABILITY');
       expect(safetyBefore.passed).toBe(false);
-      expect(safetyBefore.gap).toContain('no BCP drill');
+      expect(safetyBefore.gap).toContain('no passed BCP drill');
 
       await request(http).post(path(a.modelId)).set(auth(a.owner))
         .send({ ...drill, conducted_at: new Date(Date.now() + 5 * 86_400_000).toISOString() }).expect(400);
@@ -2389,6 +2391,88 @@ describe('SentrAI Console (e2e)', () => {
       const ledger = await request(http).get(`/api/v1/inventory/models/${a.modelId}/ledger`).set(auth(a.owner)).expect(200);
       expect(JSON.stringify(ledger.body)).toContain('BCP_DRILL_RECORDED');
     } finally {
+      if (prev === undefined) delete process.env.GOVERNANCE_V2;
+      else process.env.GOVERNANCE_V2 = prev;
+    }
+  });
+  it('BCP DRILLS: list, project and detail agree; failed drills do not count; reminders split per org (review fixes)', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const setup = async (name: string) => {
+      const org = await request(http).post('/api/v1/organizations').set(auth(admin)).send({ name, description: 'test' }).expect(201);
+      const email = `ciso@${name.toLowerCase()}.test`;
+      await request(http).post('/api/v1/users').set(auth(admin))
+        .send({ email, full_name: name, password: 'pw123456', role: 'CISO', organization_id: org.body.organization_id }).expect(201);
+      const token = await login(email, 'pw123456');
+      const project = await request(http).post('/api/v1/projects').set(auth(token)).send({ name: `${name} App`, root_directory: process.cwd() }).expect(201);
+      const model = await request(http).post('/api/v1/inventory/models').set(auth(token)).send({
+        name: `${name} Credit`, model_type: 'MACHINE_LEARNING', functional_area: 'credit_underwriting',
+        use_case_description: 'Scores SME credit applications for the underwriting team', human_oversight_required: true,
+        board_policy_ref: 'BP-1', project_id: project.body.project_id, sutras_alignment: ['UNDERSTANDABLE_BY_DESIGN'],
+        last_red_team_date: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+      }).expect(201);
+      return { token, orgId: org.body.organization_id, projectId: project.body.project_id, modelId: model.body.model_id };
+    };
+    const a = await setup('ReviewDrillA');
+    const b = await setup('ReviewDrillB');
+    const path = (id: string) => `/api/v1/monitoring/bcp/${id}/drills`;
+    const drill = { scenario: 'Scoring endpoint outage; fall back to rules engine', result: 'PASSED' };
+    const safetyGap = async (token: string, id: string) =>
+      (await request(http).get(`/api/v1/inventory/models/${id}/compliance-check`).set(auth(token)).expect(200))
+        .body.checks.find((c: any) => c.sutra === 'SAFETY_RESILIENCE_SUSTAINABILITY');
+    // The model list, model detail, project and compliance check must all agree.
+    const views = async (t: { token: string; modelId: string; projectId: string }) => {
+      const list = (await request(http).get(`/api/v1/inventory/models?project_id=${t.projectId}`).set(auth(t.token)).expect(200)).body;
+      const rows = Array.isArray(list) ? list : list.models ?? list.items;
+      const row = rows.find((r: any) => r.model_id === t.modelId);
+      const detail = (await request(http).get(`/api/v1/inventory/models/${t.modelId}`).set(auth(t.token)).expect(200)).body;
+      const project = (await request(http).get(`/api/v1/projects/${t.projectId}`).set(auth(t.token)).expect(200)).body;
+      const cc = (await request(http).get(`/api/v1/inventory/models/${t.modelId}/compliance-check`).set(auth(t.token)).expect(200)).body;
+      return { list: row.compliance_pass, detail: detail.compliance_pass, project: project.compliant_count === 1, cc: cc.overall_pass, gaps: [row.open_gap_count, detail.open_gap_count, project.open_gap_count, cc.blocking_gaps.length] };
+    };
+
+    const prev = process.env.GOVERNANCE_V2;
+    process.env.GOVERNANCE_V2 = 'true';
+    const notify = jest.spyOn(NotifierService.prototype, 'notify').mockResolvedValue(undefined);
+    try {
+      const before = await views(a);
+      expect(new Set([before.list, before.detail, before.project, before.cc])).toEqual(new Set([false]));
+      expect(new Set(before.gaps).size).toBe(1);
+
+      // A FAILED drill does not satisfy Rec 21, and is reported as the latest result.
+      const failed = await request(http).post(path(a.modelId)).set(auth(a.token)).send({ ...drill, result: 'FAILED' }).expect(201);
+      expect(failed.body).toMatchObject({ drill_status: 'NONE', drill_last_conducted: null, latest_drill_result: 'FAILED' });
+      expect((await safetyGap(a.token, a.modelId)).gap).toContain('no passed BCP drill');
+
+      // Recording drills never creates a BCP fallback state (MANAGE-2.4 stays failed).
+      const status = await request(http).get(`/api/v1/monitoring/bcp/${a.modelId}/status`).set(auth(a.token)).expect(200);
+      expect(status.body.bcp_active).toBe(false);
+      expect(status.body.reason).toBeUndefined();
+      const cc = await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.token)).expect(200);
+      expect(cc.body.nist_rmf.checks.find((c: any) => c.control_code === 'MANAGE-2.4').passed).toBe(false);
+
+      // Admin (global superuser) can record across organizations; a passed drill clears Sutra 7 everywhere.
+      const ok = await request(http).post(path(a.modelId)).set(auth(admin)).send(drill).expect(201);
+      expect(ok.body).toMatchObject({ drill_status: 'CURRENT', latest_drill_result: 'PASSED' });
+      expect((await safetyGap(a.token, a.modelId)).passed).toBe(true);
+      const after = await views(a);
+      expect(new Set([after.list, after.detail, after.project, after.cc]).size).toBe(1);
+      expect(new Set(after.gaps).size).toBe(1);
+      expect(after.gaps[0]).toBeLessThan(before.gaps[0]);
+
+      // The reminder job sends one notification per organization; org B (no drill) is in its own payload.
+      await app.get(ScheduledTasksService).checkBcpDrills();
+      const calls = notify.mock.calls.filter(([event]) => event === 'bcp_drill_due').map(([, data]) => data as any);
+      const forB = calls.find((d) => d.tenant_id === b.orgId);
+      expect(forB.models.map((m: any) => m.model_id)).toEqual([b.modelId]);
+      for (const d of calls) expect(d.models.every((m: any) => m.tenant_id === d.tenant_id)).toBe(true);
+      expect(calls.flatMap((d) => d.models.map((m: any) => m.model_id))).not.toContain(a.modelId);
+
+      // Portfolio top gaps never count a model more than once per control.
+      const portfolio = await request(http).get('/api/v1/compliance/portfolio').set(auth(a.token)).expect(200);
+      for (const g of portfolio.body.top_gaps) expect(g.count).toBeLessThanOrEqual(portfolio.body.summary.total_models);
+    } finally {
+      notify.mockRestore();
       if (prev === undefined) delete process.env.GOVERNANCE_V2;
       else process.env.GOVERNANCE_V2 = prev;
     }

@@ -42,6 +42,8 @@ interface DrillHistory {
   drill_last_conducted: string | null;
   drill_interval_days: number;
   drill_status: 'NONE' | 'CURRENT' | 'DUE_SOON' | 'OVERDUE';
+  drill_required?: boolean;
+  latest_drill_result?: string | null;
   next_drill_due: string | null;
   drills: BcpDrill[];
 }
@@ -54,6 +56,15 @@ const DRILL_TONE: Record<DrillHistory['drill_status'], BadgeTone> = {
 };
 const RESULT_TONE = (r: string): BadgeTone => (r === 'PASSED' ? 'positive' : r === 'FAILED' ? 'negative' : 'warning');
 const INPUT = 'rounded-md border border-border bg-bg-elevated px-2 py-1 text-[11px] text-text focus:border-accent';
+
+/** A date-only input parses as UTC midnight, which shows as the day before west
+ *  of UTC. Read it as local noon instead (or now, for today, so the server's
+ *  no-future-dates rule never trips before midday). */
+function drillDateToIso(day: string): string | undefined {
+  if (!day) return undefined;
+  const picked = new Date(`${day}T12:00:00`);
+  return picked.getTime() > Date.now() ? new Date().toISOString() : picked.toISOString();
+}
 
 /** NOMINAL is the only healthy state; everything else is a real signal. */
 const STATUS_TONE = (s: string): BadgeTone =>
@@ -86,7 +97,12 @@ export function Monitoring() {
       const [h, b, d] = await Promise.all([
         api<DriftReport[]>(`/monitoring/drift/${modelId}/history`),
         api<BcpStatus>(`/monitoring/bcp/${modelId}/status`).catch(() => null),
-        api<DrillHistory>(`/monitoring/bcp/${modelId}/drills`).catch(() => null),
+        // 404 means drill tracking is not enabled on this server: hide the panel.
+        // Any other failure is a real error and is surfaced, not hidden.
+        api<DrillHistory>(`/monitoring/bcp/${modelId}/drills`).catch((e) => {
+          if (e instanceof ApiError && e.status === 404) return null;
+          throw e;
+        }),
       ]);
       setHistory(Array.isArray(h) ? h : []);
       setBcp(b);
@@ -123,7 +139,7 @@ export function Monitoring() {
           scenario: drillForm.scenario,
           result: drillForm.result,
           findings: drillForm.findings || undefined,
-          conducted_at: drillForm.conducted_at ? new Date(drillForm.conducted_at).toISOString() : undefined,
+          conducted_at: drillDateToIso(drillForm.conducted_at),
         }),
       });
       toast('Drill recorded', 'positive');
@@ -230,9 +246,12 @@ export function Monitoring() {
             className="min-h-0"
             right={
               <div className="flex items-center gap-2">
-                <Badge tone={DRILL_TONE[drills.drill_status]}>{drills.drill_status.replace('_', ' ')}</Badge>
+                <Badge tone={drills.drill_required === false ? 'neutral' : DRILL_TONE[drills.drill_status]}>
+                  {drills.drill_required === false && drills.drill_status === 'NONE' ? 'NOT REQUIRED' : drills.drill_status.replace('_', ' ')}
+                </Badge>
+                {drills.latest_drill_result === 'FAILED' && <Badge tone="negative">LAST DRILL FAILED</Badge>}
                 <span className="font-mono text-[9px] text-text-tertiary">
-                  {drills.next_drill_due ? `next due ${new Date(drills.next_drill_due).toLocaleDateString()}` : 'no drill on record'} · every {drills.drill_interval_days}d
+                  {drills.next_drill_due ? `next due ${new Date(drills.next_drill_due).toLocaleDateString()}` : 'no passed drill on record'} · every {drills.drill_interval_days}d
                 </span>
                 <button
                   onClick={() => setDrillForm(drillForm ? null : { scenario: '', result: 'PASSED', findings: '', conducted_at: '' })}
@@ -252,7 +271,7 @@ export function Monitoring() {
                   <option value="PASSED_WITH_FINDINGS">Passed with findings</option>
                   <option value="FAILED">Failed</option>
                 </select>
-                <input aria-label="Conducted on" type="date" value={drillForm.conducted_at}
+                <input aria-label="Conducted on" type="date" max={new Date().toLocaleDateString('en-CA')} value={drillForm.conducted_at}
                   onChange={(e) => setDrillForm({ ...drillForm, conducted_at: e.target.value })} className={INPUT} />
                 <input aria-label="Findings" placeholder="Findings (optional)" value={drillForm.findings}
                   onChange={(e) => setDrillForm({ ...drillForm, findings: e.target.value })} className={`${INPUT} min-w-[180px] flex-1`} />
@@ -263,8 +282,8 @@ export function Monitoring() {
             {!drills.drills.length ? (
               <p className="p-3 text-[11px] leading-relaxed text-text-secondary">
                 No BCP drills recorded for this model.{' '}
-                {drills.risk_level === 'HIGH' || drills.risk_level === 'CRITICAL'
-                  ? 'HIGH risk models need a drill within the interval (RBI FREE-AI Rec 21).'
+                {drills.drill_required
+                  ? 'HIGH and CRITICAL risk models need a passed drill within the interval (RBI FREE-AI Rec 21).'
                   : 'Drills are required for HIGH risk models and recommended for others.'}
               </p>
             ) : (

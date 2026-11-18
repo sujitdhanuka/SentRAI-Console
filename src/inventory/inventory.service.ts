@@ -16,6 +16,7 @@ import { LessThan, Not } from 'typeorm';
 import {
   AIIncidentEntity,
   AIModelEntity,
+  BcpDrillEntity,
   BcpStateEntity,
   DriftReportEntity,
   ModelApprovalEntity,
@@ -64,6 +65,7 @@ import {
   RescanSummary,
 } from './inventory.dto';
 import { sourceLocationsOf } from '../discovery/source-locations';
+import { latestSuccessfulDrill, latestSuccessfulDrills } from '../monitoring/bcp-drills';
 
 function parseDate(s?: string | null): Date | null {
   return s ? new Date(s) : null;
@@ -103,6 +105,7 @@ export class InventoryService implements OnModuleInit {
     @InjectRepository(DriftReportEntity) private readonly drifts: Repository<DriftReportEntity>,
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
     @InjectRepository(BcpStateEntity) private readonly bcpStates: Repository<BcpStateEntity>,
+    @InjectRepository(BcpDrillEntity) private readonly bcpDrills: Repository<BcpDrillEntity>,
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
     @InjectRepository(ModelApprovalEntity) private readonly approvals: Repository<ModelApprovalEntity>,
     private readonly treeSitter: TreeSitterService,
@@ -140,7 +143,7 @@ export class InventoryService implements OnModuleInit {
 
   /** Gather operational evidence for framework validators (Art-12, MEASURE-2.4, ...). */
   async buildValidationContext(modelId: string): Promise<ValidationContext> {
-    const [ledgerEventCount, driftReportCount, lastDrift, overdueIncidentCount, bcpState] = await Promise.all([
+    const [ledgerEventCount, driftReportCount, lastDrift, overdueIncidentCount, bcpState, lastDrill] = await Promise.all([
       this.ledger.count({ where: { modelId } }),
       this.drifts.count({ where: { modelId } }),
       this.drifts.findOne({ where: { modelId }, order: { computedAt: 'DESC' } }),
@@ -153,6 +156,7 @@ export class InventoryService implements OnModuleInit {
         },
       }),
       this.bcpStates.findOne({ where: { modelId } }),
+      latestSuccessfulDrill(this.bcpDrills, modelId),
     ]);
     return {
       ledgerEventCount,
@@ -160,13 +164,15 @@ export class InventoryService implements OnModuleInit {
       lastDriftAt: lastDrift?.computedAt ?? null,
       overdueIncidentCount,
       bcpConfigured: Boolean(bcpState),
-      bcpDrillLastConducted: bcpState?.drillLastConducted ?? null,
+      bcpDrillLastConducted: lastDrill,
       euHighRiskDomains: this.config.get<string[]>('euAiActHighRiskDomains'),
     };
   }
 
-  private buildResponse(orm: AIModelEntity, triagedRisk?: RiskLevel): ModelResponse {
-    const report = validateSutrasCompliance(modelEntityToEntry(orm));
+  /** `lastDrill` is the model's latest successful BCP drill (E0.4); pass it from
+   *  latestSuccessfulDrills so the list agrees with the compliance check. */
+  private buildResponse(orm: AIModelEntity, triagedRisk?: RiskLevel, lastDrill: Date | null = null): ModelResponse {
+    const report = validateSutrasCompliance(modelEntityToEntry(orm), { bcpDrillLastConducted: lastDrill });
     return {
       model_id: orm.id,
       name: orm.name,
@@ -294,7 +300,8 @@ export class InventoryService implements OnModuleInit {
     }));
 
     const planWarning = await this.checkPlanSoftLimit(entry.projectId);
-    return { ...this.buildResponse(orm, triaged), plan_warning: planWarning };
+    const lastDrill = await latestSuccessfulDrill(this.bcpDrills, orm.id);
+    return { ...this.buildResponse(orm, triaged, lastDrill), plan_warning: planWarning };
   }
 
   /**
@@ -373,7 +380,8 @@ export class InventoryService implements OnModuleInit {
     if (opts.riskLevel) qb.andWhere('m.riskLevel = :rl', { rl: opts.riskLevel });
     if (opts.projectId) qb.andWhere('m.projectId = :pid', { pid: opts.projectId });
     const rows = await qb.getMany();
-    return rows.map((r) => this.buildResponse(r));
+    const drills = await latestSuccessfulDrills(this.bcpDrills, rows.map((r) => r.id));
+    return rows.map((r) => this.buildResponse(r, undefined, drills.get(r.id) ?? null));
   }
 
   private async getOrThrow(modelId: string): Promise<AIModelEntity> {
@@ -385,7 +393,8 @@ export class InventoryService implements OnModuleInit {
   /** Full response for a single model — used by the governance workspace to
    *  read tool authorization and operational state. */
   async getModel(modelId: string): Promise<ModelResponse> {
-    return this.buildResponse(await this.getOrThrow(modelId));
+    const orm = await this.getOrThrow(modelId);
+    return this.buildResponse(orm, undefined, await latestSuccessfulDrill(this.bcpDrills, orm.id));
   }
 
   /**

@@ -188,17 +188,17 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   ));
 
   // MEASURE — the system is actually tested and measured
-  // Security and resilience evaluated (MEASURE 2.7); the review also covers
-  // bias auditing (MEASURE 2.11).
+  // Security and resilience evaluated (MEASURE 2.7). It passes on a red-team
+  // date or report alone, so it is not claimed as bias evidence (MEASURE 2.11).
   const flags = ctx.flags ?? getFeatureFlags();
   let redTeamOk = false;
-  let redTeamEvidence = 'No red-team / bias-audit evidence on record';
-  let redTeamGap = 'Measure stage requires a bias audit / red-team review within the last 12 months (date or attached report).';
+  let redTeamEvidence = 'No red-team evidence on record';
+  let redTeamGap = 'Measure stage requires a red-team review within the last 12 months (date or attached report).';
   if (flags.redTeamIntervals) {
     // E0.3: one interval per risk tier, the same rule Sutra 7 uses.
     const interval = redTeamIntervalDays(entry.riskLevel);
     const at = lastRedTeamEvidenceAt(entry);
-    redTeamGap = `Measure stage requires a bias audit / red-team review within ${interval} days for ${entry.riskLevel} risk (date or attached report).`;
+    redTeamGap = `Measure stage requires a red-team review within ${interval} days for ${entry.riskLevel} risk (date or attached report).`;
     if (at) {
       const d = daysBetween(at);
       redTeamOk = d <= interval;
@@ -218,7 +218,7 @@ export function validateNistRmf(entry: AIModelEntry, ctx: ValidationContext = {}
   }
   checks.push(check(
     'MEASURE-2.7',
-    'Security Red Teaming & Bias Auditing',
+    'Security Red Teaming',
     redTeamOk,
     redTeamEvidence,
     redTeamGap,

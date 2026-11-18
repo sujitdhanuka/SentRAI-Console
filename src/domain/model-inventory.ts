@@ -166,6 +166,11 @@ export const RED_TEAM_INTERVAL_DAYS = { HIGH: 90, MEDIUM: 180, LOW: 365 } as con
 /** Interval used while the flag is off: the NIST check's original 12-month rule. */
 export const LEGACY_RED_TEAM_INTERVAL_DAYS = 365;
 
+/** HIGH, CRITICAL and PROHIBITED: the tiers the HIGH-risk governance rules apply to. */
+export function isHighOrAbove(risk: RiskLevel): boolean {
+  return (RISK_SEVERITY[risk] ?? 0) >= RISK_SEVERITY[RiskLevel.HIGH];
+}
+
 export function redTeamIntervalDays(risk: RiskLevel): number {
   const sev = RISK_SEVERITY[risk] ?? 0;
   if (sev >= RISK_SEVERITY[RiskLevel.HIGH]) return RED_TEAM_INTERVAL_DAYS.HIGH;
@@ -173,13 +178,13 @@ export function redTeamIntervalDays(risk: RiskLevel): number {
   return RED_TEAM_INTERVAL_DAYS.LOW;
 }
 
-/** Most recent red-team evidence: the recorded date, else the newest attached red_team report. */
+/** Most recent red-team evidence: the newer of the recorded date and the newest attached red_team report. */
 export function lastRedTeamEvidenceAt(entry: AIModelEntry): Date | null {
-  if (entry.lastRedTeamDate) return entry.lastRedTeamDate;
   const stamps = (entry.evidenceArtifacts ?? [])
     .filter((a) => a.type === 'red_team' && a.added_at)
     .map((a) => new Date(a.added_at).getTime())
     .filter((t) => !Number.isNaN(t));
+  if (entry.lastRedTeamDate) stamps.push(entry.lastRedTeamDate.getTime());
   return stamps.length ? new Date(Math.max(...stamps)) : null;
 }
 

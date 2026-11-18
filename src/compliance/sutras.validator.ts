@@ -4,7 +4,7 @@
  */
 import { RiskLevel, SutraAlignment } from '../common/enums';
 import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
-import { AIModelEntry, hasEvidence, redTeamWithinInterval } from '../domain/model-inventory';
+import { AIModelEntry, hasEvidence, isHighOrAbove, redTeamWithinInterval } from '../domain/model-inventory';
 import { bcpDrillIntervalDays, bcpDrillStatus } from '../domain/monitoring';
 
 /** Operational evidence the Sutra checks can use when the caller has it. */
@@ -141,9 +141,13 @@ export function validateSutrasCompliance(entry: AIModelEntry, ctx: SutrasContext
   });
 
   // Sutra 7: Safety, Resilience, Sustainability — red-team for HIGH (a date
-  // on record or an attached red-team report both count as evidence).
-  const isHigh = entry.riskLevel === RiskLevel.HIGH;
-  const redTeamGap = 'HIGH risk model with no red-team exercise on record. REC 20 asks for red teaming at a frequency proportionate to risk, and after material changes.';
+  // on record or an attached red-team report both count as evidence). With
+  // governance flags on, CRITICAL is held to the HIGH rules too, matching the
+  // drill reminder, the Monitoring panel and the red-team interval table;
+  // flags off keeps the original HIGH-only scope.
+  const isHigh = flags.governanceV2 ? isHighOrAbove(entry.riskLevel) : entry.riskLevel === RiskLevel.HIGH;
+  const tier = entry.riskLevel;
+  const redTeamGap = `${tier} risk model with no red-team exercise on record. REC 20 asks for red teaming at a frequency proportionate to risk, and after material changes.`;
   let safetyOk = isHigh ? entry.lastRedTeamDate !== null || hasEvidence(entry, 'red_team') : true;
   let safetyEvidence = safetyOk
     ? entry.lastRedTeamDate
@@ -152,24 +156,24 @@ export function validateSutrasCompliance(entry: AIModelEntry, ctx: SutrasContext
     : '';
   const gaps: string[] = safetyOk ? [] : [redTeamGap];
 
-  // E0.3: the red-team record must also be within the HIGH tier's interval.
+  // E0.3: the red-team record must also be within the tier's interval.
   if (isHigh && flags.redTeamIntervals && safetyOk) {
     const rt = redTeamWithinInterval(entry);
     if (!rt.ok) {
       safetyOk = false;
-      gaps.push(`HIGH risk model last red teamed ${rt.ageDays ?? 'an unknown number of'} days ago; REC 20 interval for HIGH risk is ${rt.intervalDays} days.`);
+      gaps.push(`${tier} risk model last red teamed ${rt.ageDays ?? 'an unknown number of'} days ago; REC 20 interval for ${tier} risk is ${rt.intervalDays} days.`);
     }
   }
 
-  // E0.4: HIGH risk models need a BCP drill within the interval (REC 21).
+  // E0.4: HIGH/CRITICAL models need a passed BCP drill within the interval (REC 21).
   if (isHigh && flags.bcpDrills) {
     const drill = bcpDrillStatus(ctx.bcpDrillLastConducted ?? null);
     if (drill.status === 'NONE' || drill.status === 'OVERDUE') {
       safetyOk = false;
       gaps.push(
         drill.status === 'NONE'
-          ? 'HIGH risk model with no BCP drill on record. REC 21 requires business-continuity plans for AI systems to be tested.'
-          : `HIGH risk model's last BCP drill was ${drill.ageDays} days ago; the drill interval is ${bcpDrillIntervalDays()} days (REC 21).`,
+          ? `${tier} risk model with no passed BCP drill on record. REC 21 requires business-continuity plans for AI systems to be tested.`
+          : `${tier} risk model's last passed BCP drill was ${drill.ageDays} days ago; the drill interval is ${bcpDrillIntervalDays()} days (REC 21).`,
       );
     } else if (safetyEvidence) {
       safetyEvidence += `; last BCP drill ${drill.ageDays} day(s) ago`;

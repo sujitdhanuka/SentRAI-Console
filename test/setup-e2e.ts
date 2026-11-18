@@ -4,3 +4,7 @@ process.env.SQLITE_PATH = ':memory:';
 process.env.DB_SYNCHRONIZE = 'true';
 process.env.JWT_SECRET = 'test-secret';
 process.env.CORS_ORIGINS = 'http://localhost';
+// Flag-off guarantee: the suite runs with every governance flag off even when a
+// local .env turns GOVERNANCE_V2 on (ConfigModule never overrides a set variable).
+// Flag-on tests set GOVERNANCE_V2=true themselves and restore it.
+process.env.GOVERNANCE_V2 = 'false';

@@ -170,7 +170,7 @@ export class ComplianceService {
     const fw: Record<string, { assessed: number; passing: number; open_gaps: number }> = {};
     for (const id of FRAMEWORK_IDS) fw[id] = { assessed: 0, passing: 0, open_gaps: 0 };
     const riskTiers: Record<string, number> = {};
-    const gapCounts = new Map<string, { framework: string; control: string; name: string; count: number }>();
+    const gapCounts = new Map<string, { framework: string; control: string; name: string; count: number; models: Set<string> }>();
     let fullyCompliant = 0;
     let totalGaps = 0;
     let highRisk = 0;
@@ -203,8 +203,13 @@ export class ComplianceService {
           if (c.mandatory && !c.passed) {
             const code = c.control_code ?? c.sutra;
             const key = `${fwId}|${code}`;
-            const g = gapCounts.get(key) ?? { framework: fwId, control: code, name: c.name ?? c.sutra, count: 0 };
-            g.count += 1;
+            // Count each model once per control, even when two checks share a
+            // code (NIST MAP-1.1 covers both purpose and deployment context).
+            const g = gapCounts.get(key) ?? { framework: fwId, control: code, name: c.name ?? c.sutra, count: 0, models: new Set<string>() };
+            if (!g.models.has(m.id)) {
+              g.models.add(m.id);
+              g.count += 1;
+            }
             gapCounts.set(key, g);
           }
         }

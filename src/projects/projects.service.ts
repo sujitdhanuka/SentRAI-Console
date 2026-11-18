@@ -16,7 +16,8 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join, resolve, sep } from 'path';
 
-import { AIModelEntity, OrganizationEntity, ProjectEntity } from '../database/entities';
+import { AIModelEntity, BcpDrillEntity, OrganizationEntity, ProjectEntity } from '../database/entities';
+import { latestSuccessfulDrills } from '../monitoring/bcp-drills';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
@@ -35,6 +36,7 @@ export class ProjectsService {
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
     @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
+    @InjectRepository(BcpDrillEntity) private readonly bcpDrills: Repository<BcpDrillEntity>,
     private readonly config: ConfigService,
     private readonly treeSitter: TreeSitterService,
   ) {}
@@ -56,8 +58,9 @@ export class ProjectsService {
     const models = await this.models.find({ where: { projectId: orm.id, isActive: true } });
     let compliant = 0;
     let openGaps = 0;
+    const drills = await latestSuccessfulDrills(this.bcpDrills, models.map((m) => m.id));
     for (const m of models) {
-      const report = validateSutrasCompliance(modelEntityToEntry(m));
+      const report = validateSutrasCompliance(modelEntityToEntry(m), { bcpDrillLastConducted: drills.get(m.id) ?? null });
       if (sutrasOverallPass(report)) compliant += 1;
       else openGaps += sutrasBlockingGaps(report).length;
     }
