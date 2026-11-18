@@ -2645,6 +2645,35 @@ describe('SentrAI Console (e2e)', () => {
     });
   });
 
+  it('PROJECTS: a global owner picks and changes a project organization; org members cannot move projects', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const mkOrg = async (name: string) =>
+      (await request(http).post('/api/v1/organizations').set(auth(admin)).send({ name }).expect(201)).body.organization_id;
+    const orgA = await mkOrg('ProjOrg A');
+    const orgB = await mkOrg('ProjOrg B');
+    await request(http).post('/api/v1/users').set(auth(admin))
+      .send({ email: 'g-owner@proj.test', full_name: 'G', password: 'pw12345678', role: 'OWNER' }).expect(201);
+    await request(http).post('/api/v1/users').set(auth(admin))
+      .send({ email: 'a-owner@proj.test', full_name: 'A', password: 'pw12345678', role: 'OWNER', organization_id: orgA }).expect(201);
+    const g = await login('g-owner@proj.test', 'pw12345678');
+    const aOwner = await login('a-owner@proj.test', 'pw12345678');
+
+    await request(http).post('/api/v1/projects').set(auth(g)).send({ name: 'Proj Ghost', organization_id: 'nope' }).expect(400);
+    const p = (await request(http).post('/api/v1/projects').set(auth(g)).send({ name: 'Proj Global', organization_id: orgA }).expect(201)).body;
+    expect(p).toMatchObject({ tenant_id: orgA, tenant_name: 'ProjOrg A' });
+
+    const moved = (await request(http).patch(`/api/v1/projects/${p.project_id}`).set(auth(g)).send({ organization_id: orgB }).expect(200)).body;
+    expect(moved).toMatchObject({ tenant_id: orgB, tenant_name: 'ProjOrg B' });
+    expect((await request(http).patch(`/api/v1/projects/${p.project_id}`).set(auth(g)).send({ organization_id: null }).expect(200)).body.tenant_id).toBeNull();
+
+    // An org member always creates in their own org and cannot move projects out of it.
+    const own = (await request(http).post('/api/v1/projects').set(auth(aOwner)).send({ name: 'Proj A Own', organization_id: orgB }).expect(201)).body;
+    expect(own.tenant_id).toBe(orgA);
+    await request(http).patch(`/api/v1/projects/${own.project_id}`).set(auth(aOwner)).send({ organization_id: orgB }).expect(403);
+    await request(http).patch(`/api/v1/projects/${own.project_id}`).set(auth(aOwner)).send({ name: 'Proj A Renamed' }).expect(200);
+  });
+
   it('ACTING ORG: a global OWNER works in the scoped organization via X-SentrAI-Org; org members cannot use it', async () => {
     const a = await govOrg('ActOrgA');
     const b = await govOrg('ActOrgB');

@@ -2,6 +2,8 @@ import { Check, FileArchive, FolderUp, Github, KeyRound, Loader2, X } from 'luci
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api, apiUpload } from '../../api/client';
+import { OrgSelect, useAssignableOrgs } from '../../api/organizations';
+import { useSession } from '../../stores/session';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { parseGithubRepo } from './GithubImportModal';
 
@@ -34,6 +36,9 @@ export function NewProjectWizard({
   const toast = useConsoleUi((s) => s.toast);
   const [step, setStep] = useState<Step>(1);
   const [name, setName] = useState('');
+  const { orgs, canChoose } = useAssignableOrgs();
+  const scopeOrgId = useSession((s) => s.activeOrgId);
+  const [orgId, setOrgId] = useState(scopeOrgId ?? '');
   const [created, setCreated] = useState<CreatedProject | null>(null);
   const [source, setSource] = useState<Source>('github');
   const [busy, setBusy] = useState(false);
@@ -52,8 +57,9 @@ export function NewProjectWizard({
     if (open) {
       setStep(1); setName(''); setCreated(null); setSource('github');
       setUrl(''); setBranch(''); setToken(''); setError(null); setBusy(false);
+      setOrgId(scopeOrgId ?? '');
     }
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +80,7 @@ export function NewProjectWizard({
     try {
       const proj = await api<{ project_id: string; name: string }>('/projects', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: name.trim(), ...(canChoose && orgId ? { organization_id: orgId } : {}) }),
       });
       setCreated({ project_id: proj.project_id, name: proj.name });
       setStep(2);
@@ -203,6 +209,15 @@ export function NewProjectWizard({
                   One project tracks one application's codebase and its scoped AI model inventory.
                 </p>
               </div>
+              {canChoose && (
+                <div>
+                  <label className={LABEL}>Organization</label>
+                  <OrgSelect className={FIELD} value={orgId} onChange={setOrgId} orgs={orgs} label="Organization" />
+                  <p className="mt-1 text-[9.5px] leading-snug text-text-tertiary">
+                    The organization whose governance (risk register, settings, approvals) covers this project's models.
+                  </p>
+                </div>
+              )}
               {error && <p className="rounded-md border border-negative bg-negative-soft px-2.5 py-1.5 text-[10.5px] text-negative">{error}</p>}
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>

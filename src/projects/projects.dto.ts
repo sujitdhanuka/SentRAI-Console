@@ -18,6 +18,12 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString()
   root_directory: string = '';
+
+  /** Owning organization. Only a global (organization-less) user may choose it;
+   *  members of an organization always create in their own. */
+  @IsOptional()
+  @IsString()
+  organization_id?: string | null;
 }
 
 export class GithubImportDto {
@@ -50,6 +56,11 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   root_directory?: string | null;
+
+  /** Move the project to an organization (null = none). Global users only. */
+  @IsOptional()
+  @IsString()
+  organization_id?: string | null;
 }
 
 export interface ProjectResponse {

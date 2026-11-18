@@ -98,6 +98,9 @@ export class ProjectsService {
     const existing = await this.projects.findOne({ where: { name: dto.name } });
     if (existing) throw new ConflictException(`A project named '${dto.name}' already exists`);
 
+    // Members create in their own org; a global user may name one.
+    const tenantId = user.tenantId ?? (await this.resolveOrganization(dto.organization_id));
+
     const now = new Date();
     const id = uuidv4();
     let project: ProjectEntity;
@@ -111,7 +114,7 @@ export class ProjectsService {
           // populated via POST /projects/:id/codebase.
           rootDirectory: usesServerPath ? expandAndResolve(dto.root_directory) : join(WORKSPACES_DIR, id),
           lastScannedAt: null,
-          tenantId: user.tenantId,
+          tenantId,
           createdAt: now,
           updatedAt: now,
         }),
@@ -334,6 +337,14 @@ export class ProjectsService {
     return Promise.all(rows.map((p) => this.toResponse(p)));
   }
 
+  /** An organization id a global user named, checked to exist (null = none). */
+  private async resolveOrganization(orgId: string | null | undefined): Promise<string | null> {
+    if (!orgId) return null;
+    const org = await this.orgs.findOne({ where: { id: orgId } });
+    if (!org) throw new BadRequestException('Organization not found');
+    return org.id;
+  }
+
   async get(projectId: string): Promise<ProjectResponse> {
     const project = await this.projects.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
@@ -348,6 +359,15 @@ export class ProjectsService {
       throw new ForbiddenException('Cannot modify a project outside your organization');
     }
 
+    if (dto.organization_id !== undefined) {
+      if (user.tenantId !== null) {
+        if ((dto.organization_id ?? null) !== user.tenantId) {
+          throw new ForbiddenException('Only a global administrator can move a project to another organization');
+        }
+      } else {
+        project.tenantId = await this.resolveOrganization(dto.organization_id);
+      }
+    }
     if (dto.name !== undefined && dto.name !== null) project.name = dto.name;
     if (dto.description !== undefined && dto.description !== null) project.description = dto.description;
     if (dto.root_directory !== undefined && dto.root_directory !== null) {
