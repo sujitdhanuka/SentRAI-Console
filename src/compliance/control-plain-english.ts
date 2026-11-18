@@ -19,20 +19,20 @@ export const FRAMEWORK_NAMES: Record<string, string> = {
  */
 const CONTROL_REQUIREMENT: Record<string, string> = {
   // NIST AI RMF
-  'GOVERN-1.1': 'a named accountable owner',
+  'GOVERN-2.1': 'a named accountable owner',
   'GOVERN-1.2': 'a board-approved AI policy reference',
-  'GOVERN-1.3': 'a defined audit schedule',
-  'MAP-1.1': 'a documented purpose / use case',
-  'MAP-1.2': 'documented deployment context and affected users',
-  'MAP-1.3': 'source or dependency provenance',
-  'MEASURE-2.1': 'a recent bias audit / red-team review',
-  'MEASURE-2.2': 'recent performance-drift measurement',
+  'GOVERN-1.5': 'a defined audit schedule',
+  'GOVERN-3.2': 'a human-in-the-loop oversight control',
+  'MAP-1.1': 'a documented purpose, use case and deployment context',
+  'MAP-4.1': 'source or dependency provenance',
   'MEASURE-2.3': 'recorded performance benchmarks',
-  'MANAGE-1.1': 'a human-in-the-loop oversight control',
-  'MANAGE-1.2': 'a business-continuity fallback plan',
-  'MANAGE-1.3': 'on-time incident reporting',
-  'MANAGE-2.1': 'a named, resourced risk-response owner',
+  'MEASURE-2.4': 'recent performance-drift measurement',
+  'MEASURE-2.7': 'a recent bias audit / red-team review',
+  'MEASURE-2.10': 'a DPIA or privacy review',
   'MEASURE-3.1': 'a risk-tracking ledger history',
+  'MANAGE-2.1': 'a named, resourced risk-response owner',
+  'MANAGE-2.4': 'a business-continuity fallback plan',
+  'MANAGE-4.3': 'on-time incident reporting',
   // EU AI Act
   'Art-9': 'a documented risk-management system',
   'Art-10': 'training-data governance / bias testing',
@@ -48,14 +48,14 @@ const CONTROL_REQUIREMENT: Record<string, string> = {
   'Art-50': 'a user transparency disclosure',
   'Art-72': 'a post-market monitoring plan',
   // ISO/IEC 42001
+  'AIMS-5.3': 'a named, accountable owner team',
   'AIMS-6.1.2': 'a systematic risk assessment',
-  'AIMS-7.2': 'a competent, accountable owner team',
-  'AIMS-8.2': 'a documented impact assessment',
-  'AIMS-8.3': 'data & codebase governance',
+  'AIMS-8.4': 'a documented impact assessment',
+  'AIMS-A.7.5': 'data & codebase provenance',
   'AIMS-9.1': 'active performance monitoring',
   'AIMS-9.2': 'internal audits at planned intervals',
-  'AIMS-10.1': 'timely handling of nonconformities',
-  'AIMS-A.6.2': 'documented model-card information',
+  'AIMS-10.2': 'timely handling of nonconformities',
+  'AIMS-A.6.2.7': 'documented model-card information',
   // 7 Sutras (SutraAlignment enum values)
   TRUST_IS_THE_FOUNDATION: 'a board-approved AI policy (Trust)',
   PEOPLE_FIRST: 'human oversight for medium/high-risk models (People First)',
@@ -63,7 +63,7 @@ const CONTROL_REQUIREMENT: Record<string, string> = {
   FAIRNESS_AND_EQUITY: 'documented bias-testing evidence (Fairness)',
   ACCOUNTABILITY: 'a named accountability owner (Accountability)',
   UNDERSTANDABLE_BY_DESIGN: 'an explainability mechanism (Understandable by Design)',
-  SAFETY_RESILIENCE_SUSTAINABILITY: 'a red-team exercise on record (Safety & Resilience)',
+  SAFETY_RESILIENCE_SUSTAINABILITY: 'a current red-team exercise (and BCP drill, where tracked) on record (Safety & Resilience)',
 };
 
 /** Plain-English requirement for a control code, with a sensible fallback. */

@@ -1,6 +1,9 @@
 /**
  * ISO 42001 — AI Management System compliance plugin.
  * Port of src/sentrai/compliance/frameworks/iso_42001.py.
+ *
+ * Control IDs name the ISO/IEC 42001:2023 clause or Annex A control each check
+ * actually evidences (Phase 0 label fix: several pointed at the wrong clause).
  */
 import {
   buildReport,
@@ -20,22 +23,22 @@ export class ISO42001Plugin implements ComplianceFrameworkPlugin {
     const results: ControlResult[] = [];
 
     results.push(
-      control('ISO42001-6.1', 'Risk identification', Boolean(asset.risk_level), ControlSeverity.BLOCKING,
+      control('ISO42001-6.1.2', 'Risk identification', Boolean(asset.risk_level), ControlSeverity.BLOCKING,
         asset.risk_level ? 'Risk level assigned' : 'No risk level assigned',
         'Set risk_level to LOW, MEDIUM, HIGH, or CRITICAL'),
     );
     results.push(
-      control('ISO42001-6.2', 'AI objectives documented', Boolean(asset.use_case_description), ControlSeverity.MAJOR,
+      control('ISO42001-A.6.2.2', 'Intended purpose documented', Boolean(asset.use_case_description), ControlSeverity.MAJOR,
         asset.use_case_description ? 'Use case documented' : 'No use case description',
         "Add a use_case_description explaining the model's purpose and scope"),
     );
     results.push(
-      control('ISO42001-8.4', 'Risk assessment performed', Boolean(asset.board_policy_ref), ControlSeverity.BLOCKING,
+      control('ISO42001-5.2', 'AI policy referenced', Boolean(asset.board_policy_ref), ControlSeverity.BLOCKING,
         asset.board_policy_ref ? 'Board policy reference present' : 'No board policy reference',
         'Link model to an approved board AI policy document'),
     );
     results.push(
-      control('ISO42001-8.6', 'Transparency information', Boolean(asset.use_case_description), ControlSeverity.MAJOR,
+      control('ISO42001-A.8.2', 'Information for users', Boolean(asset.use_case_description), ControlSeverity.MAJOR,
         asset.use_case_description ? 'Use case description provides transparency' : 'Transparency not documented',
         'Document model decisions and limitations clearly'),
     );
@@ -49,13 +52,13 @@ export class ISO42001Plugin implements ComplianceFrameworkPlugin {
         'Deployed models must have drift monitoring enabled'),
     );
     results.push(
-      control('ISO42001-9.3', 'Owner team assigned', Boolean(asset.owner_team), ControlSeverity.BLOCKING,
+      control('ISO42001-5.3', 'Owner team assigned', Boolean(asset.owner_team), ControlSeverity.BLOCKING,
         `Owner team: ${asset.owner_team ?? 'MISSING'}`, 'Assign an owner_team responsible for this model'),
     );
 
     const humanOversight = Boolean(asset.human_oversight_required);
     results.push(
-      control('ISO42001-10.1', 'Human oversight declared', humanOversight, ControlSeverity.MINOR,
+      control('ISO42001-A.9.2', 'Human oversight declared', humanOversight, ControlSeverity.MINOR,
         humanOversight ? 'Human oversight declared' : 'No human oversight flag set',
         'Set human_oversight_required=True or document autonomous scope'),
     );

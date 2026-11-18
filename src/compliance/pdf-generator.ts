@@ -34,11 +34,11 @@ export function generateCompliancePdf(entry: AIModelEntry, ctx: ValidationContex
       if (subtitle) doc.font('Helvetica').fontSize(10).fillColor('#334155').text(subtitle);
       doc.moveDown(0.2);
       for (const c of report.checks) {
-        const status = c.passed ? 'PASS' : 'FAIL';
+        const status = c.notAssessed ? 'NOT ASSESSED' : c.passed ? 'PASS' : 'FAIL';
         doc
           .font('Helvetica-Bold')
           .fontSize(9)
-          .fillColor(c.passed ? '#166534' : '#991b1b')
+          .fillColor(c.notAssessed ? '#475569' : c.passed ? '#166534' : '#991b1b')
           .text(`[${status}] ${c.controlCode} — ${c.name}`);
         if (c.evidence) {
           doc.font('Helvetica').fontSize(8).fillColor('#475569').text(c.evidence, { indent: 12 });

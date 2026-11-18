@@ -3,6 +3,7 @@
  * Mirrors src/sentrai/config.py (Settings) and the JWT constants from
  * api/middleware/auth.py.
  */
+import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
 
 export interface AppConfig {
   port: number;
@@ -52,6 +53,9 @@ export interface AppConfig {
 
   // Inventory semi-annual update enforcement (days)
   inventoryUpdateSlaDays: number;
+
+  // Governance feature flags (GOVERNANCE_V2 master switch, default off).
+  featureFlags: FeatureFlags;
 
   // Outbound webhook for governance notifications (breaker trips, overdue
   // incidents, staleness, plan soft limits). Unset = log-only.
@@ -232,6 +236,7 @@ export default (): AppConfig => {
   psiAlertThreshold: parseFloat(process.env.PSI_ALERT_THRESHOLD ?? '0.20'),
   accuracyDropAlertPct: parseFloat(process.env.ACCURACY_DROP_ALERT_PCT ?? '0.05'),
   inventoryUpdateSlaDays: parseInt(process.env.INVENTORY_UPDATE_SLA_DAYS ?? '180', 10),
+  featureFlags: getFeatureFlags(),
 
   webhookUrl: process.env.WEBHOOK_URL?.trim() || null,
 
