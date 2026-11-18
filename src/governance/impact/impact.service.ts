@@ -101,6 +101,8 @@ export class ImpactAssessmentService implements OnModuleInit {
       signed_at: r.signedAt,
       revalidation_reason: r.revalidationReason,
       content_hash: r.contentHash,
+      // L8: recomputed from the stored snapshot, so tampering outside the API shows.
+      hash_verified: r.contentHash ? iaContentHash(r) === r.contentHash : null,
       context_snapshot: r.contextSnapshot,
       risk_snapshot: r.riskSnapshot,
       created_by: r.createdBy,
@@ -189,6 +191,12 @@ export class ImpactAssessmentService implements OnModuleInit {
     if (problems.length) throw new BadRequestException(problems);
     const model = await this.models.findOne({ where: { id: r.modelId } });
     if (!model) throw new NotFoundException('Model not found');
+    // M5 separation of duties: for HIGH and CRITICAL systems the person who
+    // drafted the assessment cannot also sign it.
+    const tier = gateTierOf(model.riskLevel);
+    if ((tier === 'HIGH' || tier === 'CRITICAL') && r.createdBy === user.email) {
+      throw new ForbiddenException(`You drafted this assessment for a ${tier} system; a different Owner, CISO or Approver must sign it`);
+    }
     const riskList = this.flags.isEnabled('riskRegister') ? await this.risks.list(user, { model_id: r.modelId, org_id: r.orgId }) : { risks: [] as any[] };
     r.contextSnapshot = {
       model: {
@@ -198,18 +206,18 @@ export class ImpactAssessmentService implements OnModuleInit {
       },
       profile: contextView(model.contextProfile as any),
     };
-    r.riskSnapshot = riskList.risks
+    r.riskSnapshot = jsonRoundTrip(riskList.risks
       .filter((x) => !['DISMISSED'].includes(x.status))
-      .map((x) => ({ risk_id: x.risk_id, category: x.category, title: x.title, status: x.status, assessment: x.assessment, acceptance: x.acceptance, within_appetite: x.within_appetite }));
-    const now = new Date();
+      .map((x) => ({ risk_id: x.risk_id, category: x.category, title: x.title, status: x.status, assessment: x.assessment, acceptance: x.acceptance, within_appetite: x.within_appetite })));
+    r.contextSnapshot = jsonRoundTrip(r.contextSnapshot);
+    // Whole seconds, so the stored datetime reproduces the hashed value exactly.
+    const now = new Date(Math.floor(Date.now() / 1000) * 1000);
     r.status = 'FINAL';
     r.signedBy = user.email;
     r.signedByRole = user.role;
     r.signedAt = now;
     Object.assign(r, deriveFlags(r.packIds, r.questionnaire));
-    r.contentHash = createHash('sha256')
-      .update(canonicalJson({ id: r.id, model_id: r.modelId, version: r.version, questionnaires: r.packIds, answers: r.questionnaire, context: r.contextSnapshot, risks: r.riskSnapshot, signed_by: r.signedBy, signed_at: now.toISOString() }))
-      .digest('hex');
+    r.contentHash = iaContentHash(r);
     r.updatedAt = now;
     // The previous signed version is superseded.
     for (const old of await this.rows.find({ where: { modelId: r.modelId } })) {
@@ -249,4 +257,18 @@ export class ImpactAssessmentService implements OnModuleInit {
     const model = await this.models.findOne({ where: { id: r.modelId } });
     return renderReport(this.view(r), layout, format, model?.name ?? r.modelId);
   }
+}
+
+function jsonRoundTrip<T>(v: T): T {
+  return v === null || v === undefined ? v : JSON.parse(JSON.stringify(v));
+}
+
+/** The signed content of an impact assessment, as hashed at sign-off. */
+export function iaContentHash(r: ImpactAssessmentEntity): string {
+  return createHash('sha256')
+    .update(canonicalJson({
+      id: r.id, model_id: r.modelId, version: r.version, questionnaires: r.packIds, answers: r.questionnaire,
+      context: r.contextSnapshot, risks: r.riskSnapshot, signed_by: r.signedBy, signed_at: r.signedAt ? new Date(r.signedAt).toISOString() : null,
+    }))
+    .digest('hex');
 }

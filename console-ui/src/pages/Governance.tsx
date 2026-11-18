@@ -52,6 +52,7 @@ interface SettingsView {
     people_items: Record<string, { label: string; isoClause?: string }>;
     band_presets: Record<string, Band[]>;
     approver_options: string[];
+    parameters?: Array<{ name: string; enforced: boolean; enforced_by: string[] }>;
   };
 }
 interface Change { field: string; from: any; to: any }
@@ -395,6 +396,13 @@ function SettingsTab() {
                 <label key={p.name} className="mb-1 block text-[10px] text-text-secondary">
                   {p.label} <span className="text-text-tertiary">({p.unit})</span>
                   {floor && <span className="ml-1 text-warning">floor {fmt(floor.value)} · {floor.packs.join(', ')}</span>}
+                  {(() => {
+                    const st = view.catalog.parameters?.find((c) => c.name === p.name);
+                    if (!st) return null;
+                    return st.enforced
+                      ? <span className="ml-1 text-text-tertiary" title={st.enforced_by.join(', ')}>enforced</span>
+                      : <span className="ml-1 text-warning" title="Saved and resolved strictest-wins, but no check reads this value yet">recorded, not yet enforced</span>;
+                  })()}
                   <input type="number" step={p.step ?? 1} min={0} className={FIELD} disabled={ro}
                     value={draft.appetite.parameters[p.name] ?? ''}
                     onChange={(e) => set((d) => {

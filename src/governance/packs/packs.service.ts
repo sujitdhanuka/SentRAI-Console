@@ -7,7 +7,7 @@
  */
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThanOrEqual, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { FeatureFlagsService } from '../../common/feature-flags';
@@ -26,6 +26,7 @@ import { diffPacks } from './pack-diff';
 import { evaluatePack, resolveForPacks } from './pack-engine';
 import { BASELINE_PACK_IDS, packRegistry } from './pack-loader';
 import { LoadedPackVersion } from './pack.types';
+import { parameterEnforcement } from './parameter-enforcement';
 import { parameterSpec } from './parameter-resolver';
 
 /** Hook later epics (governance settings) use to narrow packs and add parameter sources per org. */
@@ -183,6 +184,9 @@ export class PacksService {
         rule: parameterSpec(name)?.rule ?? 'min',
         unit: parameterSpec(name)?.unit ?? null,
         description: parameterSpec(name)?.description ?? '',
+        // Recorded parameters that no control or platform feature reads yet are marked, never implied.
+        enforced: parameterEnforcement(name).enforced,
+        enforced_by: parameterEnforcement(name).enforcedBy,
         value: s.applied,
         set_by: s.setBy,
         candidates: s.candidates,
@@ -236,10 +240,16 @@ export class PacksService {
         })),
       };
     });
+    // A live evaluation always reads the model as it is now. With as_of it applies the
+    // pack versions and settings in force on that date to today's model, and the
+    // report as it actually stood then is the control results recorded by that date.
+    const recorded = asOf ? await this.recordedAt(modelId, at) : undefined;
     return {
       model_id: modelId,
       org_id: orgId,
       as_of: at.toISOString(),
+      basis: asOf ? 'CURRENT_MODEL_STATE_UNDER_RULES_AS_OF' : 'CURRENT',
+      ...(asOf ? { recorded_as_of: recorded } : {}),
       pack_versions: Object.fromEntries(packs.map((p) => [p.definition.id, p.definition.version])),
       controls: [...controls.values()].map((c) => ({
         control_id: c.control_id,
@@ -262,6 +272,19 @@ export class PacksService {
     }));
     await this.results.save(rows);
     return { ...ev, recorded: rows.length, evaluated_at: now.toISOString() };
+  }
+
+  /** The control results recorded at or before `at` (the report as it stood then), or null when none were recorded. */
+  private async recordedAt(modelId: string, at: Date) {
+    const newest = await this.results.findOne({ where: { modelId, evaluatedAt: LessThanOrEqual(at) }, order: { evaluatedAt: 'DESC' } });
+    if (!newest) return null;
+    const rows = await this.results.find({ where: { modelId, evaluatedAt: newest.evaluatedAt } });
+    return {
+      evaluated_at: newest.evaluatedAt,
+      evaluated_by: newest.evaluatedBy,
+      pack_versions: newest.packVersionSet,
+      results: rows.map((r) => ({ control_id: r.controlId, status: r.status, evidence_refs: r.evidenceRefs ?? [], clauses: r.clauses ?? [] })),
+    };
   }
 
   async latestResults(user: CurrentUser, modelId: string) {

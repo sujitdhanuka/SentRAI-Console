@@ -265,7 +265,9 @@ export const MODEL_CONTROLS: ControlDefinition[] = [
     title: 'Incidents reported within their deadlines',
     scope: 'MODEL',
     evidenceTypes: [],
-    parameters: ['incidentReportHours'],
+    // Uses each incident's own severity SLA clock; the incidentReportHours
+    // pack parameter is recorded but does not drive this check yet.
+    parameters: [],
     evaluate: (i) => {
       const overdue = i.ctx.overdueIncidentCount ?? 0;
       return outcome(overdue === 0, { overdue });

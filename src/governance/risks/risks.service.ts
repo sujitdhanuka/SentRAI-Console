@@ -19,10 +19,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Not, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { IncidentStatus, Role } from '../../common/enums';
+import { AuditType, IncidentStatus, Role } from '../../common/enums';
 import { FeatureFlagsService } from '../../common/feature-flags';
 import { CurrentUser } from '../../common/interfaces/current-user.interface';
 import {
+  AIAuditTrailEntity,
   AIIncidentEntity,
   AIModelEntity,
   DriftReportEntity,
@@ -55,7 +56,7 @@ const DAY = 86_400_000;
 export const RISK_WRITERS: Role[] = [Role.OWNER, Role.CISO, Role.ADMIN, Role.APPROVER, Role.REVIEWER];
 
 export interface GateFinding {
-  code: 'residual_risk_unaccepted' | 'risk_register_empty' | 'impact_assessment_required';
+  code: 'residual_risk_unaccepted' | 'risk_register_empty' | 'impact_assessment_required' | 'third_party_audit_required';
   message: string;
 }
 
@@ -77,6 +78,7 @@ export class RisksService implements OnModuleInit {
     @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
     @InjectRepository(DriftReportEntity) private readonly drifts: Repository<DriftReportEntity>,
+    @InjectRepository(AIAuditTrailEntity) private readonly audits: Repository<AIAuditTrailEntity>,
     private readonly settings: GovernanceSettingsService,
     private readonly accountability: AccountabilityService,
     private readonly flags: FeatureFlagsService,
@@ -128,6 +130,21 @@ export class RisksService implements OnModuleInit {
     const r = await this.risks.findOne({ where: { id } });
     if (!r || (user.role !== Role.ADMIN && r.orgId !== user.tenantId)) throw new NotFoundException('Risk not found');
     return r;
+  }
+
+  /** Owners must be active members of the risk's organisation (L1). */
+  private async assertOwner(orgId: string, ownerUserId: unknown): Promise<string | null> {
+    if (ownerUserId === null || ownerUserId === undefined || ownerUserId === '') return null;
+    const id = String(ownerUserId);
+    if (!(await this.accountability.isMember(orgId, id))) throw new BadRequestException('owner_user_id must be an active member of the organization');
+    return id;
+  }
+
+  private parseDue(v: unknown): Date | null {
+    if (v === null || v === undefined || v === '') return null;
+    const d = new Date(String(v));
+    if (Number.isNaN(d.getTime())) throw new BadRequestException('due_at must be a date');
+    return d;
   }
 
   private async latestAssessment(riskId: string): Promise<RiskAssessmentEntity | null> {
@@ -265,18 +282,19 @@ export class RisksService implements OnModuleInit {
     if (title.length < 3) throw new BadRequestException('title is required');
     const scopeId = dto.scope_id ? String(dto.scope_id) : null;
     const orgId = await this.orgForScope(user, scopeType, scopeId, dto.org_id);
+    const ownerUserId = await this.assertOwner(orgId, dto.owner_user_id);
     const now = new Date();
     const row = await this.risks.save({
       id: uuidv4(), orgId, scopeType, scopeId, category, title: title.slice(0, 300),
       description: dto.description ?? null, affectedParties: Array.isArray(dto.affected_parties) ? dto.affected_parties.map(String) : null,
       harmType: dto.harm_type ?? null, source: 'MANUAL', sourceRef: null, status: 'DRAFT',
-      ownerUserId: dto.owner_user_id ?? null, nextReviewAt: null, reviewReason: null, dismissedReason: null,
+      ownerUserId, nextReviewAt: null, reviewReason: null, dismissedReason: null,
       createdBy: user.email, createdAt: now, updatedAt: now,
     });
     return this.view(row, undefined, true);
   }
 
-  async update(user: CurrentUser, id: string, dto: Record<string, any>) {
+  async update(user: CurrentUser, id: string, dto: Record<string, any>, req?: any) {
     this.assert();
     const r = await this.loadRisk(user, id);
     if (dto.category !== undefined) {
@@ -288,12 +306,42 @@ export class RisksService implements OnModuleInit {
     if (dto.description !== undefined) r.description = dto.description;
     if (dto.affected_parties !== undefined) r.affectedParties = Array.isArray(dto.affected_parties) ? dto.affected_parties.map(String) : null;
     if (dto.harm_type !== undefined) r.harmType = dto.harm_type;
-    if (dto.owner_user_id !== undefined) r.ownerUserId = dto.owner_user_id;
+    if (dto.owner_user_id !== undefined) r.ownerUserId = await this.assertOwner(r.orgId, dto.owner_user_id);
     if (dto.status !== undefined) {
       if (dto.status !== 'CLOSED') throw new BadRequestException('Only CLOSED can be set directly; other statuses follow the workflow');
-      if (!dto.reason) throw new BadRequestException('A reason is required to close a risk');
+      const reason = String(dto.reason ?? '').trim();
+      if (reason.length < 5) throw new BadRequestException('A reason is required to close a risk');
+      if (['DISMISSED', 'CLOSED'].includes(r.status)) throw new BadRequestException(`The risk is already ${r.status.toLowerCase()}`);
+      // H2: closing must not be a way round acceptance. An assessed risk whose
+      // residual is above appetite and has no valid acceptance can only be
+      // closed by the approver the appetite names for its residual band.
+      const s = (await this.settings.inForce(r.orgId)).settings;
+      const latest = await this.latestAssessment(r.id);
+      let closedAs: string | null = null;
+      if (latest) {
+        const within = withinAppetite(r.category, { l: latest.residualL, i: latest.residualI }, s);
+        const accepted = await this.validAcceptance(r.id, latest.version);
+        if (!within && !accepted) {
+          if (user.tenantId !== r.orgId) throw new ForbiddenException('Only members of the risk’s organization can close it');
+          const official = (await this.accountability.isAccountableOfficial(r.orgId, user.userId)) || (await this.accountability.isAccountableOfficialEmail(r.orgId, user.email));
+          closedAs = acceptanceRole(latest.residualBand, s, user, official);
+          if (!closedAs) {
+            const who = (s.appetite.approvers[latest.residualBand] ?? []).map((w) => (w === 'ACCOUNTABLE_OFFICIAL' ? 'the accountable official' : w)).join(' or ');
+            throw new ForbiddenException(`This ${latest.residualBand} residual risk is above appetite and not accepted: only ${who || 'a named approver'} can close it`);
+          }
+        }
+      }
+      const from = r.status;
       r.status = 'CLOSED';
-      r.reviewReason = String(dto.reason).slice(0, 300);
+      r.reviewReason = reason.slice(0, 300);
+      if (req) {
+        req.auditSummary = {
+          risk_closed: {
+            risk_id: r.id, title: r.title, from_status: from, reason: reason.slice(0, 500), closed_by: user.email,
+            residual_band: latest?.residualBand ?? null, above_appetite_unaccepted: Boolean(closedAs), approver_role: closedAs,
+          },
+        };
+      }
     }
     r.updatedAt = new Date();
     await this.risks.save(r);
@@ -354,6 +402,11 @@ export class RisksService implements OnModuleInit {
       const who = (s.appetite.approvers[latest.residualBand] ?? []).map((w) => (w === 'ACCOUNTABLE_OFFICIAL' ? 'the accountable official' : w)).join(' or ');
       throw new ForbiddenException(`A ${latest.residualBand} residual risk must be accepted by ${who || 'a named approver'}`);
     }
+    // M5 separation of duties: whoever rated a HIGH or CRITICAL residual cannot
+    // also accept it.
+    if ((latest.residualBand === 'HIGH' || latest.residualBand === 'CRITICAL') && latest.assessedBy === user.email) {
+      throw new ForbiddenException(`You assessed this ${latest.residualBand} residual risk; a different approver must accept it`);
+    }
     let expiresAt: Date | null = null;
     if (dto.expires_at) {
       expiresAt = new Date(dto.expires_at);
@@ -387,10 +440,10 @@ export class RisksService implements OnModuleInit {
     if (!(TREATMENTS as readonly string[]).includes(treatment)) throw new BadRequestException(`treatment must be one of ${TREATMENTS.join(', ')}`);
     const action = String(dto.action ?? '').trim();
     if (!action) throw new BadRequestException('action is required');
-    const dueAt = dto.due_at ? new Date(dto.due_at) : null;
-    if (dueAt && Number.isNaN(dueAt.getTime())) throw new BadRequestException('due_at must be a date');
+    const dueAt = this.parseDue(dto.due_at);
+    const ownerUserId = await this.assertOwner(r.orgId, dto.owner_user_id);
     const a = await this.actions.save({
-      id: uuidv4(), riskId: r.id, treatment, action: action.slice(0, 1000), ownerUserId: dto.owner_user_id ?? null,
+      id: uuidv4(), riskId: r.id, treatment, action: action.slice(0, 1000), ownerUserId,
       dueAt, status: 'OPEN', createdBy: user.email, createdAt: new Date(), completedAt: null,
     });
     return this.actionView(a);
@@ -398,7 +451,7 @@ export class RisksService implements OnModuleInit {
 
   async updateAction(user: CurrentUser, id: string, actionId: string, dto: Record<string, any>) {
     this.assert();
-    await this.loadRisk(user, id);
+    const r = await this.loadRisk(user, id);
     const a = await this.actions.findOne({ where: { id: actionId, riskId: id } });
     if (!a) throw new NotFoundException('Action not found');
     if (dto.status) {
@@ -406,8 +459,8 @@ export class RisksService implements OnModuleInit {
       a.status = dto.status;
       a.completedAt = dto.status === 'DONE' ? new Date() : null;
     }
-    if (dto.due_at !== undefined) a.dueAt = dto.due_at ? new Date(dto.due_at) : null;
-    if (dto.owner_user_id !== undefined) a.ownerUserId = dto.owner_user_id;
+    if (dto.due_at !== undefined) a.dueAt = this.parseDue(dto.due_at);
+    if (dto.owner_user_id !== undefined) a.ownerUserId = await this.assertOwner(r.orgId, dto.owner_user_id);
     await this.actions.save(a);
     return this.actionView(a);
   }
@@ -529,8 +582,20 @@ export class RisksService implements OnModuleInit {
       r.updatedAt = now;
       await this.risks.save(r);
     }
-    if (due.length) this.logger.log(`risk register: ${due.length} risk(s) due for review`);
-    return due.length;
+    // L2: an accepted risk whose acceptance has lapsed is due for review too, so
+    // its status matches what the gate already treats it as.
+    let lapsed = 0;
+    for (const r of await this.risks.find({ where: { status: 'ACCEPTED' } })) {
+      const a = await this.latestAssessment(r.id);
+      if (!a || (await this.validAcceptance(r.id, a.version, now))) continue;
+      r.status = 'REVIEW_DUE';
+      r.reviewReason = 'risk acceptance expired';
+      r.updatedAt = now;
+      await this.risks.save(r);
+      lapsed++;
+    }
+    if (due.length + lapsed) this.logger.log(`risk register: ${due.length + lapsed} risk(s) due for review`);
+    return due.length + lapsed;
   }
 
   /* --------------------------------------------------------------- gate */
@@ -577,6 +642,11 @@ export class RisksService implements OnModuleInit {
         findings.push({ code: 'residual_risk_unaccepted', message: `${facts.unaccepted} risk(s) above appetite, unassessed or due for review without a valid acceptance` });
       }
     }
+    // M1: the appetite (or the RBI pack floor) can require a third-party audit for the tier.
+    if (s.appetite?.requiredAuditType?.[tier] === 'THIRD_PARTY') {
+      const external = await this.audits.count({ where: { modelId, auditType: In([AuditType.THIRD_PARTY, AuditType.SUPERVISORY]) } });
+      if (!external) findings.push({ code: 'third_party_audit_required', message: `${tier} models need a third-party audit under the organization's risk appetite; none is recorded` });
+    }
     for (const c of this.gateContributors) findings.push(...(await c(model, orgId, s)));
     return { mode, tier, block: mode === 'BLOCK' ? findings : [], warn: mode === 'WARN' ? findings : [] };
   }
@@ -595,8 +665,22 @@ export class RisksService implements OnModuleInit {
     for (const r of rows) {
       const a = await this.latestAssessment(r.id);
       if (!a) continue;
-      out.push({ category: r.category, title: r.title, residual_band: a.residualBand, status: r.status === 'ACCEPTED' ? 'accepted' : 'under management' });
+      out.push({ category: r.category, title: publicRiskTitle(r), residual_band: a.residualBand, status: r.status === 'ACCEPTED' ? 'accepted' : 'under management' });
     }
     return out;
   }
+}
+
+/**
+ * M3: the public card never shows internal risk titles. Starter-catalogue
+ * risks keep their generic catalogue title; anything else (manual entries,
+ * incident, drift or scan derived risks) is published as its category only.
+ */
+export function publicRiskTitle(r: { source: string; sourceRef: string | null; category: string }): string {
+  if (r.source === 'CATALOGUE') {
+    const entry = STARTER_CATALOGUE.find((c) => c.id === r.sourceRef);
+    if (entry) return entry.title;
+  }
+  const label = r.category.charAt(0) + r.category.slice(1).toLowerCase().replace(/_/g, ' ');
+  return `${label} risk`;
 }

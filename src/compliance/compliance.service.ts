@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
@@ -168,6 +168,14 @@ export class ComplianceService {
     // chosen packs. Flag off (or no selection) keeps all four frameworks.
     const packsOn = getFeatureFlags().packEngine;
     const inForce = packsOn ? packRegistry().activeAt() : [];
+    if (packsOn && packIds?.length) {
+      // An unknown id (or one with no framework report) would leave nothing to
+      // assess and every model would read as fully compliant: refuse it.
+      const unknown = packIds.filter((id) => !inForce.some((p) => p.definition.id === id && (FRAMEWORK_IDS as readonly string[]).includes(p.definition.legacyId)));
+      if (unknown.length) {
+        throw new BadRequestException(`Unknown pack(s): ${unknown.join(', ')}. Packs in force: ${inForce.map((p) => p.definition.id).join(', ')}`);
+      }
+    }
     const selected = packsOn && packIds?.length ? inForce.filter((p) => packIds.includes(p.definition.id)) : inForce;
     const fwIds: readonly string[] = packsOn && packIds?.length
       ? FRAMEWORK_IDS.filter((id) => selected.some((p) => p.definition.legacyId === id))
@@ -226,7 +234,8 @@ export class ComplianceService {
           }
         }
       }
-      if (allPass && perFw.every(([, r]) => r)) fullyCompliant += 1;
+      // A model counts as fully compliant only when at least one framework was assessed.
+      if (perFw.length > 0 && allPass && perFw.every(([, r]) => r)) fullyCompliant += 1;
     }
 
     const total = models.length;
