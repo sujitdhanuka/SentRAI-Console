@@ -38,6 +38,22 @@ export const EPIC_FLAGS = {
   correctiveActions: 'GOV_E1_7_ACTIONS',
   /** E1.8: document control for policies and evidence. */
   documentControl: 'GOV_E1_8_DOCUMENTS',
+  /** E2.1: Australia pack (DTA policy v2.1), DTA register export, in-scope tracking. */
+  auPack: 'GOV_E2_1_AU_PACK',
+  /** E2.2: US pack, reason codes, adverse-action notices, appeals and reconsideration. */
+  usKit: 'GOV_E2_2_US_KIT',
+  /** E2.3: SR 26-2 model validation with independence and temporary-use exceptions. */
+  modelValidation: 'GOV_E2_3_VALIDATION',
+  /** E2.4: fair-lending proxy scan, disparate-impact and less-discriminatory-alternative evidence. */
+  fairLending: 'GOV_E2_4_FAIR_LENDING',
+  /** E2.5: vendor register, assessments, AI bill of materials and change alerts. */
+  vendors: 'GOV_E2_5_VENDORS',
+  /** E2.6: training courses, completion records and policy acknowledgements. */
+  training: 'GOV_E2_6_TRAINING',
+  /** E2.7: dataset register, model links, retention and deletion orders. */
+  dataRegister: 'GOV_E2_7_DATASETS',
+  /** E2.8: pre-deploy red-team gate, red-team-required flag, audit interval, biennial framework review. */
+  redTeamAuditRules: 'GOV_E2_8_REDTEAM_AUDIT',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -56,6 +72,14 @@ export interface FeatureFlags {
   aims: boolean;
   correctiveActions: boolean;
   documentControl: boolean;
+  auPack: boolean;
+  usKit: boolean;
+  modelValidation: boolean;
+  fairLending: boolean;
+  vendors: boolean;
+  training: boolean;
+  dataRegister: boolean;
+  redTeamAuditRules: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -80,6 +104,14 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     aims: epic(EPIC_FLAGS.aims),
     correctiveActions: epic(EPIC_FLAGS.correctiveActions),
     documentControl: epic(EPIC_FLAGS.documentControl),
+    auPack: epic(EPIC_FLAGS.auPack),
+    usKit: epic(EPIC_FLAGS.usKit),
+    modelValidation: epic(EPIC_FLAGS.modelValidation),
+    fairLending: epic(EPIC_FLAGS.fairLending),
+    vendors: epic(EPIC_FLAGS.vendors),
+    training: epic(EPIC_FLAGS.training),
+    dataRegister: epic(EPIC_FLAGS.dataRegister),
+    redTeamAuditRules: epic(EPIC_FLAGS.redTeamAuditRules),
   };
 }
 

@@ -1,0 +1,271 @@
+{
+  "id": "us-2026",
+  "version": "2026.1.0",
+  "effectiveFrom": "2026-04-17",
+  "name": "US AI policy pack (OMB M-25-21/22, SR 26-2, ECOA/Reg B, FTC Act s.5, Colorado SB 26-189)",
+  "jurisdiction": "United States",
+  "baseline": false,
+  "region": "US",
+  "optIn": true,
+  "flag": "usKit",
+  "reportFormat": "framework",
+  "reportName": "US AI Policy",
+  "responseKey": "us_policy",
+  "legacyId": "us_2026",
+  "tierClassifier": "us",
+  "source": "OMB M-25-21 and M-25-22; Federal Reserve SR 26-2; ECOA / Regulation B; FTC Act s.5; Colorado SB 26-189 (paraphrased from the SentRAI US gap analysis; some sources are law-firm summaries; compliance review required).",
+  "changelog": [
+    "2026.1.0 (Phase 2, E2.2): first version. Opt-in; the decision-record retention is the longer of Reg B (25 months) and Colorado (3 years) because the pack covers both."
+  ],
+  "parameters": {
+    "decisionRecordRetentionMonths": 36,
+    "appealResponseDays": 30,
+    "validationValidityMonths": 12
+  },
+  "clauses": [
+    {
+      "code": "US-M21-4",
+      "clause": "M21-4",
+      "name": "High-impact determination",
+      "control": "CTL-US-HIGHIMPACT",
+      "mandatory": true,
+      "evidence": {
+        "pass": "M-25-21 determination: {determination}"
+      },
+      "gap": {
+        "missing": "Answer the M-25-21 high-impact questions in an impact assessment and sign it.",
+        "not_assessed": "The US pack is not switched on."
+      }
+    },
+    {
+      "code": "US-M21-6",
+      "clause": "M21-6, FT-2",
+      "name": "Impact assessment for high-impact AI",
+      "control": "CTL-IMPACT-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High impact"
+      ],
+      "evidence": {
+        "pass": "Impact assessment v{version} signed {signedAt}",
+        "not_final": "Impact assessment v{version} is {status}"
+      },
+      "gap": {
+        "missing": "High-impact AI needs a signed impact assessment before use.",
+        "not_assessed": "Impact assessments are not switched on."
+      }
+    },
+    {
+      "code": "US-M21-1",
+      "clause": "M21-1, SO",
+      "name": "Named accountable owner",
+      "control": "CTL-OWNER-01",
+      "mandatory": false,
+      "evidence": {
+        "pass": "Accountable owner named"
+      },
+      "gap": "Name an accountable owner for this AI use."
+    },
+    {
+      "code": "US-M21-10",
+      "clause": "M21-10, CO-4",
+      "name": "Appeals and human reconsideration",
+      "control": "CTL-APPEAL-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High impact"
+      ],
+      "evidence": {
+        "pass": "{decided} decided; {open} open; none overdue",
+        "fail": "{overdue} appeal(s) past their due date"
+      },
+      "gap": {
+        "fail": "Decide appeals, reconsideration and data-correction requests within the response time.",
+        "not_assessed": "The appeals workflow is not switched on."
+      }
+    },
+    {
+      "code": "US-M21-13",
+      "clause": "M21-13, SR-3",
+      "name": "Risks and waivers documented",
+      "control": "CTL-RISK-02",
+      "mandatory": false,
+      "evidence": {
+        "pass": "{assessed} risk(s) assessed; all accepted or within appetite",
+        "fail": "{unaccepted} of {total} risk(s) not accepted"
+      },
+      "gap": {
+        "empty": "Record and assess the system's risks.",
+        "unaccepted": "Document acceptance (waiver) for residual risks above appetite."
+      }
+    },
+    {
+      "code": "US-SR-1",
+      "clause": "SR-1",
+      "name": "Model-risk scope decided",
+      "control": "CTL-VAL-SCOPE",
+      "mandatory": true,
+      "flag": "modelValidation",
+      "evidence": {
+        "pass": "MRM scope: {in_scope}",
+        "excluded": "MRM scope: {in_scope}"
+      },
+      "gap": {
+        "missing": "Decide whether the model is in SR 26-2 scope; generative and agentic AI may be excluded with a reason.",
+        "not_assessed": "Model validation is not switched on."
+      }
+    },
+    {
+      "code": "US-SR-5",
+      "clause": "SR-5, SR-8",
+      "name": "Independent validation before use",
+      "control": "CTL-VAL-01",
+      "mandatory": true,
+      "flag": "modelValidation",
+      "evidence": {
+        "pass": "Validation {result}, valid until {expires}",
+        "exception": "Temporary-use exception until {exception_until}",
+        "excluded": "Excluded from MRM: {reason}"
+      },
+      "gap": {
+        "missing": "Validate the model (conceptual soundness, implementation, outcomes analysis) before first use, or record a temporary-use exception with compensating controls.",
+        "not_independent": "The validator is not independent of the model's owners and developers.",
+        "rejected": "The latest validation rejected the model.",
+        "expired": "The validation expired on {expires}; revalidate.",
+        "not_assessed": "Model validation is not switched on."
+      }
+    },
+    {
+      "code": "US-SR-6",
+      "clause": "SR-6",
+      "name": "Validation findings remediated",
+      "control": "CTL-VAL-02",
+      "mandatory": false,
+      "flag": "modelValidation",
+      "evidence": {
+        "pass": "No overdue validation findings",
+        "fail": "{overdue} validation finding(s) overdue"
+      },
+      "gap": "Close validation findings through corrective actions by their due dates."
+    },
+    {
+      "code": "US-FL-1",
+      "clause": "FL-1, CO-3",
+      "name": "Adverse-action reasons accurate",
+      "control": "CTL-AA-01",
+      "mandatory": true,
+      "evidence": {
+        "pass": "{mapped} feature(s) mapped to reason codes; {notices} notice(s), none inconsistent",
+        "not_applicable": "Not a credit decisioning use case"
+      },
+      "gap": {
+        "no_map": "Map the model's decision features to Reg B reason codes.",
+        "unmapped": "Top decision factors without a reason code: {unmapped}.",
+        "inconsistent": "{inconsistent} notice(s) state reasons that do not match the decision's top factors.",
+        "not_assessed": "The adverse-action kit is not switched on."
+      }
+    },
+    {
+      "code": "US-FL-4",
+      "clause": "FL-4, CO-5",
+      "name": "Decision records retained",
+      "control": "CTL-AA-02",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Notices kept {required} months or longer",
+        "not_applicable": "Not a credit decisioning use case"
+      },
+      "gap": "Keep notices and decision records for at least {required} months (shortest kept: {shortest})."
+    },
+    {
+      "code": "US-FL-2",
+      "clause": "FL-2",
+      "name": "No prohibited basis or proxy",
+      "control": "CTL-FL-01",
+      "mandatory": true,
+      "flag": "fairLending",
+      "evidence": {
+        "pass": "Proxy scan clean over {scanned} input(s)",
+        "not_applicable": "Not a credit decisioning use case"
+      },
+      "gap": {
+        "fail": "Model inputs include prohibited bases or likely proxies without a recorded justification: {hits}.",
+        "not_assessed": "Fair-lending checks are not switched on.",
+        "no_scan": "Run the fair-lending proxy scan over the model's inputs."
+      }
+    },
+    {
+      "code": "US-FL-3",
+      "clause": "FL-3",
+      "name": "Disparate impact tested; alternatives searched",
+      "control": "CTL-FL-02",
+      "mandatory": true,
+      "flag": "fairLending",
+      "evidence": {
+        "pass": "Disparate-impact ratio {ratio} (minimum {min}); alternatives searched",
+        "not_applicable": "Not a credit decisioning use case"
+      },
+      "gap": {
+        "no_test": "Attach a disparate_impact evidence artifact with the ratio.",
+        "below": "Disparate-impact ratio {ratio} is below {min}.",
+        "no_lda": "Record the search for less discriminatory alternatives (lda_search evidence).",
+        "not_assessed": "Fair-lending checks are not switched on."
+      }
+    },
+    {
+      "code": "US-M22-1",
+      "clause": "M22-1, M22-2, SR-8",
+      "name": "Acquired AI: vendor assessed and contract terms in place",
+      "control": "CTL-VENDOR-01",
+      "opts": {
+        "contract": true
+      },
+      "mandatory": false,
+      "flag": "vendors",
+      "evidence": {
+        "pass": "{components} third-party component(s); all assessed with contract terms",
+        "no_third_party": "No third-party components recorded"
+      },
+      "gap": {
+        "unassessed": "Assess every vendor behind this model.",
+        "unsatisfactory": "A vendor assessment is unsatisfactory.",
+        "contract": "Contract terms are missing monitoring rights, data use limits or a no-training clause.",
+        "exit": "A HIGH-criticality vendor has no exit or failover plan.",
+        "licence": "A component has a restricted or unknown licence.",
+        "not_assessed": "The vendor register is not switched on."
+      }
+    },
+    {
+      "code": "US-FT-4",
+      "clause": "FT-4, SR-4",
+      "name": "Training data traceable for deletion",
+      "control": "CTL-DATA-02",
+      "mandatory": false,
+      "flag": "dataRegister",
+      "evidence": {
+        "pass": "{linked} dataset(s) registered with lawful basis and provenance"
+      },
+      "gap": {
+        "none": "Link the datasets this model was built on.",
+        "lawful_basis": "A linked dataset has no lawful basis.",
+        "provenance": "A linked dataset has no provenance.",
+        "deletion": "A linked dataset has an open deletion order.",
+        "not_assessed": "The data register is not switched on."
+      }
+    },
+    {
+      "code": "US-M21-8",
+      "clause": "M21-8, FT-3",
+      "name": "Operator training",
+      "control": "CTL-ORG-TRAINING",
+      "mandatory": false,
+      "flag": "training",
+      "evidence": {
+        "pass": "{compliant} of {staff} staff in date; none overdue",
+        "fail": "{overdue} staff overdue on mandatory AI training",
+        "missing": "No mandatory AI training course"
+      },
+      "gap": "Train the people who operate and oversee high-impact AI, and record it."
+    }
+  ]
+}

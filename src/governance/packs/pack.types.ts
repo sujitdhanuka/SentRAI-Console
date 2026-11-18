@@ -69,8 +69,16 @@ export interface PackDefinition {
   responseKey: string;
   /** Legacy framework id used by the portfolio rollup (rbi_free_ai, nist_ai_rmf, ...). */
   legacyId: string;
-  /** Named tier classifier the engine applies (nist, eu, iso, none). */
-  tierClassifier: 'nist' | 'eu' | 'iso' | 'none';
+  /** Named tier classifier the engine applies (nist, eu, iso, au, us, none). */
+  tierClassifier: 'nist' | 'eu' | 'iso' | 'au' | 'us' | 'none';
+  /**
+   * Phase 2 region packs are opt-in: they apply only to organisations that
+   * enable them in governance settings, never by default, so adding a pack
+   * cannot move any existing organisation's results.
+   */
+  optIn?: boolean;
+  /** The pack is loaded only while this governance flag is on. */
+  flag?: keyof FeatureFlags;
   source: string;
   changelog: string[];
   parameters: Record<string, any>;

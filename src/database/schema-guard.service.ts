@@ -63,6 +63,15 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'contextProfile', definition: 'TEXT NULL' },
   // ai-model.entity.ts — named model owner (governance E1.9).
   { table: 'ai_models', column: 'ownerUserId', definition: 'VARCHAR(36) NULL' },
+  // ai-model.entity.ts — governance Phase 2: reason codes (E2.2), MRM scope (E2.3), red-team-required flag (E2.8).
+  { table: 'ai_models', column: 'reasonCodeMap', definition: 'TEXT NULL' },
+  { table: 'ai_models', column: 'mrmInScope', definition: 'TINYINT(1) NULL' },
+  { table: 'ai_models', column: 'mrmExclusionReason', definition: 'VARCHAR(500) NULL' },
+  { table: 'ai_models', column: 'redTeamRequiredAt', definition: 'DATETIME NULL' },
+  { table: 'ai_models', column: 'redTeamRequiredReason', definition: 'VARCHAR(500) NULL' },
+  // grievance.entity.ts — decision link and appeal chain (governance E2.2).
+  { table: 'grievances', column: 'decisionRef', definition: 'VARCHAR(255) NULL' },
+  { table: 'grievances', column: 'appealOf', definition: 'VARCHAR(36) NULL' },
   // project.entity.ts — codebase origin ('zip'/'folder'/'github:owner/repo@branch').
   { table: 'projects', column: 'codebaseSource', definition: 'VARCHAR(300) NULL' },
   // project.entity.ts — board-facing executive narrative (Phase 5).
@@ -116,6 +125,254 @@ interface TableSpec {
 }
 
 const REQUIRED_TABLES: TableSpec[] = [
+  {
+    table: 'regulatory_submissions', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`regulatory_submissions\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`kind\` VARCHAR(30) NOT NULL,
+      \`modelId\` VARCHAR(36) NULL,
+      \`submittedAt\` DATETIME NOT NULL,
+      \`submittedBy\` VARCHAR(255) NOT NULL,
+      \`recipient\` VARCHAR(200) NULL,
+      \`reference\` VARCHAR(200) NULL,
+      \`notes\` TEXT NULL,
+      \`payloadHash\` VARCHAR(64) NULL,
+      \`payload\` TEXT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_regulatory_submissions_orgId\` (\`orgId\`),
+      INDEX \`IDX_regulatory_submissions_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'adverse_action_notices', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`adverse_action_notices\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`decisionRef\` VARCHAR(255) NOT NULL,
+      \`explainabilityRecordId\` VARCHAR(36) NULL,
+      \`reasonCodes\` TEXT NOT NULL,
+      \`topFactors\` TEXT NOT NULL,
+      \`consistent\` TINYINT(1) NOT NULL,
+      \`mismatches\` TEXT NULL,
+      \`channel\` VARCHAR(20) NOT NULL,
+      \`sentAt\` DATETIME NOT NULL,
+      \`retentionUntil\` DATETIME NOT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_adverse_action_notices_orgId\` (\`orgId\`),
+      INDEX \`IDX_adverse_action_notices_modelId\` (\`modelId\`),
+      INDEX \`IDX_adverse_action_notices_decisionRef\` (\`decisionRef\`),
+      INDEX \`IDX_adverse_action_notices_retentionUntil\` (\`retentionUntil\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'decision_appeals', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`decision_appeals\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`grievanceId\` VARCHAR(36) NULL,
+      \`decisionRef\` VARCHAR(255) NOT NULL,
+      \`type\` VARCHAR(20) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`request\` TEXT NOT NULL,
+      \`requestedBy\` VARCHAR(255) NULL,
+      \`reviewerUserId\` VARCHAR(36) NULL,
+      \`authority\` TEXT NULL,
+      \`evidence\` TEXT NULL,
+      \`outcome\` VARCHAR(30) NULL,
+      \`outcomeNotes\` TEXT NULL,
+      \`decidedAt\` DATETIME NULL,
+      \`decidedBy\` VARCHAR(255) NULL,
+      \`dueAt\` DATETIME NULL,
+      \`retentionUntil\` DATETIME NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_decision_appeals_orgId\` (\`orgId\`),
+      INDEX \`IDX_decision_appeals_modelId\` (\`modelId\`),
+      INDEX \`IDX_decision_appeals_grievanceId\` (\`grievanceId\`),
+      INDEX \`IDX_decision_appeals_decisionRef\` (\`decisionRef\`),
+      INDEX \`IDX_decision_appeals_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'model_validations', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`model_validations\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`result\` VARCHAR(30) NULL,
+      \`validatorUserId\` VARCHAR(36) NULL,
+      \`validatorEmail\` VARCHAR(255) NULL,
+      \`independent\` TINYINT(1) NOT NULL,
+      \`independenceReasons\` TEXT NULL,
+      \`scope\` TEXT NULL,
+      \`conceptualSoundness\` TEXT NULL,
+      \`implementationReview\` TEXT NULL,
+      \`outcomesAnalysis\` TEXT NULL,
+      \`vendorModel\` TINYINT(1) NOT NULL,
+      \`tempUseException\` TINYINT(1) NOT NULL,
+      \`compensatingControls\` TEXT NULL,
+      \`exceptionExpiresAt\` DATETIME NULL,
+      \`expiresAt\` DATETIME NULL,
+      \`findings\` TEXT NULL,
+      \`completedAt\` DATETIME NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_model_validations_orgId\` (\`orgId\`),
+      INDEX \`IDX_model_validations_modelId\` (\`modelId\`),
+      INDEX \`IDX_model_validations_status\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'vendors', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`vendors\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`name\` VARCHAR(200) NOT NULL,
+      \`kind\` VARCHAR(30) NOT NULL,
+      \`criticality\` VARCHAR(10) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`contact\` VARCHAR(255) NULL,
+      \`services\` TEXT NULL,
+      \`contractTerms\` TEXT NULL,
+      \`responsibilitySplit\` TEXT NULL,
+      \`exitPlan\` TEXT NULL,
+      \`failoverPlan\` TEXT NULL,
+      \`nextReviewAt\` DATETIME NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_vendors_orgId\` (\`orgId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'vendor_assessments', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`vendor_assessments\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`vendorId\` VARCHAR(36) NOT NULL,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`answers\` TEXT NOT NULL,
+      \`score\` INT NOT NULL,
+      \`result\` VARCHAR(20) NOT NULL,
+      \`gaps\` TEXT NULL,
+      \`notes\` TEXT NULL,
+      \`assessedBy\` VARCHAR(255) NOT NULL,
+      \`assessedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_vendor_assessments_vendorId\` (\`vendorId\`),
+      INDEX \`IDX_vendor_assessments_orgId\` (\`orgId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'ai_bom_items', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`ai_bom_items\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`vendorId\` VARCHAR(36) NULL,
+      \`component\` VARCHAR(200) NOT NULL,
+      \`kind\` VARCHAR(20) NOT NULL,
+      \`provider\` VARCHAR(100) NULL,
+      \`version\` VARCHAR(100) NULL,
+      \`licence\` VARCHAR(100) NULL,
+      \`licenceClass\` VARCHAR(20) NOT NULL,
+      \`source\` VARCHAR(20) NOT NULL,
+      \`lastChangeAt\` DATETIME NULL,
+      \`previousVersion\` VARCHAR(100) NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_ai_bom_items_orgId\` (\`orgId\`),
+      INDEX \`IDX_ai_bom_items_modelId\` (\`modelId\`),
+      INDEX \`IDX_ai_bom_items_vendorId\` (\`vendorId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'training_courses', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`training_courses\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`title\` VARCHAR(300) NOT NULL,
+      \`description\` TEXT NULL,
+      \`kind\` VARCHAR(20) NOT NULL,
+      \`targetRoles\` TEXT NOT NULL,
+      \`validityMonths\` INT NULL,
+      \`mandatory\` TINYINT(1) NOT NULL,
+      \`topic\` VARCHAR(50) NULL,
+      \`documentId\` VARCHAR(36) NULL,
+      \`active\` TINYINT(1) NOT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_training_courses_orgId\` (\`orgId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'training_records', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`training_records\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`courseId\` VARCHAR(36) NOT NULL,
+      \`userId\` VARCHAR(36) NOT NULL,
+      \`completedAt\` DATETIME NOT NULL,
+      \`expiresAt\` DATETIME NULL,
+      \`evidenceDocId\` VARCHAR(36) NULL,
+      \`evidenceRef\` VARCHAR(500) NULL,
+      \`recordedBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_training_records_orgId\` (\`orgId\`),
+      INDEX \`IDX_training_records_courseId\` (\`courseId\`),
+      INDEX \`IDX_training_records_userId\` (\`userId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'datasets', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`datasets\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`name\` VARCHAR(200) NOT NULL,
+      \`description\` TEXT NULL,
+      \`source\` VARCHAR(500) NULL,
+      \`acquisition\` VARCHAR(30) NULL,
+      \`lawfulBasis\` VARCHAR(30) NULL,
+      \`consentRef\` VARCHAR(255) NULL,
+      \`personalData\` TINYINT(1) NOT NULL,
+      \`sensitiveData\` TINYINT(1) NOT NULL,
+      \`qualityChecks\` TEXT NULL,
+      \`provenance\` TEXT NULL,
+      \`preparation\` TEXT NULL,
+      \`accessControls\` TEXT NULL,
+      \`retentionUntil\` DATETIME NULL,
+      \`deletionStatus\` VARCHAR(20) NOT NULL,
+      \`deletionOrders\` TEXT NULL,
+      \`ownerUserId\` VARCHAR(36) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_datasets_orgId\` (\`orgId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'model_datasets', // governance Phase 2
+    createSql: `CREATE TABLE IF NOT EXISTS \`model_datasets\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`datasetId\` VARCHAR(36) NOT NULL,
+      \`purpose\` VARCHAR(20) NOT NULL,
+      \`linkedBy\` VARCHAR(255) NOT NULL,
+      \`linkedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_model_datasets_orgId\` (\`orgId\`),
+      INDEX \`IDX_model_datasets_modelId\` (\`modelId\`),
+      INDEX \`IDX_model_datasets_datasetId\` (\`datasetId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
   {
     table: 'ai_provider_configs', // ai-provider-config.entity.ts
     createSql: `CREATE TABLE IF NOT EXISTS \`ai_provider_configs\` (

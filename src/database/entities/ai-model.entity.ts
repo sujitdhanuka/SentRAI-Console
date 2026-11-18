@@ -168,6 +168,24 @@ export class AIModelEntity {
   @Column('simple-json', { nullable: true })
   contextProfile!: Record<string, any> | null;
 
+  /** Feature → Reg B reason code map for adverse-action notices (governance E2.2). */
+  @Column('simple-json', { nullable: true })
+  reasonCodeMap!: Record<string, { code: string; text: string }> | null;
+
+  /** SR 26-2 model-risk scope (governance E2.3); null until decided. */
+  @Column('boolean', { nullable: true })
+  mrmInScope!: boolean | null;
+
+  @Column('varchar', { length: 500, nullable: true })
+  mrmExclusionReason!: string | null;
+
+  /** Set when the CI gate sees a risk escalation (governance E2.8); cleared by a later red-team exercise. */
+  @Column('datetime', { nullable: true })
+  redTeamRequiredAt!: Date | null;
+
+  @Column('varchar', { length: 500, nullable: true })
+  redTeamRequiredReason!: string | null;
+
   /** Named accountable owner (a user) in addition to ownerTeam — governance E1.9. */
   @Column('varchar', { length: 36, nullable: true })
   ownerUserId!: string | null;

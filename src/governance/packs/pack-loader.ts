@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto';
 
 import { RiskLevel } from '../../common/enums';
+import { getFeatureFlags } from '../../common/feature-flags';
 import { isoCodeExists, nistCodeExists } from '../../compliance/framework-codes';
 import { getControl } from '../controls/control-library';
 import { LoadedPackVersion, PackDefinition, PackStatus } from './pack.types';
@@ -18,12 +19,16 @@ import nist10 from './definitions/nist-ai-rmf-1.0.json';
 import iso2023 from './definitions/iso-42001-2023.json';
 import euAiAct2024 from './definitions/eu-ai-act-2024.json';
 import rbi2025 from './definitions/rbi-free-ai-2025.json';
+import auDta21 from './definitions/au-dta-2.1.json';
+import us2026 from './definitions/us-2026.json';
 
 export const BUILT_IN_PACKS: PackDefinition[] = [
   nist10 as unknown as PackDefinition,
   iso2023 as unknown as PackDefinition,
   rbi2025 as unknown as PackDefinition,
   euAiAct2024 as unknown as PackDefinition,
+  auDta21 as unknown as PackDefinition,
+  us2026 as unknown as PackDefinition,
 ];
 
 /** Baseline packs always apply (design §2.1): NIST AI RMF plus ISO/IEC 42001. */
@@ -51,6 +56,9 @@ export function validatePack(def: PackDefinition): string[] {
   for (const k of req) if (!(def as any)[k]) errors.push(`${def.id ?? '?'}: missing ${k}`);
   if (Number.isNaN(Date.parse(def.effectiveFrom))) errors.push(`${def.id}: effectiveFrom is not a date`);
   if (!['framework', 'sutras'].includes(def.reportFormat)) errors.push(`${def.id}: bad reportFormat`);
+  if (!['nist', 'eu', 'iso', 'au', 'us', 'none'].includes(def.tierClassifier)) errors.push(`${def.id}: bad tierClassifier`);
+  if (def.flag && !(def.flag in getFeatureFlags({}))) errors.push(`${def.id}: unknown flag ${def.flag}`);
+  if (def.optIn && def.baseline) errors.push(`${def.id}: a baseline pack cannot be opt-in`);
   if (!Array.isArray(def.clauses) || def.clauses.length === 0) errors.push(`${def.id}: no clauses`);
   for (const name of Object.keys(def.parameters ?? {})) {
     if (!parameterSpec(name)) errors.push(`${def.id}: unknown parameter ${name}`);
@@ -59,6 +67,7 @@ export function validatePack(def: PackDefinition): string[] {
     const where = `${def.id} ${c.code}`;
     if (!c.code || !c.name) errors.push(`${where}: clause needs code and name`);
     if (!getControl(c.control)) errors.push(`${where}: unknown control ${c.control}`);
+    if (c.flag && !(c.flag in getFeatureFlags({}))) errors.push(`${where}: unknown flag ${c.flag}`);
     if (typeof c.gap !== 'string' && (typeof c.gap !== 'object' || c.gap === null)) errors.push(`${where}: gap must be text or keyed text`);
     if (typeof c.mandatory === 'object') {
       if (!Array.isArray(c.mandatory.riskIn) || c.mandatory.riskIn.some((r) => !RISK_VALUES.has(r))) {
@@ -100,13 +109,19 @@ export class PackRegistry {
     this.defs = defs;
   }
 
+  /** Packs behind a governance flag are invisible while that flag is off (read live). */
+  private available(): PackDefinition[] {
+    const flags = getFeatureFlags();
+    return this.defs.filter((d) => !d.flag || flags[d.flag]);
+  }
+
   packIds(): string[] {
-    return [...new Set(this.defs.map((d) => d.id))];
+    return [...new Set(this.available().map((d) => d.id))];
   }
 
   /** Every version of a pack, oldest first, with status as of `now`. */
   versions(id: string, now: Date = new Date()): LoadedPackVersion[] {
-    return this.defs
+    return this.available()
       .filter((d) => d.id === id)
       .sort((a, b) => Date.parse(a.effectiveFrom) - Date.parse(b.effectiveFrom))
       .map((d) => ({ definition: d, contentHash: this.hashOf(d), status: statusOf(d, this.defs, now) }));
@@ -131,6 +146,15 @@ export class PackRegistry {
 
   get(id: string, version: string): LoadedPackVersion | null {
     return this.versions(id).find((v) => v.definition.version === version) ?? null;
+  }
+
+  /**
+   * Packs that apply when an organisation has made no choice (no settings, or
+   * settings switched off): every pack in force except the opt-in Phase 2
+   * region packs, exactly the set that applied before they existed.
+   */
+  defaultPackIds(at: Date = new Date()): string[] {
+    return this.activeAt(at).filter((p) => !p.definition.optIn).map((p) => p.definition.id);
   }
 
   /** Packs in force on `at`, in registry order. */

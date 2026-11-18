@@ -26,7 +26,31 @@ export const PARAMETER_SPECS: ParameterSpec[] = [
   { name: 'thirdPartyAuditRequired.HIGH', rule: 'any', description: 'HIGH and CRITICAL systems need an independent third-party audit' },
   { name: 'euHighRiskDomains', rule: 'union', description: 'Functional areas treated as EU AI Act high-risk' },
   { name: 'requiredEvidence', rule: 'union', description: 'Evidence types every in-scope model must carry' },
+  // Phase 2
+  { name: 'decisionRecordRetentionMonths', rule: 'max', unit: 'months', description: 'Months to keep adverse-action notices and decision appeal records (Reg B 25, Colorado 36)' },
+  { name: 'appealResponseDays', rule: 'min', unit: 'days', description: 'Days to decide an appeal, reconsideration or data-correction request' },
+  { name: 'dtaRegisterShareMonths', rule: 'min', unit: 'months', description: 'Maximum months between sharing the AI use case register with the DTA' },
+  { name: 'highRiskReviewMonths', rule: 'min', unit: 'months', description: 'Maximum months between reviews of a high-risk use case' },
+  { name: 'validationValidityMonths', rule: 'min', unit: 'months', description: 'Months a model validation stays current before revalidation' },
+  { name: 'frameworkReviewMonths', rule: 'min', unit: 'months', description: 'Maximum months between reviews of the AI governance framework and policy' },
+  { name: 'redTeamPreDeployRequired.HIGH', rule: 'any', description: 'HIGH and CRITICAL systems need a red-team exercise before they go live' },
 ];
+
+/** Phase 2 fallbacks used where no enabled pack or setting states a value (kept out of PLATFORM_DEFAULTS so existing parameter views do not change). */
+export const PHASE2_FALLBACKS = {
+  decisionRecordRetentionMonths: 25,
+  appealResponseDays: 30,
+  dtaRegisterShareMonths: 6,
+  highRiskReviewMonths: 12,
+  validationValidityMonths: 12,
+  frameworkReviewMonths: 24,
+} as const;
+
+/** A Phase 2 parameter from resolved values, or its fallback. */
+export function phase2Param(values: Record<string, any> | undefined, name: keyof typeof PHASE2_FALLBACKS): number {
+  const v = Number(values?.[name]);
+  return Number.isFinite(v) && v > 0 ? v : PHASE2_FALLBACKS[name];
+}
 
 const SPEC_BY_NAME = new Map(PARAMETER_SPECS.map((s) => [s.name, s]));
 

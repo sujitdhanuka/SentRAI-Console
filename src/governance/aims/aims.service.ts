@@ -9,6 +9,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { governanceHooks } from '../hooks';
 
 import { ModelLifecycleStage, ModelType, RiskLevel, Role } from '../../common/enums';
 import { FeatureFlagsService } from '../../common/feature-flags';
@@ -252,6 +253,8 @@ export class AimsService {
       peopleItems: s.peopleItems,
       correctiveActions: this.flags.isEnabled('correctiveActions') ? await this.actions.orgFacts(orgId) : undefined,
       documents: this.flags.isEnabled('documentControl') ? await this.documents.orgFacts(orgId) : undefined,
+      // Phase 2 registers (training, DTA register share, framework review); each provider checks its own flag.
+      ...((await governanceHooks.extraOrgFacts?.(orgId)) ?? {}),
     };
   }
 

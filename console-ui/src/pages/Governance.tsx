@@ -13,6 +13,7 @@ import { useGovernanceFeatures } from '../stores/governanceFeatures';
 import { useSession } from '../stores/session';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
+import { AssuranceTab, AuDtaTab, DatasetsTab, DecisionsTab, FairLendingTab, TrainingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
 
 /* ------------------------------------------------------------------ types */
 
@@ -637,6 +638,14 @@ const TABS: Tab[] = [
   { id: 'settings', label: 'Settings & risk appetite', flag: 'governanceSettings' },
   { id: 'accountability', label: 'Accountability', flag: 'accountability' },
   { id: 'history', label: 'Change history', flag: 'governanceSettings' },
+  { id: 'au', label: 'Australia (DTA)', flag: 'auPack' },
+  { id: 'decisions', label: 'Decisions & appeals', flag: 'usKit' },
+  { id: 'validation', label: 'Model validation', flag: 'modelValidation' },
+  { id: 'fairLending', label: 'Fair lending', flag: 'fairLending' },
+  { id: 'vendors', label: 'Vendors & AI BOM', flag: 'vendors' },
+  { id: 'training', label: 'Training', flag: 'training' },
+  { id: 'datasets', label: 'Data register', flag: 'dataRegister' },
+  { id: 'assurance', label: 'Red team & audit', flag: 'redTeamAuditRules' },
 ];
 
 export function Governance() {
@@ -740,6 +749,22 @@ export function Governance() {
           <SettingsTab />
         ) : active === 'accountability' ? (
           <AccountabilityTab orgId={orgId} />
+        ) : active === 'au' ? (
+          <AuDtaTab />
+        ) : active === 'decisions' ? (
+          <DecisionsTab />
+        ) : active === 'validation' ? (
+          <ValidationTab />
+        ) : active === 'fairLending' ? (
+          <FairLendingTab />
+        ) : active === 'vendors' ? (
+          <VendorsTab />
+        ) : active === 'training' ? (
+          <TrainingTab />
+        ) : active === 'datasets' ? (
+          <DatasetsTab />
+        ) : active === 'assurance' ? (
+          <AssuranceTab />
         ) : (
           <HistoryTab />
         )}

@@ -58,7 +58,7 @@ export class PacksService {
   async contextFor(orgId: string | null, at: Date): Promise<OrgPackContext> {
     if (this.orgContext) return this.orgContext(orgId, at);
     // Before settings exist every pack in force applies, as today.
-    return { packIds: packRegistry().activeAt(at).map((p) => p.definition.id), extraSources: [] };
+    return { packIds: packRegistry().defaultPackIds(at), extraSources: [] };
   }
 
   private assert(): void {
@@ -99,6 +99,8 @@ export class PacksService {
       status: v.status,
       content_hash: v.contentHash,
       baseline: d.baseline,
+      // Phase 2 opt-in packs apply only to organisations that enable them (field absent on the others).
+      ...(d.optIn ? { opt_in: true } : {}),
       region: d.region,
       jurisdiction: d.jurisdiction,
       legacy_framework_id: d.legacyId,

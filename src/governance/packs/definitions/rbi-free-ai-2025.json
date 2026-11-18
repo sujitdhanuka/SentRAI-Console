@@ -14,7 +14,8 @@
   "source": "Reserve Bank of India, FREE-AI Committee Report (August 2025): 7 Sutras, 26 recommendations",
   "changelog": [
     "2025.1.0: migrated from sutras.validator.ts with the Phase 0 corrected recommendation references; results unchanged.",
-    "2025.1.0 (Phase 1): organisation-level Rec 14 policy-contents clause (ORG scope, behind the AIMS flag)."
+    "2025.1.0 (Phase 1): organisation-level Rec 14 policy-contents clause (ORG scope, behind the AIMS flag).",
+    "2025.1.0 (Phase 2): Rec 15 data lifecycle, Rec 20 red team after escalation, Rec 10 training and Rec 24 framework review, each behind its Phase 2 flag (advisory)."
   ],
   "parameters": {
     "incidentReportHours": 24,
@@ -140,6 +141,67 @@
         "rec14_missing": "AI policy lacks Rec 14 sections: {missing}"
       },
       "gap": "Rec 14 asks for a board-approved AI policy covering governance, accountability, risk appetite, safeguards, auditability, consumer protection, disclosures, lifecycle and liability."
+    },
+    {
+      "code": "REC-15",
+      "clause": "Rec 15",
+      "name": "Data Lifecycle Governance",
+      "control": "CTL-DATA-02",
+      "mandatory": false,
+      "flag": "dataRegister",
+      "evidence": {
+        "pass": "{linked} dataset(s) registered with lawful basis, provenance and no open deletion order"
+      },
+      "gap": {
+        "none": "Rec 15 asks for governance over the data lifecycle: link this model's datasets in the data register.",
+        "lawful_basis": "A linked dataset has no lawful basis or DPDP consent reference.",
+        "provenance": "A linked dataset has no provenance.",
+        "deletion": "A linked dataset has an open deletion order.",
+        "not_assessed": "The data register is not switched on."
+      }
+    },
+    {
+      "code": "REC-20",
+      "clause": "Rec 20",
+      "name": "Red Teaming After Material Change",
+      "control": "CTL-RT-02",
+      "mandatory": false,
+      "flag": "redTeamAuditRules",
+      "evidence": {
+        "pass": "No red-team exercise outstanding"
+      },
+      "gap": {
+        "escalation": "Rec 20 asks for red teaming after material changes: a risk escalation was seen on {required_since} ({reason}) and no red-team exercise is recorded since.",
+        "missing": "A red-team exercise is required before this high-risk system goes live and none is recorded.",
+        "not_assessed": "The red-team rules are not switched on."
+      }
+    },
+    {
+      "code": "REC-10",
+      "clause": "Rec 10",
+      "name": "Capacity Building and Training",
+      "control": "CTL-ORG-TRAINING",
+      "mandatory": false,
+      "flag": "training",
+      "evidence": {
+        "pass": "{compliant} of {staff} staff in date on mandatory AI training",
+        "missing": "No mandatory AI training course"
+      },
+      "gap": "Rec 10 asks for AI capacity building: run mandatory AI training and record completions ({overdue} overdue)."
+    },
+    {
+      "code": "REC-24",
+      "clause": "Rec 24",
+      "name": "Periodic Review of the AI Framework",
+      "control": "CTL-ORG-FRAMEWORK-REVIEW",
+      "mandatory": false,
+      "flag": "redTeamAuditRules",
+      "evidence": {
+        "pass": "Framework last reviewed {last_review}",
+        "missing": "No framework review recorded",
+        "overdue": "Last review {last_review} is older than {months} months"
+      },
+      "gap": "Rec 24 asks for the AI framework and policy to be reviewed at least every {months} months: approve a new AI policy version or record a management review."
     }
   ]
 }

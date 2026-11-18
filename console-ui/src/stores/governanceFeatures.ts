@@ -18,6 +18,14 @@ export interface GovernanceFeatures {
   aims?: boolean;
   correctiveActions?: boolean;
   documentControl?: boolean;
+  auPack?: boolean;
+  usKit?: boolean;
+  modelValidation?: boolean;
+  fairLending?: boolean;
+  vendors?: boolean;
+  training?: boolean;
+  dataRegister?: boolean;
+  redTeamAuditRules?: boolean;
   [k: string]: boolean | undefined;
 }
 

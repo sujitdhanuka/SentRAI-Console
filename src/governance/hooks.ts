@@ -18,6 +18,10 @@ export interface GovernanceHooks {
   gateCheck?: (modelId: string) => Promise<{ mode: string; tier: string; block: Array<{ code: string; message: string }>; warn: Array<{ code: string; message: string }> } | null>;
   /** Residual risks and limitations for the public transparency card. */
   cardGovernance?: (modelId: string) => Promise<Record<string, any> | undefined>;
+  /** A CI scan saw the code of a governed model escalate to a higher risk tier (E2.8). */
+  onRiskEscalation?: (modelId: string, detail: { from: string; to: string; source: string }) => Promise<void>;
+  /** Extra organisation facts for ORG controls from Phase 2 registers (training, DTA register, framework review). */
+  extraOrgFacts?: (orgId: string) => Promise<Record<string, any>>;
   /** Resolve a controlled document an evidence artifact points to (E1.8); undefined while the flag is off. */
   evidenceDocument?: (modelId: string, documentId: string) => Promise<{ document_id: string; version: number; hash: string } | undefined>;
 }
@@ -31,4 +35,21 @@ export async function emitModelEvent(modelId: string, event: string, detail?: Re
   } catch {
     /* governance side effects never break the originating request */
   }
+}
+
+/** Chain a model-facts provider onto the hook, keeping every earlier provider. */
+export function addModelFacts(fn: (modelId: string, orgId: string | null) => Promise<Record<string, any> | undefined>): void {
+  const prev = governanceHooks.modelGovernanceFacts;
+  governanceHooks.modelGovernanceFacts = async (modelId, orgId) => {
+    const base = (await prev?.(modelId, orgId)) ?? {};
+    const more = await fn(modelId, orgId);
+    const merged = { ...base, ...(more ?? {}) };
+    return Object.keys(merged).length ? merged : undefined;
+  };
+}
+
+/** Chain an organisation-facts provider onto the hook. */
+export function addOrgFacts(fn: (orgId: string) => Promise<Record<string, any> | undefined>): void {
+  const prev = governanceHooks.extraOrgFacts;
+  governanceHooks.extraOrgFacts = async (orgId) => ({ ...((await prev?.(orgId)) ?? {}), ...((await fn(orgId)) ?? {}) });
 }

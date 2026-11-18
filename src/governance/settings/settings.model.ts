@@ -48,7 +48,12 @@ export interface GovernanceSettingsDoc {
   enabledPacks: string[];
   peopleItems: Record<string, PeopleItemSetting>;
   appetite: RiskAppetite;
+  /** E2.4: extra proxy terms for the fair-lending scan (optional; absent means the built-in dictionary only). */
+  fairLending?: { proxyTerms: Array<{ term: string; basis: string }> };
 }
+
+/** Optional top-level settings fields (not in the defaults, so existing documents and diffs are unchanged). */
+export const OPTIONAL_SETTINGS_KEYS = ['fairLending'] as const;
 
 export const RISK_CATEGORIES = [
   'FAIRNESS', 'TRANSPARENCY', 'PRIVACY', 'SECURITY', 'PERFORMANCE', 'THIRD_PARTY',
@@ -188,6 +193,15 @@ export function validateSettings(doc: GovernanceSettingsDoc, at: Date = new Date
     else if ((spec.rule === 'min' || spec.rule === 'max') && (typeof value !== 'number' || !(value > 0))) {
       p.push({ field: `appetite.parameters.${name}`, message: 'must be a positive number' });
     }
+  }
+
+  if (doc.fairLending !== undefined) {
+    const terms = doc.fairLending?.proxyTerms;
+    if (!Array.isArray(terms) || terms.length > 200) p.push({ field: 'fairLending.proxyTerms', message: 'must be a list of at most 200 { term, basis }' });
+    else terms.forEach((t, i) => {
+      if (!t || typeof t.term !== 'string' || !/^[a-z0-9_ -]{2,40}$/i.test(t.term)) p.push({ field: `fairLending.proxyTerms[${i}]`, message: 'term must be 2-40 letters, digits, space, dash or underscore' });
+      if (!t || typeof t.basis !== 'string' || !t.basis.trim() || t.basis.length > 60) p.push({ field: `fairLending.proxyTerms[${i}]`, message: 'basis must name the prohibited basis it may stand in for' });
+    });
   }
 
   // Pack floors: a setting may be stricter than an enabled pack requires, never looser.

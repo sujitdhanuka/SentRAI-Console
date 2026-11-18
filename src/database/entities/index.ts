@@ -32,6 +32,17 @@ import { ImpactAssessmentEntity } from './impact-assessment.entity';
 import { AimsRecordEntity } from './aims-record.entity';
 import { CorrectiveActionEntity } from './corrective-action.entity';
 import { ControlledDocumentEntity } from './controlled-document.entity';
+import { RegulatorySubmissionEntity } from './regulatory-submission.entity';
+import { AdverseActionNoticeEntity } from './adverse-action-notice.entity';
+import { DecisionAppealEntity } from './decision-appeal.entity';
+import { ModelValidationEntity } from './model-validation.entity';
+import { VendorEntity } from './vendor.entity';
+import { VendorAssessmentEntity } from './vendor-assessment.entity';
+import { AiBomItemEntity } from './ai-bom-item.entity';
+import { TrainingCourseEntity } from './training-course.entity';
+import { TrainingRecordEntity } from './training-record.entity';
+import { DatasetEntity } from './dataset.entity';
+import { ModelDatasetEntity } from './model-dataset.entity';
 
 export {
   OrganizationEntity,
@@ -68,6 +79,17 @@ export {
   AimsRecordEntity,
   CorrectiveActionEntity,
   ControlledDocumentEntity,
+  RegulatorySubmissionEntity,
+  AdverseActionNoticeEntity,
+  DecisionAppealEntity,
+  ModelValidationEntity,
+  VendorEntity,
+  VendorAssessmentEntity,
+  AiBomItemEntity,
+  TrainingCourseEntity,
+  TrainingRecordEntity,
+  DatasetEntity,
+  ModelDatasetEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -105,4 +127,15 @@ export const ALL_ENTITIES = [
   AimsRecordEntity,
   CorrectiveActionEntity,
   ControlledDocumentEntity,
+  RegulatorySubmissionEntity,
+  AdverseActionNoticeEntity,
+  DecisionAppealEntity,
+  ModelValidationEntity,
+  VendorEntity,
+  VendorAssessmentEntity,
+  AiBomItemEntity,
+  TrainingCourseEntity,
+  TrainingRecordEntity,
+  DatasetEntity,
+  ModelDatasetEntity,
 ];

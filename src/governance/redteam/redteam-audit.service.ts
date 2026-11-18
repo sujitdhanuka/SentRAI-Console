@@ -1,0 +1,224 @@
+/**
+ * Red-team and audit rules (E2.8, RBI FREE-AI Rec 20, NIST MEASURE 2.6,
+ * ISO 42001 9.2): a risk escalation seen by a CI scan makes red teaming due
+ * for the model, a HIGH or CRITICAL system can be required to be red teamed
+ * before it goes live, deployed HIGH and CRITICAL systems are audited at the
+ * pack interval (auditIntervalDays.HIGH), and the governance framework is
+ * reviewed on its own cycle (frameworkReviewMonths). Each rule adds a
+ * deploy-gate finding and the facts the CTL-RT-02 and framework-review
+ * controls read.
+ */
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
+
+import { ModelLifecycleStage, RiskLevel } from '../../common/enums';
+import { FeatureFlagsService } from '../../common/feature-flags';
+import { CurrentUser } from '../../common/interfaces/current-user.interface';
+import { NotifierService } from '../../common/notifier.service';
+import { AIAuditTrailEntity, AIModelEntity, AimsRecordEntity, OrganizationEntity, ProjectEntity } from '../../database/entities';
+import { assertFlag, modelForUser } from '../governance-access';
+import { addModelFacts, addOrgFacts, emitModelEvent, governanceHooks } from '../hooks';
+import { phase2Param } from '../packs/parameter-resolver';
+import { PacksService } from '../packs/packs.service';
+import { addMonths, DAY_MS, MAINTAINERS, orgFor, orgModels, orgParams, reqText, requireRole } from '../phase2-util';
+import { RisksService } from '../risks/risks.service';
+
+const isHigh = (r: string) => r === RiskLevel.HIGH || r === RiskLevel.CRITICAL;
+const LIVE: string[] = [ModelLifecycleStage.DEPLOYED, ModelLifecycleStage.MONITORING];
+/** Platform audit interval for HIGH systems when no pack sets one (matches PLATFORM_DEFAULTS). */
+const DEFAULT_AUDIT_DAYS = 365;
+
+/** Latest red-team date: the model's lastRedTeamDate or a red_team evidence artifact, whichever is newer. */
+export function lastRedTeam(m: Pick<AIModelEntity, 'lastRedTeamDate' | 'evidenceArtifacts'>): Date | null {
+  const dates = [m.lastRedTeamDate ? new Date(m.lastRedTeamDate) : null, ...(m.evidenceArtifacts ?? []).filter((a: any) => a?.type === 'red_team' && a.added_at).map((a: any) => new Date(a.added_at))]
+    .filter((d): d is Date => !!d && !Number.isNaN(d.getTime()));
+  return dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null;
+}
+
+/** Red-team state: due after an escalation until a later exercise; due before go-live for HIGH when the rule is on. */
+export function redTeamState(
+  m: Pick<AIModelEntity, 'lastRedTeamDate' | 'evidenceArtifacts' | 'redTeamRequiredAt' | 'redTeamRequiredReason' | 'riskLevel'>,
+  preDeployRequired: boolean,
+) {
+  const last = lastRedTeam(m);
+  if (m.redTeamRequiredAt) {
+    const since = new Date(m.redTeamRequiredAt);
+    return { requiredSince: since, reason: m.redTeamRequiredReason ?? 'risk escalation', satisfied: !!last && last.getTime() >= since.getTime(), lastRedTeam: last, preDeploy: false };
+  }
+  if (preDeployRequired && isHigh(m.riskLevel)) return { requiredSince: null, reason: 'pre-deployment red team for a high-risk system', satisfied: !!last, lastRedTeam: last, preDeploy: true };
+  return { requiredSince: null, reason: null, satisfied: true, lastRedTeam: last, preDeploy: false };
+}
+
+/** When the next audit of a live HIGH / CRITICAL model is due, or null when the rule does not apply. */
+export function auditDue(
+  m: Pick<AIModelEntity, 'riskLevel' | 'lifecycleStage' | 'nextAuditDue' | 'deploymentDate' | 'registeredAt'>,
+  lastAudit: { createdAt: Date; nextAuditDue: Date | null } | null,
+  intervalDays: number,
+): Date | null {
+  if (!isHigh(m.riskLevel) || !LIVE.includes(m.lifecycleStage)) return null;
+  if (m.nextAuditDue) return new Date(m.nextAuditDue);
+  if (lastAudit?.nextAuditDue) return new Date(lastAudit.nextAuditDue);
+  const anchor = lastAudit?.createdAt ?? m.deploymentDate ?? m.registeredAt;
+  return anchor ? new Date(new Date(anchor).getTime() + intervalDays * DAY_MS) : null;
+}
+
+@Injectable()
+export class RedTeamAuditService implements OnModuleInit {
+  private readonly logger = new Logger(RedTeamAuditService.name);
+
+  constructor(
+    @InjectRepository(AIModelEntity) private readonly models: Repository<AIModelEntity>,
+    @InjectRepository(ProjectEntity) private readonly projects: Repository<ProjectEntity>,
+    @InjectRepository(AIAuditTrailEntity) private readonly audits: Repository<AIAuditTrailEntity>,
+    @InjectRepository(AimsRecordEntity) private readonly aims: Repository<AimsRecordEntity>,
+    @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
+    private readonly risks: RisksService,
+    private readonly packs: PacksService,
+    private readonly notifier: NotifierService,
+    private readonly flags: FeatureFlagsService,
+  ) {}
+
+  private on(): boolean {
+    return this.flags.isEnabled('redTeamAuditRules');
+  }
+
+  onModuleInit(): void {
+    governanceHooks.onRiskEscalation = async (modelId, detail) => {
+      if (!this.on()) return;
+      await this.markRequired(modelId, `risk escalation ${detail.from} → ${detail.to} (${detail.source})`.slice(0, 500));
+    };
+    // A risk escalation reported through the model-event hook counts the same way.
+    this.risks.onEvent(async (modelId, event, detail) => {
+      if (!this.on() || event !== 'RISK_ESCALATION' || detail?.source === 'redteam-rule') return;
+      await this.markRequired(modelId, String(detail?.ref ?? 'risk escalation').slice(0, 500), false);
+    });
+    addModelFacts(async (modelId, orgId) => {
+      if (!this.on()) return undefined;
+      const m = await this.models.findOne({ where: { id: modelId } });
+      if (!m) return undefined;
+      const s = redTeamState(m, await this.preDeploy(orgId));
+      return { redTeam: { requiredSince: s.requiredSince, reason: s.reason, satisfied: s.satisfied } };
+    });
+    addOrgFacts(async (orgId) => (this.on() ? { frameworkReview: await this.frameworkReview(orgId) } : undefined));
+    this.risks.addGateContributor(async (model, orgId) => {
+      if (!this.on()) return [];
+      const out: Array<{ code: 'red_team_required' | 'audit_overdue'; message: string }> = [];
+      const params = await orgParams(this.packs, orgId);
+      const rt = redTeamState(model, params['redTeamPreDeployRequired.HIGH'] === true);
+      if (!rt.satisfied) {
+        out.push({
+          code: 'red_team_required',
+          message: rt.requiredSince
+            ? `Red teaming is due after a risk escalation on ${rt.requiredSince.toISOString().slice(0, 10)} (${rt.reason})`
+            : 'A high-risk system needs a red-team exercise before it goes live',
+        });
+      }
+      const due = await this.auditDueFor(model, params);
+      if (due && due.getTime() < Date.now()) out.push({ code: 'audit_overdue', message: `The periodic audit for this ${model.riskLevel} system was due on ${due.toISOString().slice(0, 10)}` });
+      return out;
+    });
+  }
+
+  private async preDeploy(orgId: string | null): Promise<boolean> {
+    return (await orgParams(this.packs, orgId))['redTeamPreDeployRequired.HIGH'] === true;
+  }
+
+  private async auditDueFor(model: AIModelEntity, params: Record<string, any>): Promise<Date | null> {
+    const interval = Number(params['auditIntervalDays.HIGH']) > 0 ? Number(params['auditIntervalDays.HIGH']) : DEFAULT_AUDIT_DAYS;
+    const last = await this.audits.findOne({ where: { modelId: model.id }, order: { createdAt: 'DESC' } });
+    return auditDue(model, last, interval);
+  }
+
+  private async markRequired(modelId: string, reason: string, emit = true): Promise<void> {
+    const m = await this.models.findOne({ where: { id: modelId } });
+    if (!m) return;
+    // An open requirement keeps its original date until a red team satisfies it.
+    if (m.redTeamRequiredAt && !redTeamState(m, false).satisfied) return;
+    m.redTeamRequiredAt = new Date();
+    m.redTeamRequiredReason = reason;
+    await this.models.save(m);
+    if (emit) await emitModelEvent(modelId, 'RISK_ESCALATION', { ref: reason, source: 'redteam-rule' });
+  }
+
+  /* ---------------------------------------------------------------- views */
+
+  async modelStatus(user: CurrentUser, modelId: string) {
+    assertFlag(this.flags, 'redTeamAuditRules');
+    const { model, orgId } = await modelForUser(this.models, this.projects, user, modelId);
+    const params = await orgParams(this.packs, orgId);
+    const rt = redTeamState(model, params['redTeamPreDeployRequired.HIGH'] === true);
+    const due = await this.auditDueFor(model, params);
+    return {
+      model_id: modelId, risk_level: model.riskLevel, lifecycle_stage: model.lifecycleStage,
+      red_team: { required_since: rt.requiredSince, reason: rt.reason, satisfied: rt.satisfied, last_red_team: rt.lastRedTeam, pre_deploy_rule: params['redTeamPreDeployRequired.HIGH'] === true },
+      audit: { next_due: due, overdue: !!due && due.getTime() < Date.now(), interval_days: Number(params['auditIntervalDays.HIGH']) || DEFAULT_AUDIT_DAYS },
+    };
+  }
+
+  /** Records a red-team exercise date on the model (the report itself is attached as red_team evidence). */
+  async recordRedTeam(user: CurrentUser, modelId: string, body: Record<string, any>, req?: any) {
+    assertFlag(this.flags, 'redTeamAuditRules');
+    requireRole(user, MAINTAINERS, 'record red-team exercises');
+    const { model } = await modelForUser(this.models, this.projects, user, modelId);
+    const at = body.performed_at ? new Date(String(body.performed_at)) : new Date();
+    if (Number.isNaN(at.getTime()) || at.getTime() > Date.now() + 60_000) throw new BadRequestException('performed_at must be a past date');
+    const summary = reqText(body.summary, 'summary', 10, 2000);
+    model.lastRedTeamDate = at;
+    model.evidenceArtifacts = [...(model.evidenceArtifacts ?? []), { type: 'red_team', ref: String(body.ref ?? `sentrai:red-team:${modelId}:${at.toISOString()}`).slice(0, 500), added_at: at.toISOString(), description: summary } as any];
+    model.updatedAt = new Date();
+    await this.models.save(model);
+    if (req) req.auditSummary = { red_team_recorded: { model_id: modelId, performed_at: at, by: user.email } };
+    return this.modelStatus(user, modelId);
+  }
+
+  async frameworkReview(orgId: string, now = new Date()) {
+    const params = await orgParams(this.packs, orgId, now);
+    const intervalMonths = phase2Param(params, 'frameworkReviewMonths');
+    const rows = await this.aims.find({ where: { orgId, type: In(['POLICY', 'MGMT_REVIEW']), status: 'APPROVED' } });
+    const last = rows.map((r) => r.approvedAt).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+    const nextDueAt = last ? addMonths(last, intervalMonths) : null;
+    return { lastReviewAt: last, intervalMonths, nextDueAt, overdue: !last || nextDueAt!.getTime() < now.getTime() };
+  }
+
+  /** Organisation view: models with red teaming due, audits overdue, and the framework review. */
+  async overview(user: CurrentUser, q: { org_id?: string }) {
+    assertFlag(this.flags, 'redTeamAuditRules');
+    const orgId = orgFor(user, q.org_id);
+    const params = await orgParams(this.packs, orgId);
+    const pre = params['redTeamPreDeployRequired.HIGH'] === true;
+    const rows: any[] = [];
+    for (const m of await orgModels(this.models, this.projects, orgId)) {
+      const rt = redTeamState(m, pre);
+      const due = await this.auditDueFor(m, params);
+      if (rt.satisfied && !(due && due.getTime() < Date.now()) && !rt.requiredSince) continue;
+      rows.push({
+        model_id: m.id, name: m.name, risk_level: m.riskLevel, lifecycle_stage: m.lifecycleStage,
+        red_team_due: !rt.satisfied, red_team_required_since: rt.requiredSince, red_team_reason: rt.reason, last_red_team: rt.lastRedTeam,
+        audit_due: due, audit_overdue: !!due && due.getTime() < Date.now(),
+      });
+    }
+    const fr = await this.frameworkReview(orgId);
+    return {
+      org_id: orgId, pre_deploy_rule: pre, audit_interval_days: Number(params['auditIntervalDays.HIGH']) || DEFAULT_AUDIT_DAYS,
+      models: rows,
+      framework_review: { last_review_at: fr.lastReviewAt, interval_months: fr.intervalMonths, next_due_at: fr.nextDueAt, overdue: fr.overdue },
+    };
+  }
+
+  /** Weekly: framework reviews due within 30 days or overdue, and audits overdue, per organisation. */
+  @Cron(CronExpression.EVERY_WEEK)
+  async reminders(now = new Date()): Promise<number> {
+    if (!this.on()) return 0;
+    let sent = 0;
+    for (const org of await this.orgs.find()) {
+      const fr = await this.frameworkReview(org.id, now);
+      if (fr.overdue || (fr.nextDueAt && fr.nextDueAt.getTime() - now.getTime() < 30 * DAY_MS)) {
+        await this.notifier.notify('framework_review_due', { tenant_id: org.id, last_review_at: fr.lastReviewAt, next_due_at: fr.nextDueAt, overdue: fr.overdue });
+        sent++;
+      }
+    }
+    return sent;
+  }
+}

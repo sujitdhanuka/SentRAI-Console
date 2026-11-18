@@ -71,6 +71,22 @@ function classifyTier(def: PackDefinition, entry: AIModelEntry, ctx: ControlCont
     case 'eu':
       // An operator-configured list (EU_AI_ACT_HIGH_RISK_DOMAINS) replaces the pack list, as before.
       return euRiskTier(entry, ctx.euHighRiskDomains ?? (params.values.euHighRiskDomains as string[]) ?? []);
+    case 'au': {
+      // DTA policy v2.1 Appendix C: the in-scope answer comes from the latest
+      // signed or revalidation-due impact assessment (E1.4); HIGH or CRITICAL
+      // in-scope use cases are the policy's high-risk use cases.
+      const au = ctx.governance?.auDta;
+      if (!au || au.inScope === null || au.inScope === undefined) return 'Not assessed';
+      if (!au.inScope) return 'Out of scope';
+      return entry.riskLevel === RiskLevel.HIGH || entry.riskLevel === RiskLevel.CRITICAL ? 'In scope (high risk)' : 'In scope';
+    }
+    case 'us': {
+      // OMB M-25-21 high-impact determination from the impact assessment; until
+      // it is answered, HIGH and CRITICAL systems are treated as high impact.
+      const us = ctx.governance?.usPolicy;
+      if (us && us.highImpact !== null && us.highImpact !== undefined) return us.highImpact ? 'High impact' : 'Standard';
+      return entry.riskLevel === RiskLevel.HIGH || entry.riskLevel === RiskLevel.CRITICAL ? 'High impact' : 'Standard';
+    }
     default:
       return '';
   }
@@ -99,7 +115,7 @@ export function evaluatePack(
   const params =
     opts.params ??
     resolveForPacks(
-      opts.packIds ? packRegistry().activeAt(opts.asOf ?? now).filter((p) => opts.packIds!.includes(p.definition.id)) : packRegistry().activeAt(opts.asOf ?? now),
+      packRegistry().activeAt(opts.asOf ?? now).filter((p) => (opts.packIds ?? packRegistry().defaultPackIds(opts.asOf ?? now)).includes(p.definition.id)),
       opts.extraSources,
     );
   const def = pack.definition;

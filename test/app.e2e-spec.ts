@@ -2556,6 +2556,12 @@ describe('SentrAI Console (e2e)', () => {
     return { admin, owner, ciso, viewer, orgAdmin, orgId: org.body.organization_id, projectId: project.body.project_id, modelId: model.body.model_id, auth };
   };
 
+  /** Phase 2 epics pinned off, for Phase 1 tests that compare against exact Phase 1 output. */
+  const PHASE2_OFF = {
+    GOV_E2_1_AU_PACK: 'false', GOV_E2_2_US_KIT: 'false', GOV_E2_3_VALIDATION: 'false', GOV_E2_4_FAIR_LENDING: 'false',
+    GOV_E2_5_VENDORS: 'false', GOV_E2_6_TRAINING: 'false', GOV_E2_7_DATASETS: 'false', GOV_E2_8_REDTEAM_AUDIT: 'false',
+  };
+
   /** Run `fn` with the given governance env vars, restoring them afterwards. */
   const withEnv = async (vars: Record<string, string>, fn: () => Promise<void>) => {
     const prev: Record<string, string | undefined> = {};
@@ -2579,7 +2585,7 @@ describe('SentrAI Console (e2e)', () => {
     const later = { GOV_E1_2_SETTINGS: 'false', GOV_E1_3_RISKS: 'false', GOV_E1_4_IMPACT: 'false', GOV_E1_5_CONTEXT: 'false' };
     await withEnv({ GOVERNANCE_V2: 'true', GOV_E1_1_PACKS: 'false', ...later }, async () => { legacy = await cc(); });
     // E1.1 on its own: without settings (E1.2) every pack in force applies, as today.
-    await withEnv({ GOVERNANCE_V2: 'true', ...later }, async () => {
+    await withEnv({ GOVERNANCE_V2: 'true', ...later, ...PHASE2_OFF }, async () => {
       // Golden compatibility through the API: the engine reproduces the validators exactly.
       expect(await cc()).toEqual(legacy);
 
@@ -2729,7 +2735,10 @@ describe('SentrAI Console (e2e)', () => {
       // later epics only add advisory (non-mandatory) checks.
       const cur = await ccBody();
       expect(cur.overall_pass).toBe(legacy.overall_pass);
-      expect(cur.checks).toEqual(legacy.checks);
+      // Phase 2 epics add flagged advisory clauses only: every existing check is unchanged and every new one is non-mandatory.
+      const known = new Set(legacy.checks.map((c: any) => c.sutra));
+      expect(cur.checks.filter((c: any) => known.has(c.sutra))).toEqual(legacy.checks);
+      for (const c of cur.checks.filter((x: any) => !known.has(x.sutra))) expect(c.mandatory).toBe(false);
       for (const fw of ['nist_rmf', 'eu_ai_act', 'iso_42001']) {
         expect(cur[fw].overall_pass).toBe(legacy[fw].overall_pass);
         for (const c of legacy[fw].checks) {
@@ -3307,6 +3316,312 @@ describe('SentrAI Console (e2e)', () => {
       const sum = (await request(http).get(`${A}/summary`).set(auth(a.viewer)).expect(200)).body;
       expect(sum.types.find((t: any) => t.type === 'SCOPE').approved).toBe(1);
       expect((await request(http).get(`${A}/records`).set(auth(b.owner)).expect(200)).body.records).toEqual([]);
+    });
+  });
+
+  /* ------------------------------------------------------------ Phase 2 */
+
+  const userIds = async (admin: string, orgId: string) => {
+    const all = (await request(http).get('/api/v1/users').set({ Authorization: `Bearer ${admin}` }).expect(200)).body as any[];
+    return Object.fromEntries(all.filter((u) => u.organization_id === orgId).map((u) => [u.role, u.user_id])) as Record<string, string>;
+  };
+
+  it('PHASE 2 FLAGS: every Phase 2 route is a 404 while GOVERNANCE_V2 is off, and the features list says so', async () => {
+    const a = await govOrg('P2Off');
+    const { auth } = a;
+    const routes = [
+      '/api/v1/governance/au/register', `/api/v1/governance/models/${a.modelId}/reason-codes`, '/api/v1/governance/appeals',
+      '/api/v1/governance/validations', `/api/v1/governance/fair-lending/${a.modelId}`, '/api/v1/governance/vendors',
+      `/api/v1/governance/models/${a.modelId}/bom`, '/api/v1/governance/training/matrix', '/api/v1/governance/datasets', '/api/v1/governance/assurance',
+    ];
+    for (const r of routes) await request(http).get(r).set(auth(a.owner)).expect(404);
+    await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: 'x', description: 'please reconsider my case' }).expect(404);
+    const f = (await request(http).get('/api/v1/governance/features').set(auth(a.viewer)).expect(200)).body;
+    for (const k of ['auPack', 'usKit', 'modelValidation', 'fairLending', 'vendors', 'training', 'dataRegister', 'redTeamAuditRules']) expect(f[k]).toBe(false);
+    // Under the master flag, a single epic can still be switched off.
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E2_5_VENDORS: 'false' }, async () => {
+      await request(http).get('/api/v1/governance/vendors').set(auth(a.owner)).expect(404);
+      await request(http).get('/api/v1/governance/datasets').set(auth(a.owner)).expect(200);
+    });
+  });
+
+  it('E2.1 AUSTRALIA: opt-in pack, register export with formula-safe CSV and XLSX, share record by officers, accountable-official report, tenant isolation', async () => {
+    const a = await govOrg('AuOrgA');
+    const b = await govOrg('AuOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      // Not in force until the organisation opts in.
+      const catalogue = (await request(http).get('/api/v1/governance/packs').set(auth(a.owner)).expect(200)).body;
+      expect(catalogue.packs.find((p: any) => p.pack_id === 'au-dta')).toMatchObject({ opt_in: true, status: 'ACTIVE' });
+      const inForce = async (t: string) => Object.keys((await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(t)).expect(200)).body.pack_versions);
+      expect(await inForce(a.owner)).not.toContain('au-dta');
+      const reg = (await request(http).get('/api/v1/governance/au/register').set(auth(a.viewer)).expect(200)).body;
+      expect(reg.rows.map((r: any) => r.name)).toEqual(['AuOrgA Credit']);
+      const csv = await request(http).get('/api/v1/governance/exports/dta-register?format=csv').set(auth(a.viewer)).expect(200);
+      expect(csv.headers['content-type']).toMatch(/text\/csv/);
+      expect(csv.text.split('\r\n')[0]).toContain('Use case name');
+      const xlsx = await request(http).get('/api/v1/governance/exports/dta-register?format=xlsx').set(auth(a.viewer)).buffer(true).parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      }).expect(200);
+      expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
+      // Only officers record a share; the share is audited and the next due date moves.
+      await request(http).post('/api/v1/governance/exports/dta-register/share').set(auth(a.viewer)).send({ reference: 'DTA-2026-1' }).expect(403);
+      const share = (await request(http).post('/api/v1/governance/exports/dta-register/share').set(auth(a.ciso)).send({ reference: 'DTA-2026-1' }).expect(201)).body;
+      expect(share.use_cases).toBe(1);
+      expect(share.payload_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect((await request(http).get('/api/v1/governance/au/submissions').set(auth(a.viewer)).expect(200)).body.submissions).toHaveLength(1);
+      expect((await request(http).get('/api/v1/governance/au/submissions').set(auth(b.owner)).expect(200)).body.submissions).toHaveLength(0);
+      // The high-risk report goes through the accountable official only.
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/dta-report`).set(auth(a.owner)).send({ reasons: 'High risk credit decisions for the public' }).expect(400);
+      // Bulk in-scope start creates draft assessments for unassessed use cases.
+      const tracker = (await request(http).get('/api/v1/governance/au/in-scope').set(auth(a.owner)).expect(200)).body;
+      expect(tracker.deadline).toBe('2027-04-30');
+      expect(tracker.summary.outstanding).toBe(1);
+      await request(http).post('/api/v1/governance/au/in-scope/bulk-start').set(auth(a.viewer)).send({}).expect(403);
+      const bulk = (await request(http).post('/api/v1/governance/au/in-scope/bulk-start').set(auth(a.owner)).send({}).expect(200)).body;
+      expect(bulk.started).toBe(1);
+      // Tenant isolation: another org's model is a 404.
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/dta-report`).set(auth(b.owner)).send({ reasons: 'x'.repeat(20) }).expect(404);
+      // Opting in brings the pack into force for this organisation only.
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { enabledPacks: ['au-dta'] }, reason: 'Australian operations in scope' }).expect(200);
+      expect(await inForce(a.owner)).toContain('au-dta');
+      const ctl = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.owner)).expect(200)).body;
+      // Until the in-scope test is signed only the scoping clauses apply.
+      const au = ctl.packs.find((p: any) => p.pack_id === 'au-dta');
+      expect(au.tier).toBe('Not assessed');
+      expect(au.clauses.map((c: any) => c.control_id)).toEqual(['CTL-AU-INSCOPE', 'CTL-AU-USAGE']);
+      expect(au.clauses.every((c: any) => !c.passed)).toBe(true);
+    });
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E2_1_AU_PACK: 'false' }, async () => {
+      const off = (await request(http).get('/api/v1/governance/packs').set(auth(a.owner)).expect(200)).body;
+      expect(off.packs.map((p: any) => p.pack_id)).not.toContain('au-dta');
+      expect(Object.keys((await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.owner)).expect(200)).body.pack_versions)).not.toContain('au-dta');
+    });
+  });
+
+  it('E2.2 US DECISIONS: reason codes, consistent notices from explanations, appeal by a different reviewer, public request needs a known decision', async () => {
+    const a = await govOrg('UsOrgA');
+    const b = await govOrg('UsOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const R = `/api/v1/governance/models/${a.modelId}/reason-codes`;
+      await request(http).put(R).set(auth(a.viewer)).send({ map: {} }).expect(403);
+      await request(http).put(R).set(auth(a.owner)).send({ map: { dti: { code: 'bad code', text: 'x' } } }).expect(400);
+      await request(http).put(R).set(auth(a.owner)).send({ map: { dti: { code: 'R01', text: 'Debt is high compared with income' }, late: { code: 'R02', text: 'Recent late payments' } } }).expect(200);
+      expect((await request(http).get(R).set(auth(b.owner))).status).toBe(404);
+      const ref = `DEC-${Date.now()}`;
+      await request(http).post('/api/v1/audit/explainability/record').set(auth(a.admin)).send({
+        decision_ref: ref, top_features: { dti: 0.6, late: -0.3 }, decision_outcome: 'DECLINED', confidence_score: 0.8, explanation_method: 'SHAP', human_readable_summary: 'Declined', is_contestable: true,
+      }).expect(201);
+      // A public request needs a decision tied to this system.
+      await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: ref, description: 'Please reconsider my application' }).expect(404);
+      const notice = (await request(http).post(`/api/v1/governance/decisions/${ref}/notices`).set(auth(a.owner)).send({ model_id: a.modelId }).expect(201)).body;
+      expect(notice.consistent).toBe(true);
+      expect(notice.reason_codes.map((r: any) => r.code)).toEqual(['R01', 'R02']);
+      const bad = (await request(http).post(`/api/v1/governance/decisions/${ref}/notices`).set(auth(a.owner)).send({ model_id: a.modelId, reason_codes: ['R02'] }).expect(201)).body;
+      expect(bad.consistent).toBe(false);
+      // Another org cannot issue a notice on this model.
+      await request(http).post(`/api/v1/governance/decisions/${ref}/notices`).set(auth(b.owner)).send({ model_id: a.modelId }).expect(404);
+      const pub = (await request(http).post(`/api/v1/governance/public/decisions/${a.modelId}/requests`).send({ decision_ref: ref, description: 'Please reconsider my application', complainant: 'applicant@example.test' }).expect(201)).body;
+      expect(pub.reference ?? pub.request_id ?? pub.appeal_id).toBeTruthy();
+      const appeals = (await request(http).get('/api/v1/governance/appeals').set(auth(a.ciso)).expect(200)).body.appeals;
+      expect(appeals).toHaveLength(1);
+      expect((await request(http).get('/api/v1/governance/appeals').set(auth(b.owner)).expect(200)).body.appeals).toHaveLength(0);
+      const id = appeals[0].appeal_id;
+      const decision = { outcome: 'UPHELD', authority: 'Credit committee delegate', evidence: 'Notice, explanation record and file review', outcome_notes: 'Reasons confirmed; decision stands' };
+      // The person who issued the notice cannot decide the appeal.
+      await request(http).post(`/api/v1/governance/appeals/${id}/decide`).set(auth(a.owner)).send(decision).expect(403);
+      const decided = (await request(http).post(`/api/v1/governance/appeals/${id}/decide`).set(auth(a.ciso)).send(decision).expect(200)).body;
+      expect(decided).toMatchObject({ status: 'DECIDED', outcome: 'UPHELD' });
+      expect(decided.reviewer_user_id).toBeTruthy();
+      expect(decided.retention_until).toBeTruthy();
+    });
+  });
+
+  it('E2.3 VALIDATION: in-scope gate finding, independent validator only, validator-only analysis and completion, officer-only exception', async () => {
+    const a = await govOrg('ValOrgA');
+    const b = await govOrg('ValOrgB');
+    const { auth } = a;
+    const ids = await userIds(a.admin, a.orgId);
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      await request(http).put(`/api/v1/governance/models/${a.modelId}/mrm-scope`).set(auth(a.owner)).send({ in_scope: false }).expect(400);
+      await request(http).put(`/api/v1/governance/models/${a.modelId}/mrm-scope`).set(auth(a.owner)).send({ in_scope: true }).expect(200);
+      await request(http).post('/api/v1/governance/validations').set(auth(a.owner)).send({ model_id: a.modelId, validator_user_id: (await userIds(b.admin, b.orgId)).CISO }).expect(400);
+      const v = (await request(http).post('/api/v1/governance/validations').set(auth(a.owner)).send({ model_id: a.modelId, validator_user_id: ids.CISO, scope: 'Full validation' }).expect(201)).body;
+      expect(v.independent).toBe(true);
+      const V = `/api/v1/governance/validations/${v.validation_id}`;
+      const analysis = { conceptual_soundness: 'Logistic scorecard suits the portfolio', implementation_review: 'Code matches the documented specification', outcomes_analysis: 'Back-testing within tolerance over two years' };
+      await request(http).patch(V).set(auth(a.owner)).send(analysis).expect(403);
+      await request(http).patch(V).set(auth(a.ciso)).send(analysis).expect(200);
+      await request(http).post(`${V}/complete`).set(auth(a.owner)).send({ result: 'APPROVED' }).expect(403);
+      const done = (await request(http).post(`${V}/complete`).set(auth(a.ciso)).send({ result: 'APPROVED' }).expect(200)).body;
+      expect(done).toMatchObject({ status: 'COMPLETED', result: 'APPROVED' });
+      expect(done.expires_at).toBeTruthy();
+      await request(http).post(`${V}/exception`).set(auth(a.viewer)).send({}).expect(403);
+      await request(http).get(V).set(auth(b.owner)).expect(404);
+      const agg = (await request(http).get('/api/v1/governance/validations/aggregate').set(auth(a.viewer)).expect(200)).body;
+      expect(agg.totals ?? agg.projects).toBeTruthy();
+    });
+  });
+
+  it('E2.4 FAIR LENDING: proxy scan as evidence, justification, disparate impact and alternatives search, tenant isolation', async () => {
+    const a = await govOrg('FlOrgA');
+    const b = await govOrg('FlOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const F = `/api/v1/governance/fair-lending/${a.modelId}`;
+      await request(http).post(`${F}/scan`).set(auth(a.viewer)).send({ features: ['zip'] }).expect(403);
+      await request(http).post(`${F}/scan`).set(auth(b.owner)).send({ features: ['zip'] }).expect(404);
+      const scan = (await request(http).post(`${F}/scan`).set(auth(a.owner)).send({ features: ['applicant_zip_code', 'income', 'snapshot_date'] }).expect(200)).body;
+      expect(scan.hits.map((h: any) => h.feature)).toEqual(['applicant_zip_code']);
+      expect(scan.unjustified).toBe(1);
+      await request(http).post(`${F}/justify`).set(auth(a.owner)).send({ feature: 'income', justification: 'not flagged so nothing to justify here' }).expect(400);
+      const j = (await request(http).post(`${F}/justify`).set(auth(a.owner)).send({ feature: 'applicant_zip_code', justification: 'Used only for fraud geolocation, not in the credit score' }).expect(200)).body;
+      expect(j.unjustified).toBe(0);
+      await request(http).post(`${F}/disparate-impact`).set(auth(a.owner)).send({ ratio: 0.86 }).expect(201);
+      await request(http).post(`${F}/lda-search`).set(auth(a.owner)).send({ alternatives: [{ description: 'Drop bureau age' }], conclusion: 'No alternative with equal accuracy and lower disparity' }).expect(201);
+      const st = (await request(http).get(F).set(auth(a.viewer)).expect(200)).body;
+      expect(st).toMatchObject({ applicable: true, ldaSearch: true });
+      expect(st.disparateImpact.ratio).toBe(0.86);
+    });
+  });
+
+  it('E2.5 VENDORS: register, scored assessment, BOM from discovery, a version change triggers risk review, tenant isolation', async () => {
+    const a = await govOrg('VenOrgA');
+    const b = await govOrg('VenOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      await request(http).post('/api/v1/governance/vendors').set(auth(a.viewer)).send({ name: 'Acme' }).expect(403);
+      const v = (await request(http).post('/api/v1/governance/vendors').set(auth(a.owner)).send({ name: 'Acme AI', criticality: 'HIGH' }).expect(201)).body;
+      expect(v.contract_gaps.length).toBe(6);
+      await request(http).post('/api/v1/governance/vendors').set(auth(a.owner)).send({ name: 'Acme AI' }).expect(400);
+      await request(http).get(`/api/v1/governance/vendors/${v.vendor_id}`).set(auth(b.owner)).expect(404);
+      const checklist = (await request(http).get('/api/v1/governance/vendors/checklist').set(auth(a.viewer)).expect(200)).body.checklist;
+      const answers = Object.fromEntries(checklist.map((c: any) => [c.id, 'YES']));
+      await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers: { audit_rights: 'YES' } }).expect(400);
+      const as1 = (await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers: { ...answers, audit_rights: 'NO' } }).expect(201)).body;
+      expect(as1).toMatchObject({ version: 1, result: 'UNSATISFACTORY' });
+      const as2 = (await request(http).post(`/api/v1/governance/vendors/${v.vendor_id}/assessments`).set(auth(a.owner)).send({ answers }).expect(201)).body;
+      expect(as2).toMatchObject({ version: 2, result: 'SATISFACTORY', score: 100 });
+      // Lowering criticality is for officers.
+      await request(http).patch(`/api/v1/governance/vendors/${v.vendor_id}`).set(auth(a.owner)).send({ criticality: 'LOW' }).expect(200);
+      const B = `/api/v1/governance/models/${a.modelId}/bom`;
+      const item = (await request(http).post(B).set(auth(a.owner)).send({ component: 'xgboost', kind: 'LIBRARY', version: '1.7.0', licence: 'Apache-2.0', vendor_id: v.vendor_id }).expect(201)).body;
+      expect(item.licence_class).toBe('PERMISSIVE');
+      await request(http).post(B).set(auth(b.owner)).send({ component: 'x' }).expect(404);
+      await request(http).post(`/api/v1/governance/models/${b.modelId}/bom`).set(auth(b.owner)).send({ component: 'x', vendor_id: v.vendor_id }).expect(400);
+      const changed = (await request(http).patch(`/api/v1/governance/bom/${item.item_id}`).set(auth(a.owner)).send({ version: '2.0.0' }).expect(200)).body;
+      expect(changed).toMatchObject({ previous_version: '1.7.0', version: '2.0.0', review_triggered: true });
+      await request(http).patch(`/api/v1/governance/bom/${item.item_id}`).set(auth(b.owner)).send({ version: '3' }).expect(404);
+      const bom = (await request(http).get(B).set(auth(a.viewer)).expect(200)).body;
+      expect(bom.components).toHaveLength(1);
+      expect(bom.facts).toMatchObject({ components: 1, unsatisfactory: 0 });
+      const list = (await request(http).get('/api/v1/governance/vendors').set(auth(a.viewer)).expect(200)).body.vendors;
+      expect(list[0].models.map((m: any) => m.model_id)).toEqual([a.modelId]);
+      expect((await request(http).get('/api/v1/governance/vendors').set(auth(b.owner)).expect(200)).body.vendors).toEqual([]);
+    });
+  });
+
+  it('E2.6 TRAINING: officers set courses, maintainers record completions, people acknowledge policies, matrix and user status', async () => {
+    const a = await govOrg('TrOrgA');
+    const b = await govOrg('TrOrgB');
+    const { auth } = a;
+    const ids = await userIds(a.admin, a.orgId);
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const T = '/api/v1/governance/training';
+      await request(http).post(`${T}/courses`).set(auth(a.viewer)).send({ title: 'AI literacy' }).expect(403);
+      const course = (await request(http).post(`${T}/courses`).set(auth(a.owner)).send({ title: 'AI literacy', topic: 'ai_literacy', validity_months: 12 }).expect(201)).body;
+      const policy = (await request(http).post(`${T}/courses`).set(auth(a.owner)).send({ title: 'AI policy acknowledgement', kind: 'POLICY_ACK', topic: 'policy_ack' }).expect(201)).body;
+      await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: (await userIds(b.admin, b.orgId)).OWNER }).expect(400);
+      await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: ids.VIEWER, completed_at: '2099-01-01' }).expect(400);
+      const r = (await request(http).post(`${T}/records`).set(auth(a.owner)).send({ course_id: course.course_id, user_id: ids.VIEWER, evidence_ref: 'LMS-1' }).expect(201)).body;
+      expect(r.expires_at).toBeTruthy();
+      // A course needs a recorded completion; a policy can be self-acknowledged.
+      await request(http).post(`${T}/courses/${course.course_id}/acknowledge`).set(auth(a.viewer)).expect(403);
+      await request(http).post(`${T}/courses/${policy.course_id}/acknowledge`).set(auth(a.viewer)).expect(200);
+      await request(http).post(`${T}/courses/${policy.course_id}/acknowledge`).set(auth(b.viewer)).expect(404);
+      const m = (await request(http).get(`${T}/matrix`).set(auth(a.owner)).expect(200)).body;
+      const viewerRow = m.rows.find((x: any) => x.user_id === ids.VIEWER);
+      expect(viewerRow.compliant).toBe(true);
+      expect(m.facts.topics.policy_ack.completed).toBe(1);
+      // A viewer sees only their own row.
+      expect((await request(http).get(`${T}/matrix`).set(auth(a.viewer)).expect(200)).body.rows).toHaveLength(1);
+      const status = (await request(http).get(`${T}/user-status`).set(auth(a.owner)).expect(200)).body.users;
+      expect(status[ids.VIEWER].compliant).toBe(true);
+      expect(status[ids.OWNER].compliant).toBe(false);
+      expect((await request(http).get(`${T}/courses`).set(auth(b.owner)).expect(200)).body.courses).toEqual([]);
+    });
+  });
+
+  it('E2.7 DATA REGISTER: datasets with lawful basis, model links, deletion order traced to models and closed with evidence', async () => {
+    const a = await govOrg('DsOrgA');
+    const b = await govOrg('DsOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const D = '/api/v1/governance/datasets';
+      await request(http).post(D).set(auth(a.viewer)).send({ name: 'Bureau 2025' }).expect(403);
+      await request(http).post(D).set(auth(a.owner)).send({ name: 'Bad', personal_data: true, lawful_basis: 'NOT_PERSONAL' }).expect(400);
+      const ds = (await request(http).post(D).set(auth(a.owner)).send({ name: 'Bureau 2025', source: 'Credit bureau', personal_data: true, lawful_basis: 'CONTRACT', provenance: 'Monthly bureau extract', retention_until: '2030-01-01' }).expect(201)).body;
+      expect(ds.gaps).toEqual(['quality checks']);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/datasets`).set(auth(b.owner)).send({ dataset_id: ds.dataset_id }).expect(404);
+      await request(http).post(`/api/v1/governance/models/${b.modelId}/datasets`).set(auth(b.owner)).send({ dataset_id: ds.dataset_id }).expect(400);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/datasets`).set(auth(a.owner)).send({ dataset_id: ds.dataset_id, purpose: 'TRAINING' }).expect(201);
+      const md = (await request(http).get(`/api/v1/governance/models/${a.modelId}/datasets`).set(auth(a.viewer)).expect(200)).body;
+      expect(md.facts).toMatchObject({ linked: 1, missingLawfulBasis: 0, pendingDeletion: 0 });
+      await request(http).post(`${D}/${ds.dataset_id}/deletion-orders`).set(auth(a.viewer)).send({ reason: 'Erasure request from a customer' }).expect(403);
+      const ordered = (await request(http).post(`${D}/${ds.dataset_id}/deletion-orders`).set(auth(a.ciso)).send({ kind: 'ERASURE_REQUEST', reference: 'DSR-1', reason: 'Erasure request from a customer' }).expect(201)).body;
+      expect(ordered.deletion_status).toBe('ORDERED');
+      const order = ordered.deletion_orders[0];
+      expect(order.models.map((m: any) => m.model_id)).toEqual([a.modelId]);
+      await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/complete`).set(auth(a.ciso)).send({ evidence: 'Ticket DEL-9' }).expect(400);
+      await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/model-action`).set(auth(a.owner)).send({ model_id: a.modelId, action: 'Retrained without the record on 2026-11-01' }).expect(200);
+      const done = (await request(http).post(`${D}/${ds.dataset_id}/deletion-orders/${order.id}/complete`).set(auth(a.ciso)).send({ evidence: 'Ticket DEL-9' }).expect(200)).body;
+      expect(done.deletion_status).toBe('DELETED');
+      await request(http).get(`${D}/${ds.dataset_id}`).set(auth(b.owner)).expect(404);
+      const lineage = (await request(http).get(`${D}/lineage`).set(auth(a.viewer)).expect(200)).body;
+      expect(lineage.edges).toEqual([{ from: ds.dataset_id, to: a.modelId, purpose: 'TRAINING' }]);
+    });
+  });
+
+  it('E2.8 RED TEAM AND AUDIT: CI escalation makes red teaming due (gate finding) until a later exercise; framework review facts', async () => {
+    const a = await govOrg('RtOrgA');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const S = `/api/v1/governance/models/${a.modelId}/assurance`;
+      const before = (await request(http).get(S).set(auth(a.viewer)).expect(200)).body;
+      expect(before.red_team.satisfied).toBe(true);
+      expect(before.red_team.pre_deploy_rule).toBe(false);
+      const ov = (await request(http).get('/api/v1/governance/assurance').set(auth(a.viewer)).expect(200)).body;
+      expect(ov.framework_review).toMatchObject({ overdue: true, interval_months: 24 });
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.viewer)).send({ summary: 'Prompt-injection exercise' }).expect(403);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.owner)).send({ summary: 'short' }).expect(400);
+      const rec = (await request(http).post(`/api/v1/governance/models/${a.modelId}/red-team`).set(auth(a.owner)).send({ summary: 'Adversarial exercise on the scorecard inputs' }).expect(200)).body;
+      expect(rec.red_team.last_red_team).toBeTruthy();
+
+      // A CI scan that sees the code escalate above the registered tier makes red teaming due.
+      const m = (await request(http).post('/api/v1/inventory/models').set(auth(a.owner)).send({
+        name: 'Rt Support Ranker', model_type: 'MACHINE_LEARNING', functional_area: 'customer_support', use_case_description: 'Ranks support tickets for the desk.',
+        human_oversight_required: true, owner_team: 'Ops', board_policy_ref: 'BP-1', source_ref: 'svc/credit/rank.py', project_id: a.projectId,
+      }).expect(201)).body;
+      expect(m.risk_level).not.toBe('HIGH');
+      const tok = (await request(http).post('/api/v1/ci/tokens').set(auth(a.admin)).send({ project_id: a.projectId, label: 'rt' }).expect(201)).body.token;
+      await request(http).post('/api/v1/ci/scan').set({ Authorization: `Bearer ${tok}` })
+        .send({ commit_sha: 'rt1', files: [{ path: 'svc/credit/rank.py', content: 'import openai\n\ndef score(applicant):\n    return openai.chat.completions.create(model="gpt-4", messages=[])\n' }] }).expect(200);
+      const due = (await request(http).get(`/api/v1/governance/models/${m.model_id}/assurance`).set(auth(a.viewer)).expect(200)).body;
+      expect(due.red_team.satisfied).toBe(false);
+      expect(due.red_team.required_since).toBeTruthy();
+      expect(due.red_team.reason).toMatch(/risk escalation/);
+      const listed = (await request(http).get('/api/v1/governance/assurance').set(auth(a.viewer)).expect(200)).body.models;
+      expect(listed.find((x: any) => x.model_id === m.model_id).red_team_due).toBe(true);
+      const ctl = (await request(http).get(`/api/v1/governance/models/${m.model_id}/controls`).set(auth(a.viewer)).expect(200)).body;
+      expect(ctl.controls.find((c: any) => c.control_id === 'CTL-RT-02').status).toBe('FAIL');
+      await request(http).post(`/api/v1/governance/models/${m.model_id}/red-team`).set(auth(a.owner)).send({ summary: 'Red team after the escalation' }).expect(200);
+      expect((await request(http).get(`/api/v1/governance/models/${m.model_id}/assurance`).set(auth(a.viewer)).expect(200)).body.red_team.satisfied).toBe(true);
+    });
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E2_8_REDTEAM_AUDIT: 'false' }, async () => {
+      await request(http).get(`/api/v1/governance/models/${a.modelId}/assurance`).set(auth(a.viewer)).expect(404);
     });
   });
 });

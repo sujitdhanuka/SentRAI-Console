@@ -56,7 +56,15 @@ const DAY = 86_400_000;
 export const RISK_WRITERS: Role[] = [Role.OWNER, Role.CISO, Role.ADMIN, Role.APPROVER, Role.REVIEWER];
 
 export interface GateFinding {
-  code: 'residual_risk_unaccepted' | 'risk_register_empty' | 'impact_assessment_required' | 'third_party_audit_required';
+  code:
+    | 'residual_risk_unaccepted'
+    | 'risk_register_empty'
+    | 'impact_assessment_required'
+    | 'third_party_audit_required'
+    // Phase 2
+    | 'validation_required'
+    | 'red_team_required'
+    | 'audit_overdue';
   message: string;
 }
 

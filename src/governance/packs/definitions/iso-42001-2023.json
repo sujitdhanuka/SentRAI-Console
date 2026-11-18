@@ -16,7 +16,8 @@
     "2023.1.0: migrated from frameworks.validator.ts with the Phase 0 corrected codes; results unchanged.",
     "2023.1.0 (Phase 1): AIMS-8.4 gap text distinguishes no workflow from no signed assessment; register-backed 6.1.3 and context-profile A.6.2.2 / A.8.2 clauses behind their flags (advisory).",
     "2023.1.0 (Phase 1): organisation-level clauses 4.1–4.3, 5.2, 6.2, 7.2, 7.3, 7.5, 9.2, 9.3 and 10.2 read the AIMS workspace, document control and the corrective-action register (ORG scope, behind their flags).",
-    "2023.1.0 (Phase 1 review): AIMS-9.2 reports auditors who are not independent with its own evidence text instead of the passing text."
+    "2023.1.0 (Phase 1 review): AIMS-9.2 reports auditors who are not independent with its own evidence text instead of the passing text.",
+    "2023.1.0 (Phase 2): A.10.3 suppliers, A.7 data and A.6.2.4 validation read the Phase 2 registers, each behind its flag (advisory)."
   ],
   "parameters": {},
   "clauses": [
@@ -367,6 +368,74 @@
         "not_assessed": "Corrective-action register not switched on"
       },
       "gap": "Clause 10.2 needs nonconformities acted on in time and their effectiveness reviewed."
+    },
+    {
+      "code": "AIMS-A.10.3",
+      "clause": "A.10.3",
+      "name": "Suppliers",
+      "control": "CTL-VENDOR-01",
+      "mandatory": false,
+      "flag": "vendors",
+      "alsoEvidences": [
+        "A.10.2",
+        "A.4.2"
+      ],
+      "evidence": {
+        "pass": "{components} third-party component(s) assessed",
+        "no_third_party": "No third-party components recorded"
+      },
+      "gap": {
+        "unassessed": "A.10.3 needs suppliers assessed against the organisation's responsible-AI approach.",
+        "unsatisfactory": "A supplier assessment is unsatisfactory.",
+        "exit": "A HIGH-criticality supplier has no exit plan.",
+        "licence": "A component has a restricted or unknown licence.",
+        "not_assessed": "The vendor register is not switched on."
+      }
+    },
+    {
+      "code": "AIMS-A.7.2",
+      "clause": "A.7.2",
+      "name": "Data for Development and Enhancement",
+      "control": "CTL-DATA-02",
+      "mandatory": false,
+      "flag": "dataRegister",
+      "alsoEvidences": [
+        "A.7.3",
+        "A.7.4",
+        "A.7.5",
+        "A.7.6",
+        "A.4.3"
+      ],
+      "evidence": {
+        "pass": "{linked} dataset(s) with acquisition, provenance and lawful basis recorded"
+      },
+      "gap": {
+        "none": "A.7 needs the data used by the system defined and documented: link its datasets.",
+        "lawful_basis": "A linked dataset has no lawful basis.",
+        "provenance": "A linked dataset has no provenance (A.7.5).",
+        "deletion": "A linked dataset has an open deletion order.",
+        "not_assessed": "The data register is not switched on."
+      }
+    },
+    {
+      "code": "AIMS-A.6.2.4",
+      "clause": "A.6.2.4",
+      "name": "Verification and Validation",
+      "control": "CTL-VAL-01",
+      "mandatory": false,
+      "flag": "modelValidation",
+      "evidence": {
+        "pass": "Validation {result}, valid until {expires}",
+        "exception": "Temporary-use exception until {exception_until}",
+        "excluded": "Excluded from model-risk validation: {reason}"
+      },
+      "gap": {
+        "missing": "A.6.2.4 needs verification and validation of the system recorded.",
+        "not_independent": "The validator is not independent.",
+        "rejected": "The latest validation rejected the system.",
+        "expired": "The validation expired on {expires}.",
+        "not_assessed": "Model validation is not switched on."
+      }
     }
   ]
 }

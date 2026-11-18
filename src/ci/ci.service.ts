@@ -136,7 +136,12 @@ export class CiEvaluationService {
     return out;
   }
 
-  private evaluate(candidates: DiscoveredCandidate[], registered: AIModelEntity[], policy: PolicyContract): BlockingGap[] {
+  private evaluate(
+    candidates: DiscoveredCandidate[],
+    registered: AIModelEntity[],
+    policy: PolicyContract,
+    escalations?: Array<{ modelId: string; from: string; to: string; source: string }>,
+  ): BlockingGap[] {
     const gaps: BlockingGap[] = [];
     for (const candidate of candidates) {
       const severity = String(candidate.riskHint).toUpperCase();
@@ -171,6 +176,7 @@ export class CiEvaluationService {
       if (policy.gates.risk_escalation?.enforce && matched) {
         const registeredRank = RISK_RANK[String(matched.riskLevel).toUpperCase()];
         if (RISK_RANK[severity] >= RISK_RANK.HIGH && registeredRank !== undefined && RISK_RANK[severity] > registeredRank) {
+          escalations?.push({ modelId: matched.id, from: String(matched.riskLevel), to: severity, source: candidate.filePath });
           gaps.push({
             model_name: candidate.suggestedName,
             severity,
@@ -335,7 +341,16 @@ export class CiEvaluationService {
     const { policy, usedDefault } = parsePolicy(policyRaw);
     const registered = await this.models.find({ where: { projectId, isActive: true } });
 
-    const blockingGaps = this.evaluate(candidates, registered, policy);
+    const escalations: Array<{ modelId: string; from: string; to: string; source: string }> = [];
+    const blockingGaps = this.evaluate(candidates, registered, policy, escalations);
+    // E2.8: a risk escalation means red teaming is due (no-op unless the governance rule is on).
+    for (const e of escalations) {
+      try {
+        await governanceHooks.onRiskEscalation?.(e.modelId, { from: e.from, to: e.to, source: e.source });
+      } catch {
+        /* governance side effects never break the scan */
+      }
+    }
     // Governance E1.3/E1.4: residual_risk_unaccepted / impact_assessment_required,
     // blocking or warning per the organisation's gate setting for the tier.
     const governanceWarnings: Array<{ model_name: string; file_location: string; findings: string[] }> = [];

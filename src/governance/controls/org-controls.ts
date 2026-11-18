@@ -32,7 +32,11 @@ function peopleControl(id: string, title: string, type: string, item: string): C
         return { ...out(false, { owner: setting.owner || 'no owner named' }, 'customer'), notAssessed: true };
       }
       const r = i.ctx.org?.records?.[type] ?? { approved: 0 };
-      return out(r.approved > 0, { approved: r.approved }, r.approved > 0 ? 'pass' : 'missing');
+      // E2.6: training records (competence) and policy acknowledgements (awareness) count as retained evidence.
+      const t = i.ctx.org?.training;
+      const fromTraining = !t ? 0 : item === 'awareness' ? Number(t.topics?.policy_ack?.completed ?? 0) : Number(t.completions ?? 0);
+      const n = r.approved + fromTraining;
+      return out(n > 0, { approved: n }, n > 0 ? 'pass' : 'missing');
     },
   };
 }

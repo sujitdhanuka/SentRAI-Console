@@ -36,6 +36,7 @@ import {
   PEOPLE_ITEMS,
   RISK_CATEGORIES,
   validateSettings,
+  OPTIONAL_SETTINGS_KEYS,
 } from './settings.model';
 
 export const SETTINGS_EDITORS: Role[] = [Role.OWNER, Role.CISO];
@@ -58,7 +59,7 @@ export class GovernanceSettingsService implements OnModuleInit {
   onModuleInit(): void {
     // Settings narrow the packs in force and join the strictest-wins vote, only while the flag is on.
     this.packs.setOrgContextProvider(async (orgId, at) => {
-      const all = packRegistry().activeAt(at).map((p) => p.definition.id);
+      const all = packRegistry().defaultPackIds(at);
       if (!this.flags.isEnabled('governanceSettings') || !orgId) return { packIds: all, extraSources: [] };
       const s = await this.inForce(orgId, at);
       return {
@@ -188,7 +189,7 @@ export class GovernanceSettingsService implements OnModuleInit {
     // Past reports must keep the settings that applied at the time, so a change cannot be back-dated.
     if (effectiveFrom.getTime() < now.getTime() - 60_000) throw new BadRequestException('effective_from cannot be in the past');
 
-    const known = new Set(Object.keys(defaultSettings()));
+    const known = new Set<string>([...Object.keys(defaultSettings()), ...OPTIONAL_SETTINGS_KEYS]);
     const unknownKeys = Object.keys(body.settings ?? {}).filter((k) => !known.has(k));
     if (unknownKeys.length) throw new BadRequestException(`Unknown settings field(s): ${unknownKeys.join(', ')}`);
 

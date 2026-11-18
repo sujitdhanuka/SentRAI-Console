@@ -61,4 +61,13 @@ export class GrievanceEntity {
 
   @Column('datetime', { nullable: true })
   resolvedAt!: Date | null;
+
+  /** The decision this grievance contests (governance E2.2). */
+  @Index()
+  @Column('varchar', { length: 255, nullable: true })
+  decisionRef!: string | null;
+
+  /** The rejected grievance this one appeals (governance E2.2). */
+  @Column('varchar', { length: 36, nullable: true })
+  appealOf!: string | null;
 }

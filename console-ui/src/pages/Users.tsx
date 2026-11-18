@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
+import { useGovernanceFeatures } from '../stores/governanceFeatures';
 import { useSession } from '../stores/session';
 
 interface User {
@@ -56,6 +57,19 @@ export function Users() {
   const [draft, setDraft] = useState<EditDraft>({ full_name: '', role: '', organization_id: '' });
 
   const [rows, setRows] = useState<User[]>([]);
+  // E2.6: training compliance per user, shown only while the training flag is on.
+  const features = useGovernanceFeatures((s) => s.features);
+  const loadFeatures = useGovernanceFeatures((s) => s.load);
+  const [training, setTraining] = useState<Record<string, { compliant: boolean; overdue: number; expiring: number }>>({});
+  useEffect(() => {
+    void loadFeatures();
+  }, [loadFeatures]);
+  useEffect(() => {
+    if (!features?.training) return;
+    api<{ users: Record<string, { compliant: boolean; overdue: number; expiring: number }> }>('/governance/training/user-status')
+      .then((r) => setTraining(r.users ?? {}))
+      .catch(() => setTraining({}));
+  }, [features?.training, rows.length]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -243,6 +257,13 @@ export function Users() {
                       </td>
                       <td className="px-2 py-1.5">
                         <Badge tone={u.is_active ? 'positive' : 'neutral'}>{u.is_active ? 'active' : 'disabled'}</Badge>
+                        {training[u.user_id] && (
+                          <span className="ml-1">
+                            <Badge tone={training[u.user_id].compliant ? (training[u.user_id].expiring ? 'warning' : 'positive') : 'negative'} title="Mandatory AI training">
+                              {training[u.user_id].compliant ? (training[u.user_id].expiring ? 'training expiring' : 'trained') : `${training[u.user_id].overdue} training due`}
+                            </Badge>
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
                         <span className="flex flex-wrap gap-1.5">

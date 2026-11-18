@@ -5,6 +5,7 @@
  * which pack set it) but is reported as "not yet enforced", so the parameters
  * view and the settings window never imply a check that does not run.
  */
+import { FeatureFlags, getFeatureFlags } from '../../common/feature-flags';
 import { listControls } from '../controls/control-library';
 import { PARAMETER_SPECS } from './parameter-resolver';
 
@@ -16,9 +17,30 @@ export const PARAMETER_CONSUMERS: Record<string, string[]> = {
   bcpDrillReminderDays: ['BCP drill status and reminders'],
 };
 
+/** Phase 2 consumers, which enforce a parameter only while their flag is on. */
+export const FLAGGED_CONSUMERS: Record<string, Array<{ by: string; flag: keyof FeatureFlags }>> = {
+  decisionRecordRetentionMonths: [{ by: 'Adverse-action notice and appeal retention (E2.2)', flag: 'usKit' }],
+  appealResponseDays: [{ by: 'Appeal and reconsideration due dates (E2.2)', flag: 'usKit' }],
+  dtaRegisterShareMonths: [{ by: 'DTA register share reminder (E2.1)', flag: 'auPack' }],
+  highRiskReviewMonths: [{ by: 'High-risk use case review (E2.1)', flag: 'auPack' }],
+  validationValidityMonths: [{ by: 'Model validation expiry (E2.3)', flag: 'modelValidation' }],
+  frameworkReviewMonths: [{ by: 'Framework review reminder (E2.8)', flag: 'redTeamAuditRules' }],
+  'redTeamPreDeployRequired.HIGH': [{ by: 'Pre-deploy red-team gate (E2.8)', flag: 'redTeamAuditRules' }],
+  'auditIntervalDays.HIGH': [{ by: 'Audit interval gate (E2.8)', flag: 'redTeamAuditRules' }],
+};
+
+/** Phase 2 controls that read a parameter, which count only while their flag is on. */
+export const FLAGGED_CONTROLS: Record<string, keyof FeatureFlags> = {
+  'CTL-FL-02': 'fairLending',
+};
+
 export function parameterEnforcement(name: string): { enforced: boolean; enforcedBy: string[] } {
-  const controls = listControls().filter((c) => c.parameters.includes(name)).map((c) => c.id);
-  const enforcedBy = [...controls, ...(PARAMETER_CONSUMERS[name] ?? [])];
+  const flags = getFeatureFlags();
+  const controls = listControls()
+    .filter((c) => c.parameters.includes(name) && (!FLAGGED_CONTROLS[c.id] || flags[FLAGGED_CONTROLS[c.id]]))
+    .map((c) => c.id);
+  const flagged = (FLAGGED_CONSUMERS[name] ?? []).filter((c) => flags[c.flag]).map((c) => c.by);
+  const enforcedBy = [...controls, ...(PARAMETER_CONSUMERS[name] ?? []), ...flagged];
   return { enforced: enforcedBy.length > 0, enforcedBy };
 }
 

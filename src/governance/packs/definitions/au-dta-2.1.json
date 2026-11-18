@@ -1,0 +1,215 @@
+{
+  "id": "au-dta",
+  "version": "2.1.0",
+  "effectiveFrom": "2025-12-15",
+  "name": "Australian Government Policy for the responsible use of AI (DTA v2.1)",
+  "jurisdiction": "Australia",
+  "baseline": false,
+  "region": "AU",
+  "optIn": true,
+  "flag": "auPack",
+  "reportFormat": "framework",
+  "reportName": "AU DTA AI Policy",
+  "responseKey": "au_dta",
+  "legacyId": "au_dta",
+  "tierClassifier": "au",
+  "source": "Digital Transformation Agency, Policy for the responsible use of AI in government v2.1 (paraphrased; compliance review required before customer use). Requirement IDs follow the SentRAI AU gap analysis.",
+  "changelog": [
+    "2.1.0 (Phase 2, E2.1): first version. Opt-in; applies only to organisations that enable it in governance settings."
+  ],
+  "parameters": {
+    "dtaRegisterShareMonths": 6,
+    "highRiskReviewMonths": 12
+  },
+  "clauses": [
+    {
+      "code": "AU-IA-1",
+      "clause": "IA-1, IA-2, IA-13; Appendix C",
+      "name": "In-scope assessment documented",
+      "control": "CTL-AU-INSCOPE",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Appendix C in-scope test answered: {in_scope} (assessed {assessed_at})"
+      },
+      "gap": {
+        "missing": "Answer the Appendix C in-scope questions in an impact assessment that includes the au-dta questionnaire, and sign it.",
+        "not_assessed": "The Australia pack is not switched on."
+      }
+    },
+    {
+      "code": "AU-AD-2",
+      "clause": "AD-2; Appendix D",
+      "name": "Usage pattern and domain classified",
+      "control": "CTL-AU-USAGE",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Usage pattern {usage_pattern}; domain {domain}"
+      },
+      "gap": "Record the DTA usage pattern and domain in the model's context profile (missing: {missing})."
+    },
+    {
+      "code": "AU-IA-4",
+      "clause": "IA-4, SO-5",
+      "name": "On the AI use case register",
+      "control": "CTL-AU-REG",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "In scope",
+        "In scope (high risk)"
+      ],
+      "evidence": {
+        "pass": "Registered with risk rating {risk} and an accountable owner"
+      },
+      "gap": "The register entry needs {missing}."
+    },
+    {
+      "code": "AU-SO-4",
+      "clause": "SO-4",
+      "name": "Accountable use case owner",
+      "control": "CTL-OWNER-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "In scope",
+        "In scope (high risk)"
+      ],
+      "evidence": {
+        "pass": "Accountable use case owner named"
+      },
+      "gap": "Name an accountable use case owner (a person) for this in-scope use case."
+    },
+    {
+      "code": "AU-IA-3",
+      "clause": "IA-3, IA-6",
+      "name": "Impact assessment for an in-scope use case",
+      "control": "CTL-IMPACT-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "In scope",
+        "In scope (high risk)"
+      ],
+      "evidence": {
+        "pass": "Impact assessment v{version} signed {signedAt}",
+        "not_final": "Impact assessment v{version} is {status}"
+      },
+      "gap": {
+        "missing": "In-scope use cases need a signed AI use case impact assessment, revalidated after material change.",
+        "not_assessed": "Impact assessments are not switched on."
+      }
+    },
+    {
+      "code": "AU-IA-9",
+      "clause": "IA-9",
+      "name": "High-risk: risks and mitigations reported to the accountable official",
+      "control": "CTL-RISK-02",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "In scope (high risk)"
+      ],
+      "evidence": {
+        "pass": "{assessed} risk(s) assessed; all accepted or within appetite",
+        "fail": "{unaccepted} of {total} risk(s) not accepted"
+      },
+      "gap": {
+        "empty": "Record and assess the risks of this high-risk use case so the accountable official sees the rating, mitigations and residual risk.",
+        "unaccepted": "Residual risks above appetite need acceptance by the approver the risk appetite names."
+      }
+    },
+    {
+      "code": "AU-IA-11",
+      "clause": "IA-11",
+      "name": "High-risk use case reported to the DTA",
+      "control": "CTL-AU-DTA-REPORT",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "In scope (high risk)"
+      ],
+      "evidence": {
+        "pass": "Reported to the DTA on {reported_at}"
+      },
+      "gap": "Once deployment is decided, record the high-risk use case report to the DTA (made through the accountable official)."
+    },
+    {
+      "code": "AU-IA-12",
+      "clause": "IA-12",
+      "name": "High-risk use case reviewed at least every 12 months",
+      "control": "CTL-AU-REVIEW",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "In scope (high risk)"
+      ],
+      "evidence": {
+        "pass": "Last reviewed {last_review}"
+      },
+      "gap": {
+        "missing": "High-risk use cases need a signed review (impact assessment) at least every {months} months.",
+        "stale": "Last review {last_review} is older than {months} months."
+      }
+    },
+    {
+      "code": "AU-IA-5",
+      "clause": "IA-5",
+      "name": "Deployed use case monitored",
+      "control": "CTL-MON-01",
+      "mandatory": false,
+      "appliesWhenTier": [
+        "In scope",
+        "In scope (high risk)"
+      ],
+      "gap": "Monitor and evaluate the deployed use case (drift evaluation within the recency window)."
+    },
+    {
+      "code": "AU-SO-3",
+      "clause": "SO-3",
+      "name": "Accountable official designated",
+      "control": "CTL-ORG-ACCOUNTABLE",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Accountable official designated"
+      },
+      "gap": "Designate an accountable official on the Accountability tab and notify the DTA of the designation."
+    },
+    {
+      "code": "AU-SO-5",
+      "clause": "SO-5, IA-4",
+      "name": "AI use case register shared with the DTA",
+      "control": "CTL-ORG-DTA-REGISTER",
+      "mandatory": true,
+      "evidence": {
+        "pass": "Register last shared {last_shared}",
+        "overdue": "Register last shared {last_shared}, more than {months} months ago",
+        "missing": "Register never shared"
+      },
+      "gap": "Share the AI use case register with the DTA at least every {months} months and record the share."
+    },
+    {
+      "code": "AU-PO-6",
+      "clause": "PO-6",
+      "name": "Responsible AI training for staff",
+      "control": "CTL-ORG-TRAINING",
+      "mandatory": false,
+      "flag": "training",
+      "evidence": {
+        "pass": "{compliant} of {staff} staff in date; none overdue",
+        "fail": "{overdue} staff overdue on mandatory AI training",
+        "missing": "No mandatory AI training course"
+      },
+      "gap": "Run mandatory responsible-AI training for all staff and record completions."
+    },
+    {
+      "code": "AU-PO-2",
+      "clause": "PO-2",
+      "name": "Staff informed about Australia's AI Ethics Principles",
+      "control": "CTL-ORG-TRAINING",
+      "opts": {
+        "topic": "au_ethics_principles"
+      },
+      "mandatory": false,
+      "flag": "training",
+      "evidence": {
+        "pass": "{completed} acknowledgement(s) of the AI Ethics Principles",
+        "missing": "No course on the AI Ethics Principles"
+      },
+      "gap": "Add a course or acknowledgement with topic au_ethics_principles for staff who design and implement AI use cases."
+    }
+  ]
+}
