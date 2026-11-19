@@ -118,6 +118,7 @@ const EVAL_EVIDENCE = new Set(['behavioral_eval', 'bias_test', 'bias_test_report
 
 const filledText = (v: unknown, min = 1) => typeof v === 'string' && v.trim().length >= min;
 const filledList = (v: unknown) => Array.isArray(v) && v.length > 0;
+const LIVE_STAGES = ['DEPLOYED', 'MONITORING'];
 const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null);
 const sha = (v: unknown) => createHash('sha256').update(canonicalJson(v)).digest('hex');
 
@@ -146,7 +147,8 @@ export const CARD_SECTIONS: SectionSpec[] = [
         field('owner_team', 'Accountable owner', owned ? m.ownerTeam : null, true, owned, fix('overview')),
         field('developed_by', 'Developed by', m.developedBy || null, false, filledText(m.developedBy), fix('overview')),
         field('lifecycle_stage', 'Lifecycle stage', m.lifecycleStage, false, filledText(m.lifecycleStage)),
-        field('deployment_date', 'Deployment date', iso(m.deploymentDate), false, Boolean(m.deploymentDate)),
+        // Filled on promotion to DEPLOYED, or entered on the model page; not expected before the model goes live.
+        field('deployment_date', 'Deployment date', m.deploymentDate ? iso(m.deploymentDate) : LIVE_STAGES.includes(m.lifecycleStage) ? null : 'Not deployed yet', false, Boolean(m.deploymentDate) || !LIVE_STAGES.includes(m.lifecycleStage), fix('overview')),
         field('registered_at', 'Registered', iso(m.registeredAt), false, true),
         field('model_id', 'Record id', m.id, false, true),
       ];

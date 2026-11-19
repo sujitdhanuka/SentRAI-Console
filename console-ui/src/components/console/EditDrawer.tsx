@@ -19,6 +19,8 @@ interface ControlInfo {
   tool_authorization: { unauthorized: string[]; authorized: string[]; undeclared: boolean; compliant: boolean };
   operational_state: string;
   operational_state_reason: string | null;
+  deployment_date: string | null;
+  lifecycle_stage: string;
 }
 
 /** Latest review-board sign-off, as listed by /alignment/approvals. */
@@ -133,6 +135,9 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
   const [evalForm, setEvalForm] = useState({ suite: 'promptfoo', passed: '', total: '' });
   const [ctrl, setCtrl] = useState<ControlInfo | null>(null);
   const [permitted, setPermitted] = useState<string[]>([]);
+  // Deployment date as yyyy-mm-dd; '' when none. Saved with the governance form.
+  const [deployDate, setDeployDate] = useState('');
+  const [deployDateSaved, setDeployDateSaved] = useState('');
   const [approval, setApproval] = useState<BoardApproval | null | 'none'>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const role = useSession((s) => s.user?.role ?? 'VIEWER');
@@ -159,6 +164,9 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
       const m = await api<ControlInfo>(`/inventory/models/${id}`);
       setCtrl(m);
       setPermitted(m.permitted_tools ?? []);
+      const d = m.deployment_date ? String(m.deployment_date).slice(0, 10) : '';
+      setDeployDate(d);
+      setDeployDateSaved(d);
     } catch {
       setCtrl(null);
     }
@@ -384,6 +392,13 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
         sutrasDeclared: form.sutras.filter(Boolean).length,
         sutras: SUTRA_ENUM.filter((_, i) => form.sutras[i]),
       });
+      if (deployDate !== deployDateSaved) {
+        await api(`/inventory/models/${component.id}/governance`, {
+          method: 'PATCH',
+          body: JSON.stringify({ deployment_date: deployDate, actor: 'dashboard_user' }),
+        });
+        await fetchControl(component.id);
+      }
       await load();
       // Keep the popup open: refresh the verdict cards so the effect of the
       // edit is visible immediately — that's the point of the single screen.
@@ -708,6 +723,14 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
                     <span className="ml-1 font-ui text-[9.5px] text-text-tertiary">· record one under Red team</span>
                   </p>
                 </div>
+                <label className={LABEL}>Deployment date
+                  <Hint text="The day this model went live. Filled in automatically when it is first promoted to Deployed; set it here for a model that was already in production." />
+                  <input type="date" aria-label="Deployment date" className={FIELD} value={deployDate} max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setDeployDate(e.target.value)} />
+                  {!deployDate && ctrl && !['DEPLOYED', 'MONITORING'].includes(ctrl.lifecycle_stage) && (
+                    <span className="mt-0.5 block text-[9.5px] font-normal normal-case text-text-tertiary">Not deployed yet; filled in on promotion.</span>
+                  )}
+                </label>
                 <label className="flex items-center gap-2 self-end pb-1.5 text-[11px] text-text">
                   <input type="checkbox" checked={form.humanOversight} onChange={(e) => setForm({ ...form, humanOversight: e.target.checked })} className="accent-accent" />
                   Human oversight required

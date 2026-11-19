@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -203,6 +204,7 @@ export class InventoryService implements OnModuleInit {
       board_policy_ref: orm.boardPolicyRef,
       autonomous_scope: orm.autonomousScope,
       last_red_team_date: orm.lastRedTeamDate,
+      deployment_date: orm.deploymentDate ?? null,
       sutras_alignment: orm.sutrasAlignment ?? [],
       security_findings: orm.securityFindings ?? [],
       description_source: orm.descriptionSource ?? 'static',
@@ -699,6 +701,8 @@ export class InventoryService implements OnModuleInit {
     }
     const prev = orm.lifecycleStage;
     orm.lifecycleStage = dto.stage;
+    // The first time a model goes live, its deployment date is the day it was promoted (unless one was entered).
+    if (dto.stage === ModelLifecycleStage.DEPLOYED && !orm.deploymentDate) orm.deploymentDate = new Date();
     orm.updatedAt = new Date();
     await this.models.save(orm);
     await this.ledger.save(this.ledger.create({
@@ -790,6 +794,12 @@ export class InventoryService implements OnModuleInit {
       const d = parseDate(dto.last_red_team_date);
       changes.last_red_team_date = [String(orm.lastRedTeamDate), String(d)];
       orm.lastRedTeamDate = d;
+    }
+    if (dto.deployment_date !== undefined && dto.deployment_date !== null) {
+      const d = dto.deployment_date === '' ? null : parseDate(dto.deployment_date);
+      if (dto.deployment_date !== '' && (!d || Number.isNaN(d.getTime()))) throw new BadRequestException('deployment_date must be a date');
+      changes.deployment_date = [orm.deploymentDate ? new Date(orm.deploymentDate).toISOString() : null, d ? d.toISOString() : null];
+      orm.deploymentDate = d;
     }
     if (dto.use_case_description !== undefined && dto.use_case_description !== null) {
       if (dto.use_case_description !== orm.useCaseDescription) {

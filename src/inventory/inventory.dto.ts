@@ -40,6 +40,8 @@ export class GovernanceUpdateDto {
   @IsOptional() @IsString() autonomous_scope?: string | null;
   @IsOptional() @IsArray() @IsEnum(SutraAlignment, { each: true }) sutras_alignment?: SutraAlignment[] | null;
   @IsOptional() last_red_team_date?: string | null;
+  /** Date the model went live; an empty string clears it. Promotion to DEPLOYED fills it when empty. */
+  @IsOptional() deployment_date?: string | null;
   @IsOptional() @IsString() use_case_description?: string | null;
   /** A human-edited risk rationale (flips its provenance to 'human'). */
   @IsOptional() @IsString() risk_rationale?: string | null;
@@ -129,6 +131,7 @@ export interface ModelResponse {
   board_policy_ref: string | null;
   autonomous_scope: string | null;
   last_red_team_date: Date | null;
+  deployment_date: Date | null;
   sutras_alignment: string[];
   /** Hardcoded secrets found in the model's source at scan time (values masked). */
   security_findings: Array<{ type: string; masked_value: string; line: number }>;
