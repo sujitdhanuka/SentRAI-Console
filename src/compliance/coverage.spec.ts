@@ -68,13 +68,25 @@ describe('coverage disclosure with the framework pack engine on', () => {
 });
 
 describe('depth labels follow the reviewed implementation status and the flags', () => {
-  it('with every flag on: NIST, ISO, RBI, AU and US are deep; the EU AI Act stays partial', () => {
+  it('with every flag on: every framework, the EU AI Act included, is deep', () => {
     const f = byId();
-    for (const id of ['nist_ai_rmf', 'iso_42001', 'rbi_free_ai', 'au_dta', 'us_2026']) expect(f[id].depth).toBe('deep');
-    expect(f.eu_ai_act.depth).toBe('partial');
+    for (const id of ['nist_ai_rmf', 'iso_42001', 'rbi_free_ai', 'au_dta', 'us_2026', 'eu_ai_act']) expect(f[id].depth).toBe('deep');
+    expect(f.eu_ai_act.implementation).toMatchObject({ implemented: 45, partial: 0, gap: 0, notApplicable: 14, applicable: 45 });
     expect(f.nist_ai_rmf.implementation).toMatchObject({ implemented: 66, partial: 6, applicable: 72 });
     expect(f.iso_42001.implementation).toMatchObject({ implemented: 63, partial: 2, applicable: 65 });
     expect(f.rbi_free_ai.implementation).toMatchObject({ implemented: 19, applicable: 20, notApplicable: 13 });
+  });
+
+  it('the EU AI Act stays partial and claims no workspace duties while GOV_E5_1_EU_ACT is off', () => {
+    const eu = byId(flagSet(true, { euAiAct: false })).eu_ai_act;
+    expect(eu.depth).toBe('partial');
+    expect(eu.statement).toMatch(/off in this deployment/);
+    expect(eu.operational).toEqual([]);
+    expect(eu.evaluated.map((c) => c.code)).not.toContain('Art-5');
+    const on = byId().eu_ai_act;
+    expect(on.evaluated.map((c) => c.code)).toEqual(expect.arrayContaining(['Art-5', 'Art-6', 'Art-43', 'Art-49', 'Art-73', 'Art-86']));
+    expect(on.statement).toMatch(/operator role/);
+    expect((on.operational ?? []).join(' ')).toMatch(/2, 10 and 15-day/);
   });
 
   it('a requirement counts as implemented only while every flag it needs is on', () => {

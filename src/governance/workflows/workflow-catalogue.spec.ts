@@ -104,3 +104,52 @@ describe('workflow catalogue', () => {
     expect(v.total).toBe(counted.length);
   });
 });
+
+describe('EU AI Act workflow steps', () => {
+  const eu = (o: Record<string, any> = {}) => ({
+    roles: ['PROVIDER'], scopeDecided: true, tier: 'High Risk', highRisk: true,
+    art5: { signed: true, complete: true, prohibited: [], unanswered: [] },
+    classification: { signed: true, annexIII: ['5(b)'] },
+    annexIV: { score: 100, missing: [] }, instructions: { missing: [] },
+    conformity: { status: 'NONE' }, declaration: { issued: false }, ce: { affixed: false },
+    registration: { required: ['A'], missing: ['A'] }, art50: { missing: [] },
+    pmm: { missing: [], reviewOverdue: false }, incidents: { serious: 0, overdue: 0, problems: [] },
+    explanations: { open: 0, overdue: 0 }, valueChain: { open: 0 }, nonconformity: { open: 0, informPending: 0 },
+    ...o,
+  });
+  const ids = (v: ReturnType<typeof evaluateWorkflow>) => v.stages.flatMap((s) => s.steps).map((s) => s.id);
+
+  it('appears only with the EU pack in force and the workspace facts present', () => {
+    expect(ids(evaluateWorkflow('model', MODEL_STAGES, modelFacts({ gov: { euAct: eu() } }))).filter((i) => i.startsWith('eu-'))).toEqual([]);
+    expect(ids(evaluateWorkflow('model', MODEL_STAGES, modelFacts({ packs: ['eu-ai-act'] }))).filter((i) => i.startsWith('eu-'))).toEqual([]);
+    const off = (fl: string) => fl !== 'euAiAct';
+    expect(ids(evaluateWorkflow('model', MODEL_STAGES, modelFacts({ packs: ['eu-ai-act'], flags: off as any, gov: { euAct: eu() } }))).filter((i) => i.startsWith('eu-'))).toEqual([]);
+    const v = evaluateWorkflow('model', MODEL_STAGES, modelFacts({ packs: ['eu-ai-act'], gov: { euAct: eu() } }));
+    expect(ids(v)).toEqual(expect.arrayContaining(['eu-1', 'eu-2', 'eu-3', 'eu-4', 'eu-5', 'eu-6', 'eu-7', 'eu-11']));
+    expect(ids(v)).not.toContain('eu-8'); // deployer duties: not a deployer
+    expect(find(v, 'eu-5')!.status).toBe('todo');
+    expect(find(v, 'eu-6')!.status).toBe('blocked');
+    expect(find(v, 'eu-7')!.detail).toMatch(/section A/);
+  });
+
+  it('lists an Article 5 prohibited practice as a blocker', () => {
+    const v = evaluateWorkflow('model', MODEL_STAGES, modelFacts({ packs: ['eu-ai-act'], gov: { euAct: eu({ art5: { signed: true, complete: true, prohibited: ['SOCIAL_SCORING'], unanswered: [] } }) } }));
+    expect(find(v, 'eu-2')!.status).not.toBe('done');
+    expect(v.blockers.map((b) => b.message).join(' ')).toMatch(/prohibited practice/);
+  });
+
+  it('shows the deployer, incident and explanation steps when they apply', () => {
+    const controls = new Map([['CTL-EU-DEPLOYER', { passed: false, notAssessed: false, gaps: ['notice to affected persons'], clauses: [] }]]);
+    const v = evaluateWorkflow('model', MODEL_STAGES, modelFacts({ packs: ['eu-ai-act'], controls, gov: { euAct: eu({
+      roles: ['DEPLOYER'], incidents: { serious: 1, overdue: 1, problems: [] }, explanations: { open: 2, overdue: 1 } }) } }));
+    expect(ids(v)).toEqual(expect.arrayContaining(['eu-8', 'eu-12', 'eu-13']));
+    expect(ids(v)).not.toContain('eu-4');
+    expect(v.blockers.map((b) => b.step_id)).toEqual(expect.arrayContaining(['eu-12', 'eu-13']));
+  });
+
+  it('adds the EU organisation step behind the pack', () => {
+    const org = (packs: string[]) => evaluateWorkflow('org', ORG_STAGES, orgFacts({ packs, controls: new Map([['CTL-EU-ORG', { passed: false, notAssessed: false, gaps: ['No authorised representative'], clauses: [] }]]) }));
+    expect(find(org(['iso-42001']), 'w0-eu')).toBeUndefined();
+    expect(find(org(['eu-ai-act']), 'w0-eu')!.gaps).toEqual(['No authorised representative']);
+  });
+});

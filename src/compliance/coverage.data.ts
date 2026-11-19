@@ -226,6 +226,13 @@ const CONTROL_NEEDS: Record<string, Flag> = {
   'CTL-IMPACT-01': 'impactAssessment',
   'CTL-RISK-02': 'riskRegister',
   'CTL-ORG-ACCOUNTABLE': 'accountability',
+  'CTL-DATA-02': 'dataRegister',
+  'CTL-DOC-02': 'documentControl',
+  'CTL-TEVV-01': 'tevv',
+  'CTL-SEC-AI-01': 'aiSecurity',
+  'CTL-INC-02': 'incidentExtensions',
+  'CTL-ORG-POLICY': 'aims',
+  'CTL-ORG-TRAINING': 'training',
 };
 
 /** Clause references that a control only evidences while an epic is on. */
@@ -243,6 +250,11 @@ const CONTROL_NOTES: Record<string, string> = {
   'CTL-TEVV-01': 'Checks recorded test sets, acceptance criteria, results and metric reviews; SentRAI does not run the tests.',
   'CTL-NONE': 'Recorded as passing for minimal-risk systems; no obligation is checked.',
   'CTL-ORG-DISCLOSURE': 'Checks that the statement is published and within its review date; the wording is the organisation’s.',
+  'CTL-EU-ART5': 'Reads the signed Article 5 screening; the answers are the organisation’s own assessment, not a legal opinion.',
+  'CTL-EU-CLASS': 'Reads the signed Annex III / Annex I classification; SentRAI applies the Article 6(3) rules to the answers given.',
+  'CTL-EU-CONFORMITY': 'Checks the signed Annex VI checklist or a recorded Annex VII certificate; SentRAI does not perform the assessment.',
+  'CTL-EU-CE': 'Checks that CE marking is recorded; SentRAI cannot affix the marking.',
+  'CTL-EU-REGISTRATION': 'Checks that a registration id and date are recorded; the submission to the EU database is made by the organisation.',
 };
 
 interface Counts {
@@ -333,12 +345,36 @@ const PACK_META: Record<string, PackMeta> = {
     universe: { total: 113, unit: 'articles in the Act' },
     units: (c) => (c.code === 'Art-Minimal' ? [] : [c.code]),
     statement: (n) =>
-      `${checksLine(n)} reach ${n.covered} articles: the core high-risk provider obligations (Articles 9–15, 17), ` +
-      `value-chain and deployer duties (Articles 25, 26, 27) and post-market monitoring (Article 72) for high-risk ` +
-      `systems, and the Article 50 transparency duty for limited-risk systems. Minimal-risk systems are recorded as ` +
-      `passing the general guidelines entry without a check. The risk tier comes from the model’s functional area. ` +
-      `Conformity assessment, CE-marking and EU-database registration (e.g. Article 16) are process obligations we do ` +
-      `not implement, and we do not claim them.${notAssessedLine(n)}`,
+      n.flags.euAiAct
+        ? `${checksLine(n)} reach ${n.covered} articles. Each AI system records whether it is in scope and which ` +
+          `operator role the organisation holds (provider, deployer, importer, distributor, authorised representative), ` +
+          `and only the clauses for that role and in force on the evaluation date apply. A signed Article 5 screening ` +
+          `blocks the deploy gate when a prohibited practice is answered yes. The risk tier comes from a signed Annex III ` +
+          `and Annex I classification with the Article 6(3) derogation rules; the functional-area keyword match is kept ` +
+          `only as a hint until it is signed. Conformity assessment (Annex VI checklist or Annex VII certificate), the ` +
+          `Annex V declaration, CE marking and EU database registration (Annex VIII) are recorded per system: SentRAI ` +
+          `records them and assembles the documents, but the organisation still signs, affixes and submits them. ` +
+          `Advisory clauses read the risk, dataset, document, TEVV, AI security, impact assessment, incident, AIMS and ` +
+          `training registers as they are switched on.${notAssessedLine(n)}`
+        : `${checksLine(n)} reach ${n.covered} articles: the core high-risk provider obligations (Articles 9–15, 17), ` +
+          `value-chain and deployer duties (Articles 25, 26, 27) and post-market monitoring (Article 72) for high-risk ` +
+          `systems, and the Article 50 transparency duty for limited-risk systems. Minimal-risk systems are recorded as ` +
+          `passing the general guidelines entry without a check. The risk tier comes from the model’s functional area. ` +
+          `Conformity assessment, CE-marking and EU-database registration are handled by the EU AI Act workspace ` +
+          `(GOV_E5_1_EU_ACT), which is off in this deployment, so they are not claimed here.${notAssessedLine(n)}`,
+    operational: [
+      { text: 'Scope test and operator role per AI system; provider identity, contact and authorised representative', flag: 'euAiAct' },
+      { text: 'Article 5 prohibited-practice screening with officer sign-off; a yes blocks the deploy gate in every gate mode', flag: 'euAiAct' },
+      { text: 'Annex III / Annex I classification with the Article 6(3) derogation record, signed, setting the EU risk tier', flag: 'euAiAct' },
+      { text: 'Annex VI internal-control checklist or Annex VII certificate, Annex V declaration of conformity, CE marking record', flag: 'euAiAct' },
+      { text: 'EU database registration export (Annex VIII sections A, B and C) with the registration id and date', flag: 'euAiAct' },
+      { text: 'Annex IV technical documentation and Article 13 instructions for use, built from the model card, with a readiness score', flag: 'euAiAct' },
+      { text: 'Article 73 serious-incident classification with the 2, 10 and 15-day clocks, report template and pre-change system state', flag: 'euAiAct' },
+      { text: 'Article 86 explanation requests from affected persons, with a public request path and a 30-day answer clock', flag: 'euAiAct' },
+      { text: 'Article 20 non-conformity actions, Article 25 substantial-modification checks on material changes, Article 60 real-world test plans', flag: 'euAiAct' },
+      { text: '10-year retention floor for EU documentation and a 6-month minimum for automatic logs (Articles 18, 19, 26(6))', flag: 'euAiAct' },
+      { text: 'Authority request bundle for one system: Annex IV documentation, declaration, registration, incidents and logs', flag: 'euAiAct' },
+    ],
   },
   'iso-42001': {
     id: 'iso_42001',
