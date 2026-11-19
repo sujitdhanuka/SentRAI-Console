@@ -8,6 +8,7 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { AimsContentForm, blankContent, missingFields } from './aimsForms';
 import { governanceHref } from './governanceTabs';
 import { useGovernanceFeatures } from '../stores/governanceFeatures';
 
@@ -32,20 +33,14 @@ interface AimsType { type: string; label: string; isoClauses: string[]; required
 interface AimsRecord { record_id: string; type: string; title: string; content: Record<string, any>; status: string; approved_by: string | null; approved_at: string | null; review_due_at: string | null; review_overdue: boolean; iso_clauses: string[] }
 interface OrgControls { packs: Array<{ pack_id: string; version: string; clauses: Array<{ code: string; clause: string; name: string; passed: boolean; not_assessed: boolean; evidence: string; gap: string }> }> }
 
-/** Starter content per type so the form shows the fields that record needs. */
-const TEMPLATES: Record<string, Record<string, any>> = {
-  SCOPE: { boundaries: '', ai_systems: '', exclusions: '', justification: '' },
-  POLICY: { sections: { purpose_alignment: '', objectives_framework: '', requirements_commitment: '', continual_improvement: '', governance_structure: '', accountability: '', risk_appetite: '', operational_safeguards: '', auditability: '', consumer_protection: '', ai_disclosures: '', model_lifecycle: '', liability: '' } },
-  CONTEXT: { internal_issues: '', external_issues: '', climate_change_relevant: false },
-  INTERESTED_PARTY: { party: '', needs: '', requirements: '' },
-  OBJECTIVE: { objective: '', measure: '', target: '', due_date: '' },
-  MGMT_REVIEW: { review_date: new Date().toISOString().slice(0, 10), attendees: [], decisions: [], actions: [] },
-  AUDIT_PROGRAMME: { period: '', audits: [{ area: '', planned_date: '', auditor: '', auditor_independent: true, objectivity_note: '' }] },
-  RESOURCE: { description: '' },
-  COMMUNICATION: { description: '' },
-  CHANGE: { description: '' },
-  COMPETENCE: { person_or_role: '', evidence: '', date: '' },
-  AWARENESS: { person_or_role: '', evidence: '', date: '' },
+/** Existing content over the blank form, so fields added later still show (sections merge one level down). */
+const withBlanks = (type: string, content: Record<string, any>) => {
+  const blank = blankContent(type);
+  const out: Record<string, any> = { ...blank, ...content };
+  for (const [k, v] of Object.entries(blank)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) out[k] = { ...v, ...(content[k] ?? {}) };
+  }
+  return out;
 };
 
 export function AimsTab() {
@@ -55,7 +50,8 @@ export function AimsTab() {
   const [records, setRecords] = useState<AimsRecord[]>([]);
   const [ctl, setCtl] = useState<OrgControls | null>(null);
   const [type, setType] = useState('SCOPE');
-  const [editing, setEditing] = useState<{ id?: string; title: string; json: string } | null>(null);
+  // json is set while the advanced JSON view is open; otherwise the form edits content.
+  const [editing, setEditing] = useState<{ id?: string; title: string; content: Record<string, any>; json: string | null } | null>(null);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
@@ -81,17 +77,21 @@ export function AimsTab() {
   const t = types.find((x) => x.type === type);
 
   const startNew = async () => {
-    let content = TEMPLATES[type] ?? {};
+    let content = blankContent(type);
     if (type === 'MGMT_REVIEW') {
       const inputs = await api<{ inputs: Record<string, any> }>('/governance/aims/mgmt-review/inputs').catch(() => null);
       content = { ...content, inputs: inputs?.inputs ?? {} };
     }
-    setEditing({ title: t?.label ?? type, json: JSON.stringify(content, null, 2) });
+    setEditing({ title: t?.label ?? type, content, json: null });
   };
   const save = async () => {
     if (!editing) return;
-    let content: any;
-    try { content = JSON.parse(editing.json); } catch { return call(async () => { throw new Error('Content is not valid JSON'); }, ''); }
+    let content: any = editing.content;
+    if (editing.json !== null) {
+      try { content = JSON.parse(editing.json); } catch { return call(async () => { throw new Error('Content is not valid JSON'); }, ''); }
+    }
+    const missing = missingFields(type, content);
+    if (missing.length) return call(async () => { throw new Error(`Fill in: ${missing.join(', ')}`); }, '');
     await call(
       () => (editing.id
         ? api(`/governance/aims/records/${editing.id}`, { method: 'PATCH', body: JSON.stringify({ title: editing.title, content }) })
@@ -134,7 +134,7 @@ export function AimsTab() {
                 <Badge tone={r.status === 'APPROVED' ? (r.review_overdue ? 'negative' : 'positive') : 'neutral'}>{r.review_overdue ? 'review overdue' : r.status}</Badge>
                 {r.approved_by && <span className="text-[10px] text-text-tertiary">approved by {r.approved_by}{r.review_due_at ? `, review ${new Date(r.review_due_at).toLocaleDateString()}` : ''}</span>}
                 <span className="ml-auto flex gap-1">
-                  <Button size="xs" variant="ghost" onClick={() => setEditing({ id: r.record_id, title: r.title, json: JSON.stringify(r.content, null, 2) })}>Edit</Button>
+                  <Button size="xs" variant="ghost" onClick={() => setEditing({ id: r.record_id, title: r.title, content: withBlanks(r.type, r.content ?? {}), json: null })}>Edit</Button>
                   {r.status === 'DRAFT' && (
                     <Button size="xs" variant="secondary" onClick={() => call(() => api(`/governance/aims/records/${r.record_id}/approve`, { method: 'POST' }), 'Approved', load)}>
                       <CheckCircle2 size={10} /> Approve
@@ -149,11 +149,31 @@ export function AimsTab() {
             <div className="rounded border border-border-strong p-2">
               <label className={LABEL} htmlFor="aims-title">Title</label>
               <input id="aims-title" className={FIELD} value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-              <label className={`${LABEL} mt-2`} htmlFor="aims-content">Content (required: {t?.required.join(', ') || 'see fields'})</label>
-              <textarea id="aims-content" rows={14} className={`${FIELD} font-mono`} value={editing.json} onChange={(e) => setEditing({ ...editing, json: e.target.value })} />
-              <div className="mt-1 flex gap-1">
+              <div className="mt-3">
+                {editing.json === null ? (
+                  <AimsContentForm type={type} content={editing.content} onChange={(content) => setEditing({ ...editing, content })} />
+                ) : (
+                  <>
+                    <label className={LABEL} htmlFor="aims-content">Content as JSON (advanced)</label>
+                    <textarea id="aims-content" rows={14} className={`${FIELD} font-mono`} value={editing.json} onChange={(e) => setEditing({ ...editing, json: e.target.value })} />
+                  </>
+                )}
+                {type === 'MGMT_REVIEW' && editing.content.inputs && editing.json === null && (
+                  <p className="mt-2 text-[10px] text-text-tertiary">Review inputs from the board pack (compliance, gaps, incidents, grievances, actions) are attached to this record automatically.</p>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-1">
                 <Button size="sm" variant="primary" onClick={save}>Save draft</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                <button
+                  className="ml-auto text-[10px] text-text-tertiary hover:text-text hover:underline"
+                  onClick={() => {
+                    if (editing.json === null) { setEditing({ ...editing, json: JSON.stringify(editing.content, null, 2) }); return; }
+                    try { setEditing({ ...editing, content: withBlanks(type, JSON.parse(editing.json)), json: null }); } catch { void call(async () => { throw new Error('Content is not valid JSON'); }, ''); }
+                  }}
+                >
+                  {editing.json === null ? 'Edit as JSON' : 'Back to the form'}
+                </button>
               </div>
             </div>
           ) : (
