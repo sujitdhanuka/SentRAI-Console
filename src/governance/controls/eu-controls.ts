@@ -27,7 +27,16 @@ const missingCheck = (missing: string[] | undefined, passFacts: Record<string, a
   missing?.length ? out(false, { missing: list(missing), count: missing.length }, 'missing') : out(true, passFacts);
 
 function control(id: string, title: string, evaluate: (e: Record<string, any>, i: ControlInput) => ControlOutcome, evidenceTypes: string[] = []): ControlDefinition {
-  return { id, title, scope: 'MODEL', evidenceTypes, parameters: [], evaluate: (i) => { const e = eu(i); return e ? evaluate(e, i) : notAssessed(); } };
+  return {
+    id, title, scope: 'MODEL', evidenceTypes, parameters: [],
+    evaluate: (i) => {
+      const e = eu(i);
+      if (!e) return notAssessed();
+      // A system recorded as outside the Act (Art. 2) carries no EU duties beyond the scope record itself.
+      if (e.inScope === false && id !== 'CTL-EU-SCOPE') return notApplicable('outside the scope of the EU AI Act (Art. 2)');
+      return evaluate(e, i);
+    },
+  };
 }
 
 export const EU_CONTROLS: ControlDefinition[] = [

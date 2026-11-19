@@ -645,7 +645,9 @@ export class RisksService implements OnModuleInit {
   async gateCheck(modelId: string): Promise<{ mode: string; tier: string; block: GateFinding[]; warn: GateFinding[] } | null> {
     const risksOn = this.flags.isEnabled('riskRegister');
     const euOn = this.flags.isEnabled('euAiAct');
-    if (!this.flags.isEnabled('governanceSettings') || (!risksOn && !this.flags.isEnabled('impactAssessment') && !euOn)) return null;
+    // The gate existed only with the risk register or impact assessments; the EU flag alone adds just its hard block.
+    const gateOn = risksOn || this.flags.isEnabled('impactAssessment');
+    if (!this.flags.isEnabled('governanceSettings') || (!gateOn && !euOn)) return null;
     const model = await this.models.findOne({ where: { id: modelId } });
     if (!model?.projectId) return null;
     const project = await this.projects.findOne({ where: { id: model.projectId } });
@@ -657,6 +659,7 @@ export class RisksService implements OnModuleInit {
     // E5.1: hard findings block in every mode.
     const hard: GateFinding[] = [];
     if (euOn) for (const c of this.hardGateContributors) hard.push(...(await c(model, orgId)));
+    if (!gateOn) return hard.length ? { mode: 'BLOCK', tier, block: hard, warn: [] } : null;
     if (mode === 'OFF') return { mode: hard.length ? 'BLOCK' : mode, tier, block: hard, warn: [] };
     const findings: GateFinding[] = [];
     if (risksOn) {

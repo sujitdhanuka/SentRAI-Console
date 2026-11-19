@@ -87,6 +87,13 @@ import {
 } from './eu-act.model';
 
 export const EU_PACK_ID = 'eu-ai-act';
+
+/** In scope (true), out of scope (false) or not decided (null), from the Art. 2 answers. */
+function scopeOf(p: Profile): boolean | null {
+  if (p.scope?.exclusion && p.scope.exclusion !== 'NONE') return false;
+  if (p.scope?.placedOnEuMarket || p.scope?.outputUsedInEu) return true;
+  return p.scope?.placedOnEuMarket === false && p.scope?.outputUsedInEu === false ? false : null;
+}
 const SIGNERS: Role[] = [Role.OWNER, Role.CISO, Role.ADMIN, Role.APPROVER];
 const MATERIAL_EVENTS = ['MATERIAL_CHANGE', 'CONTEXT_CHANGED', 'VENDOR_CHANGE'];
 
@@ -133,6 +140,7 @@ export class EuActService implements OnModuleInit {
     this.riskService.addHardGateContributor(async (model, orgId) => {
       if (!(await this.active(orgId))) return [];
       const ws = await this.workspace(model.id);
+      if (scopeOf(this.profileOf(ws)) === false) return [];
       const a5 = art5Result(this.art5Of(ws));
       return a5.signed && a5.prohibited.length
         ? [{ code: 'eu_prohibited_practice' as const, message: `EU AI Act Art. 5: the signed screening records a prohibited practice (${a5.prohibited.join(', ')}); the system cannot be placed on the market or used` }]
@@ -141,6 +149,7 @@ export class EuActService implements OnModuleInit {
     this.riskService.addGateContributor(async (model, orgId) => {
       if (!(await this.active(orgId))) return [];
       const f = await this.modelFacts(model.id, orgId);
+      if (f.inScope === false) return [];
       const out: GateFinding[] = [];
       if (!f.art5.signed) out.push({ code: 'eu_art5_unsigned', message: 'EU AI Act Art. 5: prohibited-practice screening not signed' });
       if (f.tier === 'High Risk' && f.roles.includes('PROVIDER')) {
@@ -355,7 +364,7 @@ export class EuActService implements OnModuleInit {
     return {
       roles,
       scopeDecided: p.scope?.placedOnEuMarket !== undefined && p.scope?.placedOnEuMarket !== null && !!p.scope?.exclusion,
-      inScope: p.scope?.exclusion && p.scope.exclusion !== 'NONE' ? false : p.scope?.placedOnEuMarket || p.scope?.outputUsedInEu ? true : p.scope?.placedOnEuMarket === false && p.scope?.outputUsedInEu === false ? false : null,
+      inScope: scopeOf(p),
       tier: derived.tier,
       hint: model ? (model.functionalArea || '').toLowerCase() : null,
       basis: derived.basis,
@@ -454,7 +463,7 @@ export class EuActService implements OnModuleInit {
     const rows: Array<Record<string, any>> = [];
     for (const m of models) {
       const f = await this.modelFacts(m.id, orgId);
-      const open = [f.art5.signed ? null : 'Art. 5', f.classification.signed ? null : 'Art. 6', f.conformity.status === 'PASSED' ? null : 'Art. 43', f.registration.missing.length ? 'Art. 49' : null, f.incidents.overdue ? 'Art. 73' : null].filter(Boolean);
+      const open = f.inScope === false ? [] : [f.art5.signed ? null : 'Art. 5', f.classification.signed ? null : 'Art. 6', f.conformity.status === 'PASSED' ? null : 'Art. 43', f.registration.missing.length ? 'Art. 49' : null, f.incidents.overdue ? 'Art. 73' : null].filter(Boolean);
       rows.push({ model_id: m.id, name: m.name, roles: f.roles, tier: f.tier, hint: m.functionalArea, prohibited: f.art5.prohibited.length > 0, open_items: open });
     }
     return {
@@ -1056,13 +1065,15 @@ export class EuActService implements OnModuleInit {
     requireRole(user, MAINTAINERS, 'answer an explanation request');
     if (r.status !== 'RECEIVED') throw new ConflictException('Already answered');
     const exp = await this.explanations.findOne({ where: { decisionRef: r.data.decisionRef, modelId: r.modelId! } });
-    if (!exp) throw new NotFoundException('No explainability record for this decision');
+    const own = optText(body.text, 'text', 8000);
+    // With no explainability record for the decision, the reviewer writes the explanation.
+    if (!exp && !own) throw new BadRequestException('No explainability record for this decision; write the explanation in text');
     const model = await this.models.findOne({ where: { id: r.modelId! } });
-    const generated = explanationText({
+    const generated = exp ? explanationText({
       modelName: model?.name ?? 'The AI system', decisionRef: exp.decisionRef, outcome: exp.decisionOutcome, method: exp.explanationMethod,
       topFeatures: exp.topFeatures ?? {}, summary: exp.humanReadableSummary, humanOversight: !!model?.humanOversightRequired,
-    });
-    const text = optText(body.text, 'text', 8000) ?? generated;
+    }) : null;
+    const text = own ?? generated!;
     r.data = { ...r.data, explanation: text, generated, channel: optText(body.channel, 'channel', 50) ?? 'EMAIL' };
     r.status = 'ANSWERED';
     r.signedBy = user.email;

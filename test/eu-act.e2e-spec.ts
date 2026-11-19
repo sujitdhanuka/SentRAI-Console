@@ -174,6 +174,12 @@ describe('EU AI Act workspace (e2e)', () => {
       expect(eu.risk_tier).toBe('Prohibited');
       expect(check(eu, 'Art-5').passed).toBe(false);
       expect(check(eu, 'Art-5').gap).toMatch(/social_scoring/);
+
+      // A system recorded as outside the Act (Art. 2 exclusion) carries no EU block.
+      await request(http).put(`${base}/profile`).set(auth(o.owner)).send({ scope: { exclusion: 'MILITARY' } }).expect(200);
+      const out = (await request(http).get(`/api/v1/governance/models/${o.modelId}/gate`).set(auth(o.owner)).expect(200)).body;
+      expect(out.block.map((b: any) => b.code)).not.toContain('eu_prohibited_practice');
+      expect(out.block.map((b: any) => b.code).filter((c: string) => c.startsWith('eu_'))).toEqual([]);
     });
   });
 
