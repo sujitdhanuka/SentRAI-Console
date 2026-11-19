@@ -67,6 +67,34 @@ describe('coverage disclosure with the framework pack engine on', () => {
   });
 });
 
+describe('depth labels follow the reviewed implementation status and the flags', () => {
+  it('with every flag on: NIST, ISO, RBI, AU and US are deep; the EU AI Act stays partial', () => {
+    const f = byId();
+    for (const id of ['nist_ai_rmf', 'iso_42001', 'rbi_free_ai', 'au_dta', 'us_2026']) expect(f[id].depth).toBe('deep');
+    expect(f.eu_ai_act.depth).toBe('partial');
+    expect(f.nist_ai_rmf.implementation).toMatchObject({ implemented: 66, partial: 6, applicable: 72 });
+    expect(f.iso_42001.implementation).toMatchObject({ implemented: 63, partial: 2, applicable: 65 });
+    expect(f.rbi_free_ai.implementation).toMatchObject({ implemented: 19, applicable: 20, notApplicable: 13 });
+  });
+
+  it('a requirement counts as implemented only while every flag it needs is on', () => {
+    const off = Object.fromEntries(PHASE3_FLAGS.map((k) => [k, false]));
+    const nist = byId(flagSet(true, off)).nist_ai_rmf.implementation!;
+    expect(nist.implemented).toBeLessThan(66);
+    expect(nist.heldBackByFlags).toBeGreaterThan(0);
+    const minimal = byId(flagSet(false, { governanceV2: true, packEngine: true })).nist_ai_rmf;
+    expect(minimal.implementation!.implemented).toBe(22);
+    expect(minimal.depth).toBe('partial');
+  });
+
+  it('validator mode keeps its stated labels and carries no implementation figures', () => {
+    const f = byId(flagSet(false));
+    expect(f.nist_ai_rmf.depth).toBe('partial');
+    expect(f.rbi_free_ai.depth).toBe('deep');
+    expect(f.nist_ai_rmf.implementation).toBeUndefined();
+  });
+});
+
 describe('coverage disclosure with the built-in validators', () => {
   it('names the EU minimal-risk entry by the code the validator prints and says it is not a check', () => {
     const eu = byId(flagSet(false)).eu_ai_act;

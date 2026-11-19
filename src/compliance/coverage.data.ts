@@ -25,6 +25,7 @@ import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
 import { getControl } from '../governance/controls/control-library';
 import { BUILT_IN_PACKS } from '../governance/packs/pack-loader';
 import type { PackClause, PackDefinition } from '../governance/packs/pack.types';
+import { IMPLEMENTATION_ASSESSED, implementationSummary, ImplementationSummary } from './implementation-status.data';
 
 type Flag = keyof Omit<FeatureFlags, 'governanceV2'>;
 
@@ -70,7 +71,17 @@ export interface FrameworkCoverage {
   availability?: string;
   /** Pack id, version and effective date the list was generated from (pack mode). */
   basis?: string;
+  /** Reviewed implementation status per requirement with this deployment's flags (pack mode). */
+  implementation?: ImplementationSummary & { assessedOn: string; commit: string };
 }
+
+/**
+ * Pack mode: a framework is DEEP when the reviewed assessment finds at least
+ * this share of its applicable requirements implemented with the flags this
+ * deployment runs; otherwise PARTIAL. Frameworks with no assessment keep their
+ * stated depth.
+ */
+export const DEEP_THRESHOLD = 0.8;
 
 /* =================================================================== */
 /* Built-in validators (GOV_E1_1_PACKS off)                            */
@@ -441,12 +452,14 @@ function packCoverage(flags: FeatureFlags, at: Date): FrameworkCoverage[] {
       for (const u of meta.units(c, flags)) units.add(u);
     }
     const coveredList = [...units].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+    const impl = implementationSummary(meta.id, flags);
+    const depth: 'deep' | 'partial' = impl ? (impl.applicable && impl.implemented / impl.applicable >= DEEP_THRESHOLD ? 'deep' : 'partial') : meta.depth;
     const counts: Counts = { model, org, covered: units.size, coveredList, codes: evaluated.map((e) => e.code), notAssessed, flags };
     out.push({
       id: meta.id,
       name: meta.name,
       jurisdiction: meta.jurisdiction,
-      depth: meta.depth,
+      depth,
       evaluated,
       ...(notAssessed.length ? { notAssessed } : {}),
       universe: { ...meta.universe, covered: units.size },
@@ -456,6 +469,7 @@ function packCoverage(flags: FeatureFlags, at: Date): FrameworkCoverage[] {
         ? { availability: 'Opt-in: applies only to organisations that switch this pack on in Governance settings. It never changes results for anyone else.' }
         : {}),
       basis: `Pack ${def.id} v${def.version}, in force from ${def.effectiveFrom}`,
+      ...(impl ? { implementation: { ...impl, assessedOn: IMPLEMENTATION_ASSESSED.on, commit: IMPLEMENTATION_ASSESSED.commit } } : {}),
     });
   }
   return out;
@@ -529,6 +543,7 @@ export function coverageSummary(flags: FeatureFlags = getFeatureFlags()) {
       ...(f.basis ? { basis: f.basis } : {}),
       evaluated: f.evaluated,
       ...(f.notAssessed ? { not_assessed: f.notAssessed } : {}),
+      ...(f.implementation ? { implementation: f.implementation } : {}),
     })),
   };
 }

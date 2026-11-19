@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from './common/decorators/public.decorator';
 import { INDEX_HTML, LANDING_HTML, HELP_MD, DEMO_MP4, GATE_SCRIPT_CANDIDATES } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
-import { CoverageControl, coverageMode, getCoverage } from './compliance/coverage.data';
+import { CoverageControl, coverageMode, DEEP_THRESHOLD, getCoverage } from './compliance/coverage.data';
 import { APP_VERSION, BUILD_TAG } from './common/build';
 import { GA_SNIPPET } from './common/analytics';
 
@@ -175,9 +175,10 @@ export class AppController {
       <section class="fw">
         <div class="fw-head">
           <h2>${esc(f.name)} <span class="jur">${esc(f.jurisdiction)}</span></h2>
-          <span class="depth ${f.depth}">${f.depth === 'deep' ? 'DEEP COVERAGE' : 'PARTIAL COVERAGE'}</span>
+          <span class="depth ${f.depth}" title="${f.implementation ? `DEEP when at least ${Math.round(DEEP_THRESHOLD * 100)}% of applicable requirements are implemented with this deployment's flags` : ''}">${f.depth === 'deep' ? 'DEEP COVERAGE' : 'PARTIAL COVERAGE'}</span>
         </div>
         <p class="count"><b>${f.evaluated.length}</b> checks evaluated${f.universe.covered !== undefined ? ` · reach <b>${f.universe.covered}</b> of <b>${f.universe.total}</b>` : ` · regime size: <b>${f.universe.total}</b>`} ${esc(f.universe.unit)}</p>
+        ${f.implementation ? `<p class="count">Implemented in the product: <b>${f.implementation.implemented}</b> of <b>${f.implementation.applicable}</b> ${esc(f.implementation.unit)}${f.implementation.partial ? ` · <b>${f.implementation.partial}</b> partial` : ''}${f.implementation.gap ? ` · <b>${f.implementation.gap}</b> not yet` : ''}${f.implementation.notApplicable ? ` · ${f.implementation.notApplicable} not applicable to a product` : ''}${f.implementation.heldBackByFlags ? ` · ${f.implementation.heldBackByFlags} more need governance flags that are off here` : ''}<br><span class="note">Reviewed assessment against the code (${esc(f.implementation.assessedOn)}, commit ${esc(f.implementation.commit)}), counting only features switched on in this deployment. It includes workflows and records, not just the automated checks below.</span></p>` : ''}
         ${f.availability ? `<p class="avail">${esc(f.availability)}</p>` : ''}
         <p class="stmt">${esc(f.statement)}</p>
         <details>
