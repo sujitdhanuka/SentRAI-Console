@@ -6,6 +6,7 @@ import { useSession } from '../../stores/session';
 import { Toasts } from '../ui/Toast';
 import { ContextHelp } from './ContextHelp';
 import { IconRail } from './IconRail';
+import { APP_VERSION } from '../../version';
 
 function useClock(): string {
   const [now, setNow] = useState(() => new Date());
@@ -42,7 +43,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
             <span className="hidden items-center gap-2 font-mono text-[10px] text-text-tertiary md:flex">
               <span>{clock}</span>
               <span className="opacity-40">·</span>
-              <span>REV 1.2.2</span>
+              <span>REV {APP_VERSION}</span>
             </span>
 
             {activeProjectId && (
@@ -91,7 +92,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
           {children}
 
           <footer className="shrink-0 border-t border-border py-1 text-center font-mono text-[8.5px] text-text-tertiary">
-            sentRAI Console · v1.2.2 · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
+            sentRAI Console · v{APP_VERSION} · RBI FREE-AI · NIST AI RMF · EU AI Act · ISO 42001
           </footer>
         </div>
       </div>

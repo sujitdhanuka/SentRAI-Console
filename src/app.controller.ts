@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from './common/decorators/public.decorator';
 import { INDEX_HTML, LANDING_HTML, HELP_MD, DEMO_MP4, GATE_SCRIPT_CANDIDATES } from './common/paths';
 import { SUTRAS } from './common/sutras.data';
-import { getCoverage } from './compliance/coverage.data';
+import { CoverageControl, coverageMode, getCoverage } from './compliance/coverage.data';
 import { APP_VERSION, BUILD_TAG } from './common/build';
 import { GA_SNIPPET } from './common/analytics';
 
@@ -162,19 +162,31 @@ export class AppController {
   @ApiExcludeEndpoint()
   coveragePage(@Res() res: Response): void {
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const item = (c: CoverageControl) => {
+      const tags = [
+        c.scope === 'organisation' ? '<span class="tag">organisation-level</span>' : '',
+        c.advisory ? '<span class="tag">advisory, never blocks</span>' : '',
+        c.appliesTo?.length ? `<span class="tag">${esc(c.appliesTo.join(' / '))} only</span>` : '',
+      ].join('');
+      return `<li><code>${esc(c.code)}</code> ${esc(c.name)}${c.clause ? ` <span class="ref">${esc(c.clause)}</span>` : ''}${tags}${c.note ? `<br><span class="note">${esc(c.note)}</span>` : ''}</li>`;
+    };
+    const mode = coverageMode();
     const cards = getCoverage().map((f) => `
       <section class="fw">
         <div class="fw-head">
           <h2>${esc(f.name)} <span class="jur">${esc(f.jurisdiction)}</span></h2>
           <span class="depth ${f.depth}">${f.depth === 'deep' ? 'DEEP COVERAGE' : 'PARTIAL COVERAGE'}</span>
         </div>
-        <p class="count"><b>${f.evaluated.length}</b> controls evaluated · regime size: <b>${f.universe.total}</b> ${esc(f.universe.unit)}</p>
+        <p class="count"><b>${f.evaluated.length}</b> checks evaluated${f.universe.covered !== undefined ? ` · reach <b>${f.universe.covered}</b> of <b>${f.universe.total}</b>` : ` · regime size: <b>${f.universe.total}</b>`} ${esc(f.universe.unit)}</p>
+        ${f.availability ? `<p class="avail">${esc(f.availability)}</p>` : ''}
         <p class="stmt">${esc(f.statement)}</p>
         <details>
-          <summary>Show the ${f.evaluated.length} evaluated controls</summary>
-          <ul>${f.evaluated.map((c) => `<li><code>${esc(c.code)}</code> ${esc(c.name)}</li>`).join('')}</ul>
+          <summary>Show the ${f.evaluated.length} evaluated checks</summary>
+          <ul>${f.evaluated.map(item).join('')}</ul>
         </details>
-        ${f.operational?.length ? `<details><summary>Platform machinery implementing this regime</summary><ul>${f.operational.map((o) => `<li>${esc(o)}</li>`).join('')}</ul></details>` : ''}
+        ${f.notAssessed?.length ? `<details><summary>${f.notAssessed.length} listed but NOT ASSESSED here</summary><ul>${f.notAssessed.map(item).join('')}</ul></details>` : ''}
+        ${f.operational?.length ? `<details><summary>Platform machinery implementing this regime</summary><ul>${f.operational.map((o) => `<li>${esc(typeof o === 'string' ? o : o.text)}</li>`).join('')}</ul></details>` : ''}
+        ${f.basis ? `<p class="basis">${esc(f.basis)}</p>` : ''}
       </section>`).join('\n');
 
     const html = `<!doctype html><html lang="en"><head>${GA_SNIPPET}<meta charset="utf-8">
@@ -205,6 +217,10 @@ export class AppController {
   ul{margin:8px 0 4px;padding-left:20px} li{margin:4px 0;color:var(--graphite)}
   code{font-family:var(--mono);background:var(--signal-tint);border-radius:2px;padding:1px 6px;font-size:12px;color:var(--signal)}
   .why{background:var(--signal-tint);border:1px solid var(--signal);border-left-width:3px;border-radius:3px;padding:14px 18px;margin:20px 0;font-size:14.5px;max-width:74ch}
+  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.04em;border:1px solid var(--hairline);border-radius:8px;padding:0 7px;margin-left:6px;color:var(--graphite);white-space:nowrap}
+  .ref{font-family:var(--mono);font-size:11px;color:var(--graphite)} .note{font-size:13px;font-style:italic}
+  .avail{font-family:var(--sans);font-size:13px;color:var(--caution);margin:0 0 8px} .basis{font-family:var(--mono);font-size:11px;color:var(--graphite);margin:8px 0 0}
+  .mode{font-family:var(--sans);font-size:13.5px;border:1px solid var(--hairline);border-radius:3px;padding:10px 14px;background:var(--raise);max-width:74ch}
   .foot{color:var(--graphite);font-family:var(--mono);font-size:11.5px;margin-top:26px;border-top:1px solid var(--hairline);padding-top:14px}
 </style></head><body><div class="wrap">
   <p><a href="/">&larr; SentRAI</a></p>
@@ -212,8 +228,9 @@ export class AppController {
   <h1>Framework coverage disclosure</h1>
   <p class="sub">Exactly which controls SentRAI evaluates per framework, measured against the full size of each regime — published so our claims can never drift from our code. This page and the product are generated from the same manifest.</p>
   <div class="why"><b>Why we publish this.</b> A governance product that overstates its own coverage invites exactly the audit it sells protection from. Where coverage is partial we say so, say what a verdict means, and say what is on the roadmap.</div>
+  <p class="mode">${esc(mode.description)}</p>
   ${cards}
-  <p class="foot">Machine-readable version: <a href="/api/v1/compliance/coverage">/api/v1/compliance/coverage</a> · Source of truth: <code>src/compliance/coverage.data.ts</code>, updated in the same commit as any validator change. Build ${ASSET_VERSION}.</p>
+  <p class="foot">Machine-readable version: <a href="/api/v1/compliance/coverage">/api/v1/compliance/coverage</a> · Source of truth: <code>src/compliance/coverage.data.ts</code>, updated in the same commit as any validator change; with the pack engine on, the lists are generated from the framework packs in force. Build ${ASSET_VERSION}.</p>
 </div></body></html>`;
     res.set('Cache-Control', 'no-cache');
     res.type('html').send(html);

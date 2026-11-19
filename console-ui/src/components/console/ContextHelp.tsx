@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
 import { navigate, Route, useRoute } from '../../stores/route';
+import { governanceTabLabel } from '../../pages/governanceTabs';
 
 /**
  * Which HELP.md section belongs to each screen. public/docs/HELP.md stays the
@@ -60,6 +61,29 @@ export function extractHelpSection(md: string, title: string): string | null {
 }
 
 /**
+ * Narrow a screen's section to one of its "#### Sub title" parts: the section's
+ * introduction (everything before the first ####) plus that part. Returns the
+ * whole section when the part is not found.
+ */
+export function narrowHelpSection(section: string, sub: string | null): string {
+  if (!sub) return section;
+  const lines = section.split('\n');
+  const isSub = (l: string) => /^####\s+\S/.test(l);
+  const target = (l: string) => isSub(l) && l.replace(/^####\s+/, '').trim().toLowerCase() === sub.trim().toLowerCase();
+  const start = lines.findIndex(target);
+  if (start === -1) return section;
+  const firstSub = lines.findIndex(isSub);
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (isSub(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+  return [...lines.slice(0, firstSub), ...lines.slice(start, end)].join('\n').trim();
+}
+
+/**
  * Context-sensitive help: the header button and the "?" key open the guide
  * section for whatever screen you are on, without leaving it.
  */
@@ -69,13 +93,18 @@ export function ContextHelp() {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(false);
   const title = HELP_SECTIONS[route];
+  // On Governance, "?" opens the help for the tab you are on.
+  const [sub, setSub] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    const tab = route === 'governance' ? governanceTabLabel() : null;
+    setSub(tab);
     setLoading(true);
     getDocs()
       .then((md) => {
-        const section = title ? extractHelpSection(md, title) : null;
+        const whole = title ? extractHelpSection(md, title) : null;
+        const section = whole ? narrowHelpSection(whole, tab) : null;
         setHtml(
           section
             ? (marked.parse(section, { async: false }) as string)
@@ -84,7 +113,7 @@ export function ContextHelp() {
       })
       .catch((e) => setHtml(`<p>Couldn't load help — ${e instanceof Error ? e.message : 'unknown error'}.</p>`))
       .finally(() => setLoading(false));
-  }, [open, title]);
+  }, [open, title, route]);
 
   // "?" opens help, Escape closes it — but never while the user is typing.
   useEffect(() => {
@@ -123,13 +152,19 @@ export function ContextHelp() {
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-6 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-label={`Help for ${title}`}
+          aria-label={`Help for ${sub ? `${title}: ${sub}` : title}`}
         >
           <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
             <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
               <CircleHelp size={13} className="text-accent" />
               <h2 className="font-heading text-[12px] font-medium text-text">
                 Help <span className="text-text-tertiary">·</span> {title}
+                {sub && (
+                  <>
+                    {' '}
+                    <span className="text-text-tertiary">·</span> {sub}
+                  </>
+                )}
               </h2>
               <button
                 onClick={() => setOpen(false)}

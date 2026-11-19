@@ -38,10 +38,23 @@
  *         round-trips back in through the proxy. DEMO_SEED_BASE_URL / PUBLIC_URL
  *         override it (and enable the boot toggle on such hosts).
  *
- * NOTE: the displayed version is intentionally PINNED to 1.2.2 (by request) so
- * the dashboard, /health and the award evidence pack all report the same
- * number. The 1.2.3–1.2.5 changes above ARE included in this build; only the
- * label is held at 1.2.2. Do not bump until instructed.
+ * 1.8.0 — Governance release (Phases 0 to 3 of the governance plan), dark
+ *         behind GOVERNANCE_V2 and one flag per epic: corrected compliance
+ *         codes, framework pack engine with Australia and US packs, risk
+ *         register, impact assessments, AIMS workspace, corrective actions,
+ *         document control, accountability, model validation, fair lending,
+ *         vendors, training, data register, Statement of Applicability,
+ *         disclosures, incident extensions, TEVV, energy, AI security,
+ *         engagement records and federal-vendor controls. Users and projects
+ *         can be assigned to and moved between organisations. The coverage
+ *         disclosure follows the evaluation path the deployment runs, and the
+ *         on-screen help covers every Governance tab.
+ *
+ * The label was held at 1.2.2 through the 1.2.3–1.2.5 builds (by request) so
+ * the dashboard, /health and the award evidence pack reported one number. It
+ * moves to 1.8.0 by request; every place that shows or declares the version
+ * reads it from here or from the package.json files, which carry the same
+ * number.
  */
-export const APP_VERSION = '1.2.2';
-export const BUILD_TAG = '1.2.2';
+export const APP_VERSION = '1.8.0';
+export const BUILD_TAG = '1.8.0';

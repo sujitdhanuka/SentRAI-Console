@@ -15,6 +15,7 @@ import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
 import { AssuranceTab, AuDtaTab, DatasetsTab, DecisionsTab, FairLendingTab, TrainingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
 import { DisclosuresTab, EnergyTab, EngagementTab, FederalTab, IncidentsExtTab, SecurityTab, SoaTab, TevvTab } from './GovernancePhase3';
+import { GOVERNANCE_TABS as TABS, governanceTabFromHash, setGovernanceTabInHash } from './governanceTabs';
 
 /* ------------------------------------------------------------------ types */
 
@@ -628,34 +629,7 @@ function HistoryTab() {
 
 /* ----------------------------------------------------------------- page */
 
-type Tab = { id: string; label: string; flag: string };
-const TABS: Tab[] = [
-  { id: 'risks', label: 'Risk register', flag: 'riskRegister' },
-  { id: 'impact', label: 'Impact assessments', flag: 'impactAssessment' },
-  { id: 'context', label: 'Context profiles', flag: 'contextProfile' },
-  { id: 'aims', label: 'AIMS workspace', flag: 'aims' },
-  { id: 'actions', label: 'Corrective actions', flag: 'correctiveActions' },
-  { id: 'documents', label: 'Documents', flag: 'documentControl' },
-  { id: 'settings', label: 'Settings & risk appetite', flag: 'governanceSettings' },
-  { id: 'accountability', label: 'Accountability', flag: 'accountability' },
-  { id: 'history', label: 'Change history', flag: 'governanceSettings' },
-  { id: 'au', label: 'Australia (DTA)', flag: 'auPack' },
-  { id: 'decisions', label: 'Decisions & appeals', flag: 'usKit' },
-  { id: 'validation', label: 'Model validation', flag: 'modelValidation' },
-  { id: 'fairLending', label: 'Fair lending', flag: 'fairLending' },
-  { id: 'vendors', label: 'Vendors & AI BOM', flag: 'vendors' },
-  { id: 'training', label: 'Training', flag: 'training' },
-  { id: 'datasets', label: 'Data register', flag: 'dataRegister' },
-  { id: 'assurance', label: 'Red team & audit', flag: 'redTeamAuditRules' },
-  { id: 'soa', label: 'Statement of Applicability', flag: 'soa' },
-  { id: 'disclosures', label: 'Disclosures', flag: 'disclosures' },
-  { id: 'incidentExt', label: 'Incident sign-off & ITSM', flag: 'incidentExtensions' },
-  { id: 'tevv', label: 'TEVV & retirement', flag: 'tevv' },
-  { id: 'energy', label: 'Energy', flag: 'energy' },
-  { id: 'security', label: 'AI security', flag: 'aiSecurity' },
-  { id: 'engagement', label: 'Engagement records', flag: 'orgRecords' },
-  { id: 'federal', label: 'External AI & export', flag: 'federalVendor' },
-];
+// The tab list lives in governanceTabs.ts so the help panel can name the tab you are on.
 
 export function Governance() {
   const features = useGovernanceFeatures((s) => s.features);
@@ -664,7 +638,11 @@ export function Governance() {
   const activeProjectId = useSession((s) => s.activeProjectId);
   const activeOrgId = useSession((s) => s.activeOrgId);
   const setActiveOrg = useSession((s) => s.setActiveOrg);
-  const [tab, setTab] = useState('');
+  const [tab, setTabState] = useState(() => governanceTabFromHash() ?? '');
+  const setTab = (id: string) => {
+    setTabState(id);
+    setGovernanceTabInHash(id);
+  };
   const [scopeOrgName, setScopeOrgName] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   useEffect(() => {
@@ -697,6 +675,10 @@ export function Governance() {
   const tabs = TABS.filter((t) => features?.[t.flag]);
   const orgId = user?.tenant_id ?? (isGlobal && activeProjectId ? activeOrgId : null);
   const active = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? 'settings';
+  // Keep the open tab in the URL, so it can be linked to and "?" opens its help.
+  useEffect(() => {
+    if (features) setGovernanceTabInHash(active);
+  }, [features, active]);
 
   return (
     <AppShell title="Governance">

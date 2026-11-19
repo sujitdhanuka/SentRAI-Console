@@ -8,6 +8,7 @@ import helmet from 'helmet';
 
 import { AppModule } from './app.module';
 import { DemoSeedService } from './admin/demo-seed.service';
+import { APP_VERSION } from './common/build';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -81,7 +82,7 @@ async function bootstrap() {
         'RBI SentrAI Framework Compliance Backend. Implements Recommendations 16, 21–26: ' +
           'AI Inventory Ledger, Drift Monitoring, Audit Framework, and Incident Reporting.',
       )
-      .setVersion('1.2.2')
+      .setVersion(APP_VERSION)
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
