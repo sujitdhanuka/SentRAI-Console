@@ -1066,6 +1066,26 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'eu_act_records', // governance E5.1 (EU AI Act)
+    createSql: `CREATE TABLE IF NOT EXISTS \`eu_act_records\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NULL,
+      \`kind\` VARCHAR(20) NOT NULL,
+      \`status\` VARCHAR(30) NOT NULL,
+      \`data\` MEDIUMTEXT NOT NULL,
+      \`contentHash\` VARCHAR(64) NULL,
+      \`signedBy\` VARCHAR(255) NULL,
+      \`signedAt\` DATETIME NULL,
+      \`dueAt\` DATETIME NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_eu_act_records_orgId\` (\`orgId\`),
+      INDEX \`IDX_eu_act_records_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'engagement_records', // governance Phase 3
     createSql: `CREATE TABLE IF NOT EXISTS \`engagement_records\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

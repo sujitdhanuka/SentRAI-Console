@@ -14,115 +14,1035 @@
   "source": "Regulation (EU) 2024/1689. Not re-assessed in this round (plan section 10).",
   "changelog": [
     "2024.1.0: migrated from frameworks.validator.ts; results unchanged.",
-    "2024.1.0 (pre-release correction): incidentReportHours is 360 (Art. 73(2), 15 days), not GDPR's 72; Art. 73(3)-(4) shorten it to 2 or 10 days for widespread infringement or a death."
+    "2024.1.0 (pre-release correction): incidentReportHours is 360 (Art. 73(2), 15 days), not GDPR's 72; Art. 73(3)-(4) shorten it to 2 or 10 days for widespread infringement or a death.",
+    "2024.1.0 (EU): per-article application dates (Art. 113) and operator roles on every clause; the tier comes from the signed Art. 5 screening and Annex III classification, with the functional-area match kept as the hint; new clauses for Art. 2, 4, 5, 6, 10, 11, 13, 16–20, 22–27, 43, 47–50, 53, 60, 72, 73 and 86 read the EU workspace, and register-backed advisory clauses read the risk register, data register, TEVV, AI security, FRIA, incidents, AIMS policy and training, each behind GOV_E5_1_EU_ACT."
   ],
   "parameters": {
-    "euHighRiskDomains": ["credit_underwriting", "loan_decisioning", "fund_movement", "credit_scoring", "insurance_pricing"],
-    "incidentReportHours": 360
+    "euHighRiskDomains": [
+      "credit_underwriting",
+      "loan_decisioning",
+      "fund_movement",
+      "credit_scoring",
+      "insurance_pricing"
+    ],
+    "incidentReportHours": 360,
+    "logRetentionMonths": 6,
+    "technicalDocRetentionYears": 10
   },
   "clauses": [
     {
-      "code": "Art-9", "clause": "Article 9", "name": "Risk Management System",
-      "control": "CTL-RISK-01", "opts": { "requirePolicy": true }, "mandatory": true, "appliesWhenTier": ["High Risk"],
-      "evidence": { "pass": "Risk tier {riskLevel} under board policy {boardPolicyRef}", "fail": "Risk classification or governing policy reference missing" },
-      "gap": "High-risk AI systems require a documented risk-management system (classification + board policy)."
+      "code": "Art-9",
+      "clause": "Article 9",
+      "name": "Risk Management System",
+      "control": "CTL-RISK-01",
+      "opts": {
+        "requirePolicy": true
+      },
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "Risk tier {riskLevel} under board policy {boardPolicyRef}",
+        "fail": "Risk classification or governing policy reference missing"
+      },
+      "gap": "High-risk AI systems require a documented risk-management system (classification + board policy).",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-10", "clause": "Article 10", "name": "Data & Data Governance",
-      "control": "CTL-DATA-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "code": "Art-10",
+      "clause": "Article 10",
+      "name": "Data & Data Governance",
+      "control": "CTL-DATA-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
       "evidence": {
         "bias_test": "Bias-test evidence artifact attached",
         "dependencies": "Training data dependencies documented",
         "fail": "No bias-testing evidence or data dependencies recorded"
       },
-      "gap": "High-risk systems must document training data governance and bias testing (attach a bias_test artifact)."
+      "gap": "High-risk systems must document training data governance and bias testing (attach a bias_test artifact).",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-11", "clause": "Article 11", "name": "Technical Documentation",
-      "control": "CTL-DOC-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
-      "evidence": { "pass": "Source codebase ref: {sourceRef}; purpose documented", "fail": "Missing source traceability or substantive purpose documentation" },
-      "gap": "High-risk AI systems must have complete technical documentation including source traceability."
+      "code": "Art-11",
+      "clause": "Article 11",
+      "name": "Technical Documentation",
+      "control": "CTL-DOC-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "Source codebase ref: {sourceRef}; purpose documented",
+        "fail": "Missing source traceability or substantive purpose documentation"
+      },
+      "gap": "High-risk AI systems must have complete technical documentation including source traceability.",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-12", "clause": "Article 12", "name": "Record-Keeping (Automatic Logs)",
-      "control": "CTL-REC-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "code": "Art-12",
+      "clause": "Article 12",
+      "name": "Record-Keeping (Automatic Logs)",
+      "control": "CTL-REC-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
       "evidence": {
         "pass": "{ledgerEventCount} ledger event(s), {driftReportCount} drift evaluation(s) on record",
         "fail": "Insufficient operational records: model needs ledger history and drift evaluations"
       },
-      "gap": "High-risk systems require automatically generated operational logs (ledger events + drift evaluations)."
+      "gap": "High-risk systems require automatically generated operational logs (ledger events + drift evaluations).",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-14", "clause": "Article 14", "name": "Human Oversight Gate",
-      "control": "CTL-HUM-01", "opts": { "mode": "required" }, "mandatory": true, "appliesWhenTier": ["High Risk"],
-      "evidence": { "pass": "Human-in-the-loop is active", "fail": "Oversight deactivated" },
-      "gap": "High-risk systems require explicit human-in-the-loop oversight gates."
+      "code": "Art-14",
+      "clause": "Article 14",
+      "name": "Human Oversight Gate",
+      "control": "CTL-HUM-01",
+      "opts": {
+        "mode": "required"
+      },
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "Human-in-the-loop is active",
+        "fail": "Oversight deactivated"
+      },
+      "gap": "High-risk systems require explicit human-in-the-loop oversight gates.",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-15", "clause": "Article 15", "name": "Accuracy, Robustness & Cybersecurity",
-      "control": "CTL-MON-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
-      "gap": "High-risk systems require continuous accuracy/robustness monitoring (recent drift evaluations)."
+      "code": "Art-15",
+      "clause": "Article 15",
+      "name": "Accuracy, Robustness & Cybersecurity",
+      "control": "CTL-MON-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "gap": "High-risk systems require continuous accuracy/robustness monitoring (recent drift evaluations).",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-13", "clause": "Article 13", "name": "Transparency & Information to Deployers",
-      "control": "CTL-INFO-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "code": "Art-13",
+      "clause": "Article 13",
+      "name": "Transparency & Information to Deployers",
+      "control": "CTL-INFO-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
       "evidence": {
         "pass": "Documented purpose with a named owner ({ownerTeam})",
         "fail": "Deployer information incomplete: needs a substantive purpose and a named accountable owner"
       },
-      "gap": "High-risk systems must give deployers clear use instructions and an identified accountable owner."
+      "gap": "High-risk systems must give deployers clear use instructions and an identified accountable owner.",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-25", "clause": "Article 25", "name": "Provider Responsibilities Along the Value Chain",
-      "control": "CTL-PROV-02", "mandatory": true, "appliesWhenTier": ["High Risk"],
-      "evidence": { "pass": "Provider recorded: {developedBy}", "fail": "No provider / build origin recorded for this system" },
-      "gap": "High-risk systems must identify the provider (internal or third party) responsible along the value chain."
+      "code": "Art-25",
+      "clause": "Article 25",
+      "name": "Provider Responsibilities Along the Value Chain",
+      "control": "CTL-PROV-02",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "Provider recorded: {developedBy}",
+        "fail": "No provider / build origin recorded for this system"
+      },
+      "gap": "High-risk systems must identify the provider (internal or third party) responsible along the value chain.",
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-27", "clause": "Article 27", "name": "Fundamental Rights Impact Assessment",
-      "control": "CTL-PRIV-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
-      "evidence": { "pass": "Fundamental-rights / data-protection impact assessment attached", "fail": "No FRIA/DPIA artifact attached" },
-      "gap": "High-risk deployers must complete a fundamental-rights impact assessment (attach a dpia artifact)."
+      "code": "Art-27",
+      "clause": "Article 27",
+      "name": "Fundamental Rights Impact Assessment",
+      "control": "CTL-PRIV-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "Fundamental-rights / data-protection impact assessment attached",
+        "fail": "No FRIA/DPIA artifact attached"
+      },
+      "gap": "High-risk deployers must complete a fundamental-rights impact assessment (attach a dpia artifact).",
+      "roles": [
+        "DEPLOYER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-72", "clause": "Article 72", "name": "Post-Market Monitoring",
-      "control": "CTL-MON-02", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "code": "Art-72",
+      "clause": "Article 72",
+      "name": "Post-Market Monitoring",
+      "control": "CTL-MON-02",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
       "evidence": {
         "pass": "Active post-market monitoring: business-continuity plan configured with recent drift evaluations",
         "fail": "Post-market monitoring incomplete: needs a configured continuity plan and recent drift evaluations"
       },
-      "gap": "High-risk providers must operate a documented post-market monitoring plan (continuity plan + ongoing drift evaluation)."
+      "gap": "High-risk providers must operate a documented post-market monitoring plan (continuity plan + ongoing drift evaluation).",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-17", "clause": "Article 17", "name": "Quality Management System",
-      "control": "CTL-AUD-01", "opts": { "requireFuture": true }, "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "code": "Art-17",
+      "clause": "Article 17",
+      "name": "Quality Management System",
+      "control": "CTL-AUD-01",
+      "opts": {
+        "requireFuture": true
+      },
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
       "evidence": {
         "pass": "Planned internal audit on {nextAuditDue}",
         "past_due": "Quality-management audit is past due",
         "none": "No quality-management audit cadence scheduled"
       },
-      "gap": "High-risk providers must operate a quality-management system with a planned internal audit cadence."
+      "gap": "High-risk providers must operate a quality-management system with a planned internal audit cadence.",
+      "roles": [
+        "PROVIDER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-26", "clause": "Article 26", "name": "Deployer Operational Record",
-      "control": "CTL-DEP-01", "mandatory": true, "appliesWhenTier": ["High Risk"],
+      "code": "Art-26",
+      "clause": "Article 26",
+      "name": "Deployer Operational Record",
+      "control": "CTL-DEP-01",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "High Risk"
+      ],
       "evidence": {
         "pass": "Put into service on {deploymentDate}",
         "fail": "No deployment date recorded — operation cannot be monitored from a known start"
       },
-      "gap": "Deployers of high-risk systems must record the deployment date so operation is monitored from putting-into-service."
+      "gap": "Deployers of high-risk systems must record the deployment date so operation is monitored from putting-into-service.",
+      "roles": [
+        "DEPLOYER"
+      ],
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-50", "clause": "Article 50", "name": "Transparency & Disclosure",
-      "control": "CTL-CTX-01", "opts": { "minLength": 10, "untrimmed": true }, "mandatory": true, "appliesWhenTier": ["Limited Risk"],
-      "evidence": { "pass": "Use case transparency text: {descPrefix}...", "fail": "No transparency statement" },
-      "gap": "Limited risk systems must provide clear use case descriptions for user transparency."
+      "code": "Art-50",
+      "clause": "Article 50",
+      "name": "Transparency & Disclosure",
+      "control": "CTL-CTX-01",
+      "opts": {
+        "minLength": 10,
+        "untrimmed": true
+      },
+      "mandatory": true,
+      "appliesWhenTier": [
+        "Limited Risk"
+      ],
+      "evidence": {
+        "pass": "Use case transparency text: {descPrefix}...",
+        "fail": "No transparency statement"
+      },
+      "gap": "Limited risk systems must provide clear use case descriptions for user transparency.",
+      "effectiveFrom": "2026-08-02"
     },
     {
-      "code": "Art-Minimal", "clause": "Article 95", "name": "General Compliance Guidelines",
-      "control": "CTL-NONE", "mandatory": true, "appliesWhenTier": ["Minimal Risk"],
-      "evidence": { "pass": "Minimal risk model. Complies by default." },
+      "code": "Art-2",
+      "clause": "Articles 2–3",
+      "name": "Scope and Operator Role",
+      "control": "CTL-EU-SCOPE",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2024-08-01",
+      "evidence": {
+        "pass": "Roles: {roles}; {in_scope}",
+        "no_role": "No operator role recorded",
+        "no_scope": "EU scope questions not answered"
+      },
+      "gap": {
+        "no_role": "Record whether the organisation is the provider, deployer, importer, distributor or authorised representative of this system (Art. 3).",
+        "no_scope": "Answer the Art. 2 scope questions: placed on the EU market, output used in the EU, and any exclusion."
+      }
+    },
+    {
+      "code": "Art-5",
+      "clause": "Article 5",
+      "name": "Prohibited AI Practices Screening",
+      "control": "CTL-EU-ART5",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2025-02-02",
+      "evidence": {
+        "pass": "Art. 5 screening signed by {signed_by} on {signed_at}: no prohibited practice",
+        "unsigned": "Art. 5 screening not signed",
+        "prohibited": "Prohibited practice recorded: {practices}"
+      },
+      "gap": {
+        "unsigned": "Answer the eight Art. 5 questions and have an officer or approver sign the screening.",
+        "prohibited": "Art. 5 prohibits this practice ({practices}). The system cannot be placed on the market or used; the deploy gate blocks it."
+      }
+    },
+    {
+      "code": "Art-6",
+      "clause": "Article 6, Annex III",
+      "name": "High-Risk Classification",
+      "control": "CTL-EU-CLASS",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "evidence": {
+        "pass": "{tier}: {basis}",
+        "unsigned": "Not classified: tier taken from the functional-area hint"
+      },
+      "gap": {
+        "unsigned": "Answer the Annex III and Annex I questions (and any Art. 6(3) derogation) and sign the classification."
+      }
+    },
+    {
+      "code": "Art-10",
+      "clause": "Article 10(2)–(5)",
+      "name": "Data Governance Record",
+      "control": "CTL-EU-DATA",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Representativeness, statistical properties, known gaps and any Art. 10(5) safeguards recorded",
+        "missing": "Data governance incomplete: {missing}"
+      },
+      "gap": {
+        "missing": "Record {missing} for the training, validation and test data (Art. 10)."
+      }
+    },
+    {
+      "code": "Art-11",
+      "clause": "Article 11, Annex IV",
+      "name": "Technical Documentation (Annex IV)",
+      "control": "CTL-EU-ANNEX4",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Annex IV documentation complete",
+        "missing": "Annex IV readiness {score}%; incomplete: {missing}"
+      },
+      "gap": {
+        "missing": "Complete the Annex IV sections: {missing}."
+      }
+    },
+    {
+      "code": "Art-13",
+      "clause": "Article 13(3)",
+      "name": "Instructions for Use",
+      "control": "CTL-EU-INSTRUCTIONS",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Instructions for use complete",
+        "missing": "Instructions for use incomplete: {missing}"
+      },
+      "gap": {
+        "missing": "Fill the Art. 13(3) items: {missing}."
+      }
+    },
+    {
+      "code": "Art-16",
+      "clause": "Article 16(b), (l)",
+      "name": "Provider Identification and Accessibility",
+      "control": "CTL-EU-PROVIDER",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Provider identity and accessibility recorded",
+        "missing": "Missing: {missing}"
+      },
+      "gap": {
+        "missing": "Record the {missing} (Art. 16)."
+      }
+    },
+    {
+      "code": "Art-18",
+      "clause": "Article 18",
+      "name": "Documentation Kept 10 Years",
+      "control": "CTL-EU-RETENTION",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Documents retained until at least {until}",
+        "short": "Retention shorter than 10 years: {documents}",
+        "not_applicable": "Not applicable: {why}",
+        "not_assessed": "NOT ASSESSED: {what} is not switched on"
+      },
+      "gap": {
+        "short": "Extend retention of {documents} to ten years after placing on the market (Art. 18)."
+      }
+    },
+    {
+      "code": "Art-20",
+      "clause": "Article 20",
+      "name": "Corrective Actions and Duty of Information",
+      "control": "CTL-EU-CORRECTIVE",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "{closed} non-conformity action(s) closed",
+        "open": "{open} non-conformity action(s) open",
+        "not_informed": "{pending} action(s) on a system presenting a risk without the authority informed"
+      },
+      "gap": {
+        "open": "Close the open non-conformity actions (correct, withdraw, disable or recall) and inform deployers and distributors (Art. 20(1)).",
+        "not_informed": "Inform the market surveillance authority of the risk (Art. 20(2))."
+      }
+    },
+    {
+      "code": "Art-23",
+      "clause": "Articles 23–24",
+      "name": "Importer and Distributor Verification",
+      "control": "CTL-EU-VERIFY",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "IMPORTER",
+        "DISTRIBUTOR"
+      ],
+      "evidence": {
+        "pass": "Pre-market verification complete",
+        "missing": "Verification incomplete: {missing}"
+      },
+      "gap": {
+        "missing": "Verify before making the system available: {missing}."
+      }
+    },
+    {
+      "code": "Art-25",
+      "clause": "Article 25",
+      "name": "Value Chain: Substantial Modification",
+      "control": "CTL-EU-VALUECHAIN",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "{assessed} material change(s) assessed",
+        "open": "{open} material change(s) not yet assessed"
+      },
+      "gap": {
+        "open": "Assess whether each material change is a substantial modification or a change of purpose; if so the organisation takes on the provider duties (Art. 25(1))."
+      }
+    },
+    {
+      "code": "Art-26",
+      "clause": "Article 26(4), (7), (11)",
+      "name": "Deployer Duties",
+      "control": "CTL-EU-DEPLOYER",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "DEPLOYER"
+      ],
+      "evidence": {
+        "pass": "Deployer duties recorded",
+        "missing": "Missing: {missing}"
+      },
+      "gap": {
+        "missing": "Record the {missing}."
+      }
+    },
+    {
+      "code": "Art-27",
+      "clause": "Article 27",
+      "name": "FRIA Signed and Authority Notified",
+      "control": "CTL-EU-FRIA",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "DEPLOYER"
+      ],
+      "evidence": {
+        "pass": "FRIA signed; authority notified on {notified_at}",
+        "no_fria": "No signed impact assessment with the EU FRIA questionnaire",
+        "not_notified": "FRIA results not notified to the market surveillance authority",
+        "not_applicable": "Not applicable: {why}",
+        "not_assessed": "NOT ASSESSED: {what} is not switched on"
+      },
+      "gap": {
+        "no_fria": "Complete and sign an impact assessment that includes the EU FRIA questionnaire before first use (Art. 27(1)).",
+        "not_notified": "Notify the market surveillance authority of the FRIA results (Art. 27(3))."
+      }
+    },
+    {
+      "code": "Art-43",
+      "clause": "Article 43, Annexes VI–VII",
+      "name": "Conformity Assessment",
+      "control": "CTL-EU-CONFORMITY",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Conformity assessment passed ({route}) on {at}",
+        "missing": "Conformity assessment {status}",
+        "reassess": "Substantial modification: a new conformity assessment is due",
+        "route": "{problem}"
+      },
+      "gap": {
+        "missing": "Run the Annex VI internal-control checklist (or a notified-body assessment) and have an officer sign it before placing on the market.",
+        "reassess": "Run a new conformity assessment after the substantial modification (Art. 43(4)).",
+        "route": "{problem}"
+      }
+    },
+    {
+      "code": "Art-47",
+      "clause": "Article 47, Annex V",
+      "name": "EU Declaration of Conformity",
+      "control": "CTL-EU-DECLARATION",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Declaration issued on {issued_at}",
+        "missing": "No EU declaration of conformity",
+        "stale": "Declaration predates a substantial modification"
+      },
+      "gap": {
+        "missing": "Issue the Annex V declaration after the conformity assessment passes.",
+        "stale": "Re-issue the declaration after the new conformity assessment."
+      }
+    },
+    {
+      "code": "Art-48",
+      "clause": "Article 48",
+      "name": "CE Marking",
+      "control": "CTL-EU-CE",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "CE marking affixed ({form}) on {at}",
+        "missing": "CE marking not recorded",
+        "problem": "{problem}"
+      },
+      "gap": {
+        "missing": "Record the CE marking (date, form, notified-body number if any). SentRAI records it; it does not affix it.",
+        "problem": "{problem}"
+      }
+    },
+    {
+      "code": "Art-49",
+      "clause": "Articles 49, 71, Annex VIII",
+      "name": "EU Database Registration",
+      "control": "CTL-EU-REGISTRATION",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "roles": [
+        "PROVIDER",
+        "DEPLOYER"
+      ],
+      "evidence": {
+        "pass": "Registered (Annex VIII section {sections})",
+        "missing": "Not registered: Annex VIII section {sections}",
+        "not_applicable": "Not applicable: {why}",
+        "not_assessed": "NOT ASSESSED: {what} is not switched on"
+      },
+      "gap": {
+        "missing": "Register the system in the EU database (Annex VIII section {sections}) before placing it on the market or using it, and record the EU database id."
+      },
+      "alsoEvidences": [
+        "Art. 6(4)",
+        "Art. 26(8)"
+      ]
+    },
+    {
+      "code": "Art-50",
+      "clause": "Article 50",
+      "name": "Transparency Obligations",
+      "control": "CTL-EU-ART50",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "evidence": {
+        "pass": "Art. 50 transparency items recorded",
+        "missing": "Missing: {missing}"
+      },
+      "gap": {
+        "missing": "Record the {missing}."
+      }
+    },
+    {
+      "code": "Art-53",
+      "clause": "Articles 25(4), 53, Annexes XI–XII",
+      "name": "General-Purpose AI Models",
+      "control": "CTL-EU-GPAI",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2025-08-02",
+      "evidence": {
+        "pass": "GPAI documentation recorded",
+        "missing": "Missing: {missing}",
+        "not_applicable": "Not applicable: {why}",
+        "not_assessed": "NOT ASSESSED: {what} is not switched on"
+      },
+      "gap": {
+        "missing": "Record the {missing}."
+      }
+    },
+    {
+      "code": "Art-60",
+      "clause": "Articles 60–61",
+      "name": "Real-World Testing",
+      "control": "CTL-EU-RWT",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "{plans} real-world testing plan(s) registered and approved",
+        "missing": "Incomplete: {missing}",
+        "not_applicable": "Not applicable: {why}",
+        "not_assessed": "NOT ASSESSED: {what} is not switched on"
+      },
+      "gap": {
+        "missing": "Record the {missing} (Art. 60(4))."
+      }
+    },
+    {
+      "code": "Art-72",
+      "clause": "Article 72",
+      "name": "Post-Market Monitoring Plan",
+      "control": "CTL-EU-PMM",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Written plan, reviewed every {every}",
+        "missing": "Plan incomplete: {missing}",
+        "overdue": "Plan review overdue (last {last})"
+      },
+      "gap": {
+        "missing": "Write the post-market monitoring plan: {missing} (Art. 72(3)).",
+        "overdue": "Review the post-market monitoring plan."
+      }
+    },
+    {
+      "code": "Art-73",
+      "clause": "Article 73, 26(5)",
+      "name": "Serious Incident Reporting Clocks",
+      "control": "CTL-EU-INCIDENT",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER",
+        "DEPLOYER"
+      ],
+      "evidence": {
+        "pass": "{serious} serious incident(s), all reported in time",
+        "overdue": "{overdue} serious incident report(s) overdue",
+        "problems": "Open items: {problems}"
+      },
+      "gap": {
+        "overdue": "Report the serious incident to the market surveillance authority now (2, 10 or 15 days from awareness, Art. 73).",
+        "problems": "Resolve: {problems}."
+      }
+    },
+    {
+      "code": "Art-86",
+      "clause": "Article 86",
+      "name": "Right to Explanation",
+      "control": "CTL-EU-EXPLANATION",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "DEPLOYER"
+      ],
+      "evidence": {
+        "pass": "{answered} explanation request(s) answered, {open} open",
+        "overdue": "{overdue} explanation request(s) past due"
+      },
+      "gap": {
+        "overdue": "Answer the explanation requests from the decision’s explainability record."
+      }
+    },
+    {
+      "code": "Art-19",
+      "clause": "Articles 19, 22, 26(6)",
+      "name": "Log Retention and Authorised Representative",
+      "control": "CTL-EU-ORG",
+      "mandatory": true,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "evidence": {
+        "pass": "Logs kept at least {min} months in every store",
+        "missing": "Missing: {missing}"
+      },
+      "gap": {
+        "missing": "Record the {missing}."
+      },
+      "alsoEvidences": [
+        "Art. 22"
+      ]
+    },
+    {
+      "code": "Art-9",
+      "clause": "Article 9",
+      "name": "Risk Management (Risk Register)",
+      "control": "CTL-RISK-02",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "{assessed} risk(s) assessed; all accepted or within appetite",
+        "fail": "{unaccepted} of {total} risk(s) not accepted and above appetite",
+        "empty": "No assessed risks in the register"
+      },
+      "gap": {
+        "empty": "Art. 9 needs identified and evaluated risks: record and assess this system’s risks.",
+        "unaccepted": "Art. 9(5): keep residual risk acceptable: accept or reduce the risks above appetite."
+      }
+    },
+    {
+      "code": "Art-10",
+      "clause": "Article 10",
+      "name": "Data Register",
+      "control": "CTL-DATA-02",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "{linked} dataset(s) registered with lawful basis and provenance"
+      },
+      "gap": {
+        "none": "Link the training and test datasets in the data register.",
+        "lawful_basis": "Record the lawful basis of each dataset.",
+        "provenance": "Record the provenance of each dataset (Art. 10(2)(b)).",
+        "deletion": "Act on the pending deletion orders."
+      }
+    },
+    {
+      "code": "Art-11",
+      "clause": "Article 11",
+      "name": "Model Card",
+      "control": "CTL-DOC-02",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Model card attached",
+        "fail": "No model card evidence"
+      },
+      "gap": "Attach the model card as technical documentation evidence."
+    },
+    {
+      "code": "Art-15",
+      "clause": "Article 15(1), (3)",
+      "name": "Accuracy Testing (TEVV)",
+      "control": "CTL-TEVV-01",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "{test_sets} test set(s) with acceptance criteria, latest runs passing"
+      },
+      "gap": {
+        "missing": "Declare accuracy metrics as test sets with acceptance criteria.",
+        "not_run": "Run the test sets.",
+        "failing": "Fix or accept the failing test sets.",
+        "review_overdue": "Review the test metrics."
+      }
+    },
+    {
+      "code": "Art-15",
+      "clause": "Article 15(5)",
+      "name": "Cybersecurity (AI Security)",
+      "control": "CTL-SEC-AI-01",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "PROVIDER"
+      ],
+      "evidence": {
+        "pass": "Threat model approved; attack categories evaluated"
+      },
+      "gap": {
+        "no_threat_model": "Approve an AI threat model (data poisoning, model poisoning, adversarial examples, confidentiality).",
+        "untested": "Evaluate: {untested}.",
+        "failing": "Mitigate: {failing}."
+      }
+    },
+    {
+      "code": "Art-27",
+      "clause": "Article 27",
+      "name": "FRIA (Impact Assessment)",
+      "control": "CTL-IMPACT-01",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "roles": [
+        "DEPLOYER"
+      ],
+      "evidence": {
+        "pass": "Impact assessment v{version} signed {signedAt}",
+        "not_final": "Impact assessment v{version} is {status}"
+      },
+      "gap": {
+        "missing": "Sign an impact assessment that includes the EU FRIA questionnaire."
+      }
+    },
+    {
+      "code": "Art-73",
+      "clause": "Article 73",
+      "name": "Serious Incident Sign-off",
+      "control": "CTL-INC-02",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "appliesWhenTier": [
+        "High Risk"
+      ],
+      "evidence": {
+        "pass": "{serious} serious incident(s) signed off with affected people told"
+      },
+      "gap": {
+        "no_sign_off": "Senior sign-off before closing serious incidents.",
+        "not_notified": "Notify the affected people."
+      }
+    },
+    {
+      "code": "Art-17",
+      "clause": "Article 17",
+      "name": "QMS: Approved AI Policy",
+      "control": "CTL-ORG-POLICY",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2026-08-02",
+      "evidence": {
+        "pass": "AI policy approved {approved_at} by {approved_by}",
+        "missing": "No approved AI policy record",
+        "review_overdue": "AI policy is past its review date"
+      },
+      "gap": "Art. 17(1) needs a documented quality management system: approve the AI policy and keep it in review."
+    },
+    {
+      "code": "Art-4",
+      "clause": "Article 4",
+      "name": "AI Literacy (Training)",
+      "control": "CTL-ORG-TRAINING",
+      "mandatory": false,
+      "flag": "euAiAct",
+      "requiresFact": "euAct",
+      "effectiveFrom": "2025-02-02",
+      "evidence": {
+        "pass": "{compliant} of {staff} staff in date on mandatory AI training",
+        "missing": "No mandatory AI training course"
+      },
+      "gap": "Art. 4 needs sufficient AI literacy: run mandatory AI training and record completions ({overdue} overdue)."
+    },
+    {
+      "code": "Art-Minimal",
+      "clause": "Article 95",
+      "name": "General Compliance Guidelines",
+      "control": "CTL-NONE",
+      "mandatory": true,
+      "appliesWhenTier": [
+        "Minimal Risk"
+      ],
+      "evidence": {
+        "pass": "Minimal risk model. Complies by default."
+      },
       "gap": ""
     }
-  ]
+  ],
+  "parameterFlags": {
+    "logRetentionMonths": "euAiAct",
+    "technicalDocRetentionYears": "euAiAct"
+  }
 }

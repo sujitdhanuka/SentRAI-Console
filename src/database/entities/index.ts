@@ -56,6 +56,7 @@ import { EnergyReadingEntity } from './energy-reading.entity';
 import { ThreatModelEntity } from './threat-model.entity';
 import { SecurityEvaluationEntity } from './security-evaluation.entity';
 import { EngagementRecordEntity } from './engagement-record.entity';
+import { EuActRecordEntity } from './eu-act-record.entity';
 import { AiProviderAttestationEntity } from './ai-provider-attestation.entity';
 import { ModelCardEntity } from './model-card.entity';
 
@@ -120,6 +121,7 @@ export {
   EngagementRecordEntity,
   AiProviderAttestationEntity,
   ModelCardEntity,
+  EuActRecordEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -183,4 +185,5 @@ export const ALL_ENTITIES = [
   EngagementRecordEntity,
   AiProviderAttestationEntity,
   ModelCardEntity,
+  EuActRecordEntity,
 ];

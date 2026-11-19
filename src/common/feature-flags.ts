@@ -72,6 +72,13 @@ export const EPIC_FLAGS = {
   federalVendor: 'GOV_E3_8_FEDERAL_VENDOR',
   /** E4.1: model cards: readiness, draft and final versions, staleness, PDF / Markdown / JSON export. */
   modelCards: 'GOV_E4_1_MODEL_CARDS',
+  /**
+   * E5.1: EU AI Act workspace: operator role, Art. 5 screening, Annex III classification,
+   * conformity, declaration, CE marking, EU database registration, Annex IV and Art. 13
+   * exports, Art. 73 incident clocks, Art. 86 explanations and the register-backed EU pack
+   * clauses. Applies only to organisations that enable the EU AI Act pack.
+   */
+  euAiAct: 'GOV_E5_1_EU_ACT',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -84,6 +91,9 @@ export const PHASE3_FLAGS: readonly EpicFlag[] = ['soa', 'disclosures', 'inciden
 
 /** Epics added after Phase 3 (E4.1 model cards). */
 export const PHASE4_FLAGS: readonly EpicFlag[] = ['modelCards'];
+
+/** The EU AI Act epic (E5.1). */
+export const PHASE5_FLAGS: readonly EpicFlag[] = ['euAiAct'];
 
 export interface FeatureFlags {
   governanceV2: boolean;
@@ -116,6 +126,7 @@ export interface FeatureFlags {
   orgRecords: boolean;
   federalVendor: boolean;
   modelCards: boolean;
+  euAiAct: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -157,6 +168,7 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     orgRecords: epic(EPIC_FLAGS.orgRecords),
     federalVendor: epic(EPIC_FLAGS.federalVendor),
     modelCards: epic(EPIC_FLAGS.modelCards),
+    euAiAct: epic(EPIC_FLAGS.euAiAct),
   };
 }
 

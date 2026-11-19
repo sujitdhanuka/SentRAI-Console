@@ -53,6 +53,7 @@ import {
   ThreatModelEntity,
   ModelCardEntity,
   ModelApprovalEntity,
+  EuActRecordEntity,
 } from '../database/entities';
 import { ComplianceModule } from '../compliance/compliance.module';
 import { NotifierService } from '../common/notifier.service';
@@ -111,6 +112,8 @@ import { FederalVendorController } from './federal/federal.controller';
 import { FederalVendorService } from './federal/federal.service';
 import { ModelCardsController } from './model-cards/model-cards.controller';
 import { ModelCardsService } from './model-cards/model-cards.service';
+import { EuActController, EuActPublicController } from './eu-act/eu-act.controller';
+import { EuActService } from './eu-act/eu-act.service';
 
 /**
  * Governance module (plan section 3): everything shared across frameworks.
@@ -123,7 +126,7 @@ import { ModelCardsService } from './model-cards/model-cards.service';
  * red-team and audit rules. Phase 3: E3.1 Statement of Applicability; E3.2
  * disclosures; E3.3 incident extensions; E3.4 TEVV and retirement; E3.5
  * energy; E3.6 AI security; E3.7 engagement records; E3.8 federal vendor.
- * E4.1 model cards.
+ * E4.1 model cards. E5.1 EU AI Act workspace.
  * Each Phase 2 and Phase 3 route answers 404 while its flag is off.
  */
 @Module({
@@ -138,7 +141,7 @@ import { ModelCardsService } from './model-cards/model-cards.service';
       TrainingRecordEntity, DatasetEntity, ModelDatasetEntity,
       AiProviderAttestationEntity, AiProviderConfigEntity, BcpStateEntity, DisclosureEntity, EnergyReadingEntity, EngagementRecordEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity,
       ModelDeployerEntity, ModelRetirementEntity, SecurityEvaluationEntity, SoaEntryEntity, SoaStatementEntity, TestSetEntity, TevvRunEntity, ThreatModelEntity,
-      ModelCardEntity, ModelApprovalEntity,
+      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity,
     ]),
     InventoryModule,
     ComplianceModule, // board-pack inputs for management review (E1.6)
@@ -151,6 +154,7 @@ import { ModelCardsService } from './model-cards/model-cards.service';
     TrainingController, DatasetsController, RedTeamAuditController,
     SoaController, DisclosuresController, IncidentExtensionsController, TevvController, EnergyController,
     AiSecurityController, EngagementController, FederalVendorController, ModelCardsController,
+    EuActController, EuActPublicController,
   ],
   providers: [
     ActingOrgInterceptor,
@@ -160,6 +164,7 @@ import { ModelCardsService } from './model-cards/model-cards.service';
     DatasetsService, RedTeamAuditService,
     SoaService, DisclosuresService, IncidentExtensionsService, TevvService, EnergyService, AiSecurityService,
     EngagementService, FederalVendorService, ModelCardsService,
+    EuActService,
   ],
   exports: [
     PacksService, GovernanceSettingsService, AccountabilityService, RisksService, ImpactAssessmentService,

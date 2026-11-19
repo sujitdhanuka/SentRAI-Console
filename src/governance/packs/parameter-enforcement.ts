@@ -27,11 +27,14 @@ export const FLAGGED_CONSUMERS: Record<string, Array<{ by: string; flag: keyof F
   frameworkReviewMonths: [{ by: 'Framework review reminder (E2.8)', flag: 'redTeamAuditRules' }],
   'redTeamPreDeployRequired.HIGH': [{ by: 'Pre-deploy red-team gate (E2.8)', flag: 'redTeamAuditRules' }],
   'auditIntervalDays.HIGH': [{ by: 'Audit interval gate (E2.8)', flag: 'redTeamAuditRules' }],
+  logRetentionMonths: [{ by: 'EU log-retention record: values below the minimum are refused (E5.1)', flag: 'euAiAct' }],
+  technicalDocRetentionYears: [{ by: 'EU document retention check and apply (E5.1)', flag: 'euAiAct' }],
 };
 
 /** Phase 2 controls that read a parameter, which count only while their flag is on. */
 export const FLAGGED_CONTROLS: Record<string, keyof FeatureFlags> = {
   'CTL-FL-02': 'fairLending',
+  'CTL-EU-ORG': 'euAiAct',
 };
 
 export function parameterEnforcement(name: string): { enforced: boolean; enforcedBy: string[] } {

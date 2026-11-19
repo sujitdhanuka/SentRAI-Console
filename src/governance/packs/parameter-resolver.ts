@@ -34,6 +34,9 @@ export const PARAMETER_SPECS: ParameterSpec[] = [
   { name: 'validationValidityMonths', rule: 'min', unit: 'months', description: 'Months a model validation stays current before revalidation' },
   { name: 'frameworkReviewMonths', rule: 'min', unit: 'months', description: 'Maximum months between reviews of the AI governance framework and policy' },
   { name: 'redTeamPreDeployRequired.HIGH', rule: 'any', description: 'HIGH and CRITICAL systems need a red-team exercise before they go live' },
+  // E5.1 EU AI Act
+  { name: 'logRetentionMonths', rule: 'max', unit: 'months', description: 'Minimum months to keep automatically generated logs (EU AI Act Art. 19, 26(6))' },
+  { name: 'technicalDocRetentionYears', rule: 'max', unit: 'years', description: 'Years to keep technical documentation and the declaration after placing on the market (EU AI Act Art. 18)' },
 ];
 
 /** Phase 2 fallbacks used where no enabled pack or setting states a value (kept out of PLATFORM_DEFAULTS so existing parameter views do not change). */

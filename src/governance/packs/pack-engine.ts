@@ -58,19 +58,28 @@ function interpolate(template: string, facts: Record<string, any>): string {
   return template.replace(/\{(\w+)\}/g, (m, name) => (name in facts ? String(facts[name]) : m));
 }
 
+/** A clause that needs a register fact the organisation does not have (feature off, or pack not enabled) is not evaluated. */
+function lacksFact(ctx: ControlContext, fact: string): boolean {
+  return ctx.governance?.[fact] === undefined && ctx.org?.[fact] === undefined;
+}
+
 function isMandatory(rule: PackClause['mandatory'], risk: RiskLevel): boolean {
   return typeof rule === 'boolean' ? rule : rule.riskIn.includes(risk);
 }
 
-function classifyTier(def: PackDefinition, entry: AIModelEntry, ctx: ControlContext, params: ResolvedParameters): string {
+function classifyTier(def: PackDefinition, entry: AIModelEntry, ctx: ControlContext, params: ResolvedParameters, flags: FeatureFlags): string {
   switch (def.tierClassifier) {
     case 'nist':
       return entry.riskLevel === RiskLevel.HIGH || entry.riskLevel === RiskLevel.CRITICAL ? 'High' : 'Standard';
     case 'iso':
       return [RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL].includes(entry.riskLevel) ? 'Elevated' : 'Standard';
-    case 'eu':
+    case 'eu': {
       // An operator-configured list (EU_AI_ACT_HIGH_RISK_DOMAINS) replaces the pack list, as before.
-      return euRiskTier(entry, ctx.euHighRiskDomains ?? (params.values.euHighRiskDomains as string[]) ?? []);
+      const hint = euRiskTier(entry, ctx.euHighRiskDomains ?? (params.values.euHighRiskDomains as string[]) ?? []);
+      // E5.1: the signed Art. 5 screening and Annex III classification decide the tier; the keyword match stays as the hint.
+      const eu = flags.euAiAct ? ctx.governance?.euAct : undefined;
+      return eu?.tier ?? hint;
+    }
     case 'au': {
       // DTA policy v2.1 Appendix C: the in-scope answer comes from the latest
       // signed or revalidation-due impact assessment (E1.4); HIGH or CRITICAL
@@ -119,13 +128,19 @@ export function evaluatePack(
       opts.extraSources,
     );
   const def = pack.definition;
-  const tier = classifyTier(def, entry, ctx, params);
+  const tier = classifyTier(def, entry, ctx, params, flags);
+  // E5.1: the operator roles recorded for the system select the provider or deployer clauses.
+  const euRoles: string[] | null = flags.euAiAct && Array.isArray(ctx.governance?.euAct?.roles) && ctx.governance!.euAct.roles.length ? ctx.governance!.euAct.roles : null;
+  const evalAt = opts.asOf ?? now;
   const outcomes = new Map<string, ControlOutcome>();
   const clauses: ClauseResult[] = [];
 
   for (const clause of def.clauses) {
     if (clause.flag && !flags[clause.flag]) continue;
     if (clause.appliesWhenTier && !clause.appliesWhenTier.includes(tier)) continue;
+    if (clause.requiresFact && lacksFact(ctx, clause.requiresFact)) continue;
+    if (flags.euAiAct && clause.effectiveFrom && Date.parse(clause.effectiveFrom) > evalAt.getTime()) continue;
+    if (euRoles && clause.roles && !clause.roles.some((r) => euRoles.includes(r))) continue;
     const control = getControl(clause.control)!;
     if (control.scope !== (opts.scope ?? 'MODEL')) continue;
     const out = control.evaluate({ entry, ctx, params, flags, opts: clause.opts ?? {}, now });

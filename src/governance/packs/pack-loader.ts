@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 
 import { RiskLevel } from '../../common/enums';
-import { getFeatureFlags, PHASE2_FLAGS, PHASE3_FLAGS } from '../../common/feature-flags';
+import { getFeatureFlags, PHASE2_FLAGS, PHASE3_FLAGS, PHASE5_FLAGS } from '../../common/feature-flags';
 import { isoCodeExists, nistCodeExists } from '../../compliance/framework-codes';
 import { getControl } from '../controls/control-library';
 import { LoadedPackVersion, PackDefinition, PackStatus } from './pack.types';
@@ -32,6 +32,9 @@ export const BUILT_IN_PACKS: PackDefinition[] = [
 ];
 
 /** Baseline packs always apply (design §2.1): NIST AI RMF plus ISO/IEC 42001. */
+/** EU AI Act operator roles a clause can name (E5.1). */
+const EU_ROLE_VALUES = new Set(['PROVIDER', 'DEPLOYER', 'IMPORTER', 'DISTRIBUTOR', 'AUTHORISED_REP']);
+
 export const BASELINE_PACK_IDS = ['nist-ai-rmf', 'iso-42001'];
 
 /** Stable JSON: object keys sorted, so the hash does not depend on key order. */
@@ -63,11 +66,17 @@ export function validatePack(def: PackDefinition): string[] {
   for (const name of Object.keys(def.parameters ?? {})) {
     if (!parameterSpec(name)) errors.push(`${def.id}: unknown parameter ${name}`);
   }
+  for (const [name, flag] of Object.entries(def.parameterFlags ?? {})) {
+    if (!(name in (def.parameters ?? {}))) errors.push(`${def.id}: parameterFlags names ${name}, which the pack does not set`);
+    if (!(flag in getFeatureFlags({}))) errors.push(`${def.id}: unknown flag ${flag}`);
+  }
   for (const c of def.clauses ?? []) {
     const where = `${def.id} ${c.code}`;
     if (!c.code || !c.name) errors.push(`${where}: clause needs code and name`);
     if (!getControl(c.control)) errors.push(`${where}: unknown control ${c.control}`);
     if (c.flag && !(c.flag in getFeatureFlags({}))) errors.push(`${where}: unknown flag ${c.flag}`);
+    if (c.roles !== undefined && (!Array.isArray(c.roles) || !c.roles.length || c.roles.some((r) => !EU_ROLE_VALUES.has(r)))) errors.push(`${where}: roles must list operator roles`);
+    if (c.effectiveFrom !== undefined && Number.isNaN(Date.parse(c.effectiveFrom))) errors.push(`${where}: effectiveFrom must be a date`);
     if (typeof c.gap !== 'string' && (typeof c.gap !== 'object' || c.gap === null)) errors.push(`${where}: gap must be text or keyed text`);
     if (typeof c.mandatory === 'object') {
       if (!Array.isArray(c.mandatory.riskIn) || c.mandatory.riskIn.some((r) => !RISK_VALUES.has(r))) {
@@ -109,10 +118,40 @@ export class PackRegistry {
     this.defs = defs;
   }
 
+  private readonly servedCache = new WeakMap<PackDefinition, Map<string, PackDefinition>>();
+
   /** Packs behind a governance flag are invisible while that flag is off (read live). */
   private available(): PackDefinition[] {
     const flags = getFeatureFlags();
-    return this.defs.filter((d) => !d.flag || flags[d.flag]);
+    return this.defs.filter((d) => !d.flag || flags[d.flag]).map((d) => this.served(d, flags));
+  }
+
+  /**
+   * E5.1: while GOV_E5_1_EU_ACT is off a pack is served exactly as before it: clause roles and
+   * clause effective dates are dropped, and parameters behind a flag that is off are left out.
+   * The same object is returned when nothing changes, so hashes and caches keep their identity.
+   */
+  private served(d: PackDefinition, flags: ReturnType<typeof getFeatureFlags>): PackDefinition {
+    const offParams = Object.entries(d.parameterFlags ?? {}).filter(([, f]) => !flags[f]).map(([p]) => p);
+    const strip = !flags.euAiAct && (d.clauses ?? []).some((c) => c.roles !== undefined || c.effectiveFrom !== undefined);
+    const hasFlagsField = d.parameterFlags !== undefined;
+    if (!offParams.length && !strip && !hasFlagsField) return d;
+    const key = `${offParams.join(',')}|${strip}`;
+    let byKey = this.servedCache.get(d);
+    if (!byKey) { byKey = new Map(); this.servedCache.set(d, byKey); }
+    let out = byKey.get(key);
+    if (!out) {
+      const { parameterFlags: _pf, ...rest } = d;
+      const parameters = { ...(d.parameters ?? {}) };
+      for (const p of offParams) delete parameters[p];
+      const clauses = strip ? d.clauses.map(({ roles: _r, effectiveFrom: _e, ...c }) => c) : d.clauses;
+      out = { ...rest, parameters, clauses } as PackDefinition;
+      // Flag-gated parameters stay listed for the served copy only while their flag is on.
+      const onFlags = Object.fromEntries(Object.entries(d.parameterFlags ?? {}).filter(([, f]) => flags[f]));
+      if (Object.keys(onFlags).length) out.parameterFlags = onFlags;
+      byKey.set(key, out);
+    }
+    return out;
   }
 
   packIds(): string[] {
@@ -134,7 +173,7 @@ export class PackRegistry {
    */
   private hashOf(d: PackDefinition): string {
     const flags = getFeatureFlags();
-    const later = [...PHASE2_FLAGS, ...PHASE3_FLAGS];
+    const later = [...PHASE2_FLAGS, ...PHASE3_FLAGS, ...PHASE5_FLAGS];
     const off = new Set<string>(later.filter((f) => !flags[f]));
     const served = (d.clauses ?? []).filter((c) => !(c.flag && off.has(c.flag)));
     const key = `${[...off].sort().join(',')}`;
@@ -143,7 +182,7 @@ export class PackRegistry {
     let h = byKey.get(key);
     if (!h) {
       let changelog = (d as any).changelog;
-      for (const [tag, phaseFlags] of [['Phase 2', PHASE2_FLAGS], ['Phase 3', PHASE3_FLAGS]] as const) {
+      for (const [tag, phaseFlags] of [['Phase 2', PHASE2_FLAGS], ['Phase 3', PHASE3_FLAGS], ['EU', PHASE5_FLAGS]] as const) {
         const phaseOn = served.some((c) => c.flag && (phaseFlags as readonly string[]).includes(c.flag));
         if (!phaseOn && Array.isArray(changelog)) changelog = changelog.filter((l: unknown) => !String(l).includes(`(${tag})`));
       }

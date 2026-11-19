@@ -48,6 +48,16 @@ export interface PackClause {
   gap: string | Record<string, string>;
   /** Other clauses of the framework this control also evidences (reported, not separately checked). */
   alsoEvidences?: string[];
+  /**
+   * EU AI Act operator roles the clause falls on (PROVIDER, DEPLOYER, IMPORTER, DISTRIBUTOR,
+   * AUTHORISED_REP). While GOV_E5_1_EU_ACT is on and the system's roles are recorded, a clause
+   * none of whose roles the organisation holds for the system is not evaluated.
+   */
+  roles?: string[];
+  /** Evaluated only when ctx.governance (or ctx.org) carries this fact: e.g. "euAct" while the EU workspace is in force for the organisation. */
+  requiresFact?: string;
+  /** ISO date the clause's obligation applies from (EU AI Act Art. 113); honoured while GOV_E5_1_EU_ACT is on. */
+  effectiveFrom?: string;
 }
 
 export interface PackDefinition {
@@ -82,6 +92,8 @@ export interface PackDefinition {
   source: string;
   changelog: string[];
   parameters: Record<string, any>;
+  /** Parameters served only while a governance flag is on (left out of the hash and the strictest-wins vote while it is off). */
+  parameterFlags?: Record<string, keyof FeatureFlags>;
   clauses: PackClause[];
 }
 

@@ -65,7 +65,14 @@ export interface GateFinding {
     // Phase 2
     | 'validation_required'
     | 'red_team_required'
-    | 'audit_overdue';
+    | 'audit_overdue'
+    // E5.1 EU AI Act
+    | 'eu_prohibited_practice'
+    | 'eu_art5_unsigned'
+    | 'eu_conformity_missing'
+    | 'eu_declaration_missing'
+    | 'eu_registration_missing'
+    | 'eu_fria_missing';
   message: string;
 }
 
@@ -76,6 +83,7 @@ type EventListener = (modelId: string, event: string, detail?: Record<string, an
 export class RisksService implements OnModuleInit {
   private readonly logger = new Logger(RisksService.name);
   private readonly listeners: EventListener[] = [];
+  private readonly hardGateContributors: Array<(model: AIModelEntity, orgId: string) => Promise<GateFinding[]>> = [];
   private readonly gateContributors: Array<(model: AIModelEntity, orgId: string, settings: GovernanceSettingsDoc) => Promise<GateFinding[]>> = [];
 
   constructor(
@@ -127,6 +135,11 @@ export class RisksService implements OnModuleInit {
 
   addGateContributor(fn: (model: AIModelEntity, orgId: string, settings: GovernanceSettingsDoc) => Promise<GateFinding[]>): void {
     this.gateContributors.push(fn);
+  }
+
+  /** Findings that always block, whatever the organisation's gate mode (E5.1: an EU AI Act Art. 5 prohibited practice). */
+  addHardGateContributor(fn: (model: AIModelEntity, orgId: string) => Promise<GateFinding[]>): void {
+    this.hardGateContributors.push(fn);
   }
 
   private assert(): void {
@@ -631,7 +644,8 @@ export class RisksService implements OnModuleInit {
    */
   async gateCheck(modelId: string): Promise<{ mode: string; tier: string; block: GateFinding[]; warn: GateFinding[] } | null> {
     const risksOn = this.flags.isEnabled('riskRegister');
-    if (!this.flags.isEnabled('governanceSettings') || (!risksOn && !this.flags.isEnabled('impactAssessment'))) return null;
+    const euOn = this.flags.isEnabled('euAiAct');
+    if (!this.flags.isEnabled('governanceSettings') || (!risksOn && !this.flags.isEnabled('impactAssessment') && !euOn)) return null;
     const model = await this.models.findOne({ where: { id: modelId } });
     if (!model?.projectId) return null;
     const project = await this.projects.findOne({ where: { id: model.projectId } });
@@ -640,7 +654,10 @@ export class RisksService implements OnModuleInit {
     const s = (await this.settings.inForce(orgId)).settings;
     const tier = gateTierOf(model.riskLevel);
     const mode = s.gateMode[tier] ?? 'OFF';
-    if (mode === 'OFF') return { mode, tier, block: [], warn: [] };
+    // E5.1: hard findings block in every mode.
+    const hard: GateFinding[] = [];
+    if (euOn) for (const c of this.hardGateContributors) hard.push(...(await c(model, orgId)));
+    if (mode === 'OFF') return { mode: hard.length ? 'BLOCK' : mode, tier, block: hard, warn: [] };
     const findings: GateFinding[] = [];
     if (risksOn) {
       const facts = await this.registerFacts(modelId, orgId);
@@ -657,7 +674,7 @@ export class RisksService implements OnModuleInit {
       if (!external) findings.push({ code: 'third_party_audit_required', message: `${tier} models need a third-party audit under the organization's risk appetite; none is recorded` });
     }
     for (const c of this.gateContributors) findings.push(...(await c(model, orgId, s)));
-    return { mode, tier, block: mode === 'BLOCK' ? findings : [], warn: mode === 'WARN' ? findings : [] };
+    return { mode, tier, block: [...hard, ...(mode === 'BLOCK' ? findings : [])], warn: mode === 'WARN' ? findings : [] };
   }
 
   async gateView(user: CurrentUser, modelId: string) {
