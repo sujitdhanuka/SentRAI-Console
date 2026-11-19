@@ -13,7 +13,7 @@ import {
   ProjectEntity,
 } from '../database/entities';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
-import { Role } from '../common/enums';
+import { RiskLevel, Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
 import { SummarizerService } from '../summarizer/summarizer.service';
 import { governanceHooks } from '../governance/hooks';
@@ -21,6 +21,9 @@ import { FRAMEWORK_NAMES, frameworkReadiness, gapStatement } from './control-pla
 import { sourceLocationsOf } from '../discovery/source-locations';
 import { getFeatureFlags } from '../common/feature-flags';
 import { packRegistry } from '../governance/packs/pack-loader';
+import { currentPlan, gapLinesOf } from '../inventory/remediation-plan';
+import { modelEntityToEntry } from '../inventory/model.mapper';
+import { daysBetween, LEGACY_RED_TEAM_INTERVAL_DAYS, lastRedTeamEvidenceAt, redTeamIntervalDays } from '../domain/model-inventory';
 
 const FRAMEWORK_IDS = ['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001'] as const;
 const HIGH_RISK = new Set(['HIGH', 'CRITICAL', 'PROHIBITED']);
@@ -107,6 +110,13 @@ export class ComplianceService {
       !s || s === 'NOMINAL' ? 'ok' : s === 'WARNING' ? 'warn' : 'alert';
 
     const severity = (risk: string) => (HIGH_RISK.has(risk) ? 'HIGH' : risk === 'MEDIUM' ? 'MED' : 'LOW');
+    // Red-team recency by the same rule the validators apply: per-tier intervals
+    // with GOV_E0_3 on, else the legacy 12-month NIST rule. The newest attached
+    // red_team report counts as well as the recorded date.
+    const perTier = getFeatureFlags().redTeamIntervals;
+    const redTeamPolicy = perTier
+      ? { per_tier: true, interval_days: { HIGH: redTeamIntervalDays(RiskLevel.HIGH), MEDIUM: redTeamIntervalDays(RiskLevel.MEDIUM), LOW: redTeamIntervalDays(RiskLevel.LOW) } }
+      : { per_tier: false, interval_days: { HIGH: LEGACY_RED_TEAM_INTERVAL_DAYS, MEDIUM: LEGACY_RED_TEAM_INTERVAL_DAYS, LOW: LEGACY_RED_TEAM_INTERVAL_DAYS } };
 
     const components = [] as Record<string, any>[];
     const gaps = [] as Record<string, any>[];
@@ -125,6 +135,10 @@ export class ComplianceService {
           gaps.push({ model_id: m.id, framework: label, description: g, severity: severity(m.riskLevel) });
         }
       }
+      const plan = currentPlan(m, gapLinesOf(report));
+      const entry = modelEntityToEntry(m);
+      const lastRedTeam = lastRedTeamEvidenceAt(entry);
+      const redTeamInterval = perTier ? redTeamIntervalDays(entry.riskLevel) : LEGACY_RED_TEAM_INTERVAL_DAYS;
       components.push({
         model_id: m.id,
         name: m.name,
@@ -137,7 +151,9 @@ export class ComplianceService {
         autonomous_scope: m.autonomousScope,
         sutras_alignment: m.sutrasAlignment ?? [],
         board_policy_ref: m.boardPolicyRef || null,
-        last_red_team_date: m.lastRedTeamDate,
+        last_red_team_date: lastRedTeam,
+        red_team_interval_days: redTeamInterval,
+        red_team_overdue: !lastRedTeam || daysBetween(lastRedTeam) > redTeamInterval,
         next_audit_due: m.nextAuditDue,
         grievance_count: m.grievanceCount,
         has_evidence: (m.evidenceArtifacts?.length ?? 0) > 0,
@@ -147,8 +163,13 @@ export class ComplianceService {
         description_source: m.descriptionSource ?? 'static',
         risk_rationale: m.riskRationale ?? null,
         risk_rationale_source: m.riskRationaleSource ?? null,
-        gap_remediation: m.gapRemediation ?? null,
-        gap_remediation_source: m.gapRemediationSource ?? null,
+        // Checked against the live gaps: a heuristic plan is rebuilt from them,
+        // an AI plan is flagged stale when its gaps have changed.
+        gap_remediation: plan.text,
+        gap_remediation_source: plan.source,
+        gap_remediation_stale: plan.stale,
+        gap_remediation_closed: plan.closed,
+        gap_remediation_new: plan.added,
         // Every file this record covers — more than one means hits were merged.
         source_refs: m.sourceRefs ?? (m.sourceRef ? [m.sourceRef] : []),
         merge_history: m.mergeHistory ?? [],
@@ -156,7 +177,7 @@ export class ComplianceService {
         frameworks,
       });
     }
-    return { generated_at: new Date().toISOString(), components, gaps };
+    return { generated_at: new Date().toISOString(), red_team_policy: redTeamPolicy, components, gaps };
   }
 
   /**

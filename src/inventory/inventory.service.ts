@@ -67,24 +67,10 @@ import {
 } from './inventory.dto';
 import { sourceLocationsOf } from '../discovery/source-locations';
 import { latestSuccessfulDrill, latestSuccessfulDrills } from '../monitoring/bcp-drills';
+import { gapLinesOf, heuristicPlan } from './remediation-plan';
 
 function parseDate(s?: string | null): Date | null {
   return s ? new Date(s) : null;
-}
-
-/** Deterministic remediation hint per known gap pattern — the no-AI fallback. */
-function heuristicRemediationStep(gap: string): string {
-  const g = gap.toLowerCase();
-  if (g.includes('board-approved') || g.includes('board policy')) return 'Set a board-approved AI policy reference in the governance form (e.g. AI-POLICY-2026-xxx).';
-  if (g.includes('owner') || g.includes('accountability chain')) return 'Assign a named owner team in the governance form.';
-  if (g.includes('bias')) return 'Run a bias/fairness test and attach the report as a bias_test evidence artifact.';
-  if (g.includes('red-team') || g.includes('red team')) return 'Complete a red-team review and record its date (or attach a red_team artifact).';
-  if (g.includes('drift') || g.includes('inference scores') || g.includes('monitoring')) return 'Push live score windows to /monitoring/scores so drift evaluation runs.';
-  if (g.includes('continuity') || g.includes('fallback') || g.includes('bcp')) return 'Configure the business-continuity fallback via /monitoring/bcp.';
-  if (g.includes('audit schedule') || g.includes('audit due')) return 'Set the next audit due date to establish a recurring audit schedule.';
-  if (g.includes('oversight') || g.includes('human')) return 'Enable human oversight or document the bounded autonomous scope.';
-  if (g.includes('secret')) return 'Remove the hardcoded credential from source, rotate it, and re-scan the project.';
-  return 'Assign an owner and schedule this item in the next governance review.';
 }
 
 const RISK_ORDER: Record<string, number> = { [RiskLevel.LOW]: 0, [RiskLevel.MEDIUM]: 1, [RiskLevel.HIGH]: 2 };
@@ -600,14 +586,9 @@ export class InventoryService implements OnModuleInit {
    */
   async draftGapRemediation(user: CurrentUser, modelId: string) {
     const orm = await this.getOrThrow(modelId);
-    const entry = modelEntityToEntry(orm);
-    const ctx = await this.buildValidationContext(modelId);
-    const gapLines: string[] = [
-      ...sutrasBlockingGaps(validateSutrasCompliance(entry, ctx)).map((g) => `[RBI FREE-AI] ${g}`),
-      ...frameworkBlockingGaps(validateNistRmf(entry, ctx)).map((g) => `[NIST AI RMF] ${g}`),
-      ...frameworkBlockingGaps(validateEuAiAct(entry, ctx)).map((g) => `[EU AI Act] ${g}`),
-      ...frameworkBlockingGaps(validateIso42001(entry, ctx)).map((g) => `[ISO 42001] ${g}`),
-    ];
+    // The same evaluation the matrix and compliance-check serve, so the plan's
+    // gap list can be compared with them later (see remediation-plan.ts).
+    const gapLines = gapLinesOf(await this.complianceCheck(modelId));
     if (!gapLines.length) {
       return { model_id: modelId, open_gaps: 0, draft: null, message: 'No open compliance gaps — nothing to remediate.' };
     }
@@ -622,7 +603,7 @@ export class InventoryService implements OnModuleInit {
         risk_level: orm.riskLevel,
         gaps: gapLines.join('\n'),
       },
-      () => gapLines.map((g) => `• ${g}\n  → Action: ${heuristicRemediationStep(g)}`).join('\n'),
+      () => heuristicPlan(gapLines) ?? '',
       user?.email ?? 'dashboard_user',
       await this.dataOrgs(modelId),
     );
@@ -632,6 +613,7 @@ export class InventoryService implements OnModuleInit {
     orm.gapRemediation = result.text;
     orm.gapRemediationSource = result.source;
     orm.gapRemediationModel = result.model;
+    orm.gapRemediationGaps = gapLines;
     orm.updatedAt = new Date();
     await this.models.save(orm);
 

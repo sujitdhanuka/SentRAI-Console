@@ -146,6 +146,10 @@ export class AIModelEntity {
   @Column('varchar', { length: 100, nullable: true })
   gapRemediationModel!: string | null;
 
+  /** The gap lines the remediation plan was drafted for, so a later read can tell it is out of date. */
+  @Column('simple-json', { nullable: true })
+  gapRemediationGaps!: string[] | null;
+
   /**
    * Every file this model was discovered in. A scan often finds the same model
    * defined or invoked in several places; those are merged into one governed

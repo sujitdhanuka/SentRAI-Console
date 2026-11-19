@@ -44,6 +44,7 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'gapRemediation', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'gapRemediationSource', definition: 'VARCHAR(20) NULL' },
   { table: 'ai_models', column: 'gapRemediationModel', definition: 'VARCHAR(100) NULL' },
+  { table: 'ai_models', column: 'gapRemediationGaps', definition: 'TEXT NULL' },
   // ai-model.entity.ts — duplicate scan hits merge into one record instead of being dropped.
   { table: 'ai_models', column: 'sourceRefs', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'mergeHistory', definition: 'TEXT NULL' },

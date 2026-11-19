@@ -46,10 +46,12 @@ interface MatrixRow {
   human_oversight_required: boolean; autonomous_scope: string | null;
   sutras_alignment: string[]; board_policy_ref: string | null;
   last_red_team_date: string | null; next_audit_due: string | null;
+  red_team_interval_days?: number; red_team_overdue?: boolean;
   grievance_count: number; has_evidence: boolean; drift: DriftStatus;
   description_source: string;
   risk_rationale: string | null; risk_rationale_source: string | null;
   gap_remediation: string | null; gap_remediation_source: string | null;
+  gap_remediation_stale?: boolean; gap_remediation_closed?: number; gap_remediation_new?: number;
   source_refs: string[];
   merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
   source_locations?: Array<{ file: string; lines: number[] }>;
@@ -58,6 +60,10 @@ interface MatrixRow {
 
 export class HttpGovernanceProvider implements GovernanceProvider {
   private cache: { rows: MatrixRow[]; gaps: GovernanceGap[]; at: number; scope: string } | null = null;
+
+  invalidate(): void {
+    this.cache = null;
+  }
 
   private async api<T>(path: string, init?: RequestInit): Promise<T> {
     const token = localStorage.getItem('sentrai_access_token');
@@ -117,6 +123,8 @@ export class HttpGovernanceProvider implements GovernanceProvider {
         autonomousScope: r.autonomous_scope,
         drift: r.drift,
         lastRedTeamDaysAgo: daysAgo(r.last_red_team_date),
+        redTeamIntervalDays: r.red_team_interval_days,
+        redTeamOverdue: r.red_team_overdue,
         sutrasDeclared: r.sutras_alignment.length,
         incidents30d: r.grievance_count,
         boardPolicyRef: r.board_policy_ref,
@@ -126,6 +134,9 @@ export class HttpGovernanceProvider implements GovernanceProvider {
         riskRationaleSource: r.risk_rationale_source,
         gapRemediation: r.gap_remediation,
         gapRemediationSource: r.gap_remediation_source,
+        gapRemediationStale: r.gap_remediation_stale ?? false,
+        gapRemediationClosed: r.gap_remediation_closed ?? 0,
+        gapRemediationNew: r.gap_remediation_new ?? 0,
         sourceRefs: r.source_refs ?? [],
         mergeHistory: r.merge_history ?? [],
         sourceLocations: r.source_locations ?? (r.source_refs ?? []).map((file) => ({ file, lines: [] })),
@@ -144,14 +155,15 @@ export class HttpGovernanceProvider implements GovernanceProvider {
   }
 
   /** Governance calendar synthesized from the fleet's real dates: red-team
-   *  reviews fall due 90 days after the last one; audits from next_audit_due. */
+   *  reviews fall due one tier interval after the last one (the server's
+   *  red_team_interval_days); audits from next_audit_due. */
   async getCalendar(): Promise<CalendarEvent[]> {
     const { rows } = await this.matrix();
     const events: Array<CalendarEvent & { ts: number }> = [];
     const fmt = (d: Date) => d.toLocaleDateString('en', { month: 'short', day: '2-digit' });
     for (const r of rows) {
       if (r.last_red_team_date) {
-        const due = new Date(new Date(r.last_red_team_date).getTime() + 90 * 86_400_000);
+        const due = new Date(new Date(r.last_red_team_date).getTime() + (r.red_team_interval_days ?? 90) * 86_400_000);
         events.push({ date: fmt(due), label: `${r.name} · red-team review`, type: 'redteam', overdue: due.getTime() < Date.now(), ts: due.getTime(), componentId: r.model_id });
       }
       if (r.next_audit_due) {

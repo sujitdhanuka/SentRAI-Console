@@ -1277,6 +1277,79 @@ describe('SentrAI Console (e2e)', () => {
     expect(new Set(rowGaps.map((g: any) => g.framework)).size).toBeGreaterThan(1);
   });
 
+  it('MATRIX: the remediation plan and red-team status follow the live evaluation, not the first scan', async () => {
+    const admin = await login('admin@sentrai.local', 'admin123');
+    const orgId = (await request(http).post('/api/v1/organizations').set('Authorization', `Bearer ${admin}`)
+      .send({ name: 'Live Plan Org' })).body.organization_id;
+    await request(http).post('/api/v1/users').set('Authorization', `Bearer ${admin}`)
+      .send({ email: 'liveplan@x.test', full_name: 'LP', password: 'pw123456', role: 'CISO', organization_id: orgId }).expect(201);
+    const ciso = await login('liveplan@x.test', 'pw123456');
+    const auth = { Authorization: `Bearer ${ciso}` };
+    const p = await request(http).post('/api/v1/projects').set(auth).send({ name: 'Live Plan Proj' });
+    const projectId = p.body.project_id;
+    const reg = await request(http).post('/api/v1/inventory/models').set(auth)
+      .send({ name: 'Live Plan Scorer', model_type: 'MACHINE_LEARNING', functional_area: 'credit_underwriting', use_case_description: 'scores', project_id: projectId }).expect(201);
+    const modelId = reg.body.model_id;
+
+    const row = async () => {
+      const mx = await request(http).get(`/api/v1/compliance/matrix?project_id=${projectId}`).set(auth).expect(200);
+      const r = mx.body.components.find((c: any) => c.model_id === modelId);
+      const gaps = mx.body.gaps.filter((g: any) => g.model_id === modelId);
+      return { r, gaps, policy: mx.body.red_team_policy };
+    };
+    const BIAS = 'No bias-test evidence attached';
+
+    // Draft (and persist) a plan while the bias-test gap is open.
+    const drafted = await request(http).post(`/api/v1/inventory/models/${modelId}/draft-remediation`).set(auth).expect(200);
+    expect(drafted.body.draft).toContain(BIAS);
+    const before = await row();
+    expect(before.r.gap_remediation).toContain(BIAS);
+    expect(before.r.gap_remediation_stale).toBe(false);
+
+    // Close the gap with evidence. The matrix, its gap list and the plan the
+    // "Close Governance Gaps" popup shows must all drop it together.
+    await request(http).post(`/api/v1/inventory/models/${modelId}/evidence`).set(auth)
+      .send({ type: 'bias_test', ref: 'https://example.test/bias.pdf', actor: 'test' }).expect(201);
+    const check = await request(http).get(`/api/v1/inventory/models/${modelId}/compliance-check`).set(auth).expect(200);
+    expect(check.body.blocking_gaps.join('\n')).not.toContain(BIAS);
+    const after = await row();
+    expect(after.gaps.map((g: any) => g.description).join('\n')).not.toContain(BIAS);
+    expect(after.r.gap_remediation ?? '').not.toContain(BIAS);
+    expect(after.r.gap_remediation_stale).toBe(false);
+    // One plan bullet per open gap, each naming that gap.
+    const bullets = (after.r.gap_remediation ?? '').split('\n').filter((l: string) => l.startsWith('• '));
+    expect(bullets).toHaveLength(after.gaps.length);
+    for (const g of after.gaps) expect(after.r.gap_remediation).toContain(g.description);
+
+    // Red-team status uses the validators' rule. Flag off: the legacy 12-month rule.
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+    await request(http).patch(`/api/v1/inventory/models/${modelId}/governance`).set(auth)
+      .send({ last_red_team_date: daysAgo(100), actor: 'test' }).expect(200);
+    const legacy = await row();
+    expect(legacy.policy.per_tier).toBe(false);
+    expect(legacy.r.red_team_interval_days).toBe(365);
+    expect(legacy.r.red_team_overdue).toBe(false);
+
+    // Flag on (GOVERNANCE_V2 with per-tier intervals): HIGH is held to 90 days.
+    const prev = process.env.GOVERNANCE_V2;
+    process.env.GOVERNANCE_V2 = 'true';
+    try {
+      const tiered = await row();
+      expect(tiered.policy.per_tier).toBe(true);
+      expect(tiered.r.risk_level).toBe('HIGH');
+      expect(tiered.r.red_team_interval_days).toBe(90);
+      expect(tiered.r.red_team_overdue).toBe(true);
+      // A fresh red_team report counts, as it does in the validators.
+      await request(http).post(`/api/v1/inventory/models/${modelId}/evidence`).set(auth)
+        .send({ type: 'red_team', ref: 'garak:0/10', actor: 'test' }).expect(201);
+      const fresh = await row();
+      expect(fresh.r.red_team_overdue).toBe(false);
+      expect(Date.now() - new Date(fresh.r.last_red_team_date).getTime()).toBeLessThan(86_400_000);
+    } finally {
+      if (prev === undefined) delete process.env.GOVERNANCE_V2; else process.env.GOVERNANCE_V2 = prev;
+    }
+  });
+
   it('RBAC: an OWNER administers only their own org and cannot mint ADMINs', async () => {
     const admin = await login('admin@sentrai.local', 'admin123');
     const mkOrg = async (name: string) => (await request(http)

@@ -70,7 +70,7 @@ function frameworkOf(check: ComplianceCheck | null, key: string): FrameworkRepor
 const HINTS = {
   owner: "The named, accountable team that owns this model's risks. RBI FREE-AI accountability and ISO 42001 Clause 7.2 require a designated owner — 'unassigned' is a gap.",
   policy: 'The board-approved AI policy this model operates under. RBI FREE-AI Recommendation 14 mandates a board-approved AI policy reference.',
-  redteam: 'When this model was last adversarially / bias tested. Policy target: within 90 days; NIST MEASURE expects a red-team or bias review within the last 12 months.',
+  redteam: 'When this model was last red teamed. The interval depends on the risk tier (HIGH 90 days, MEDIUM 180, LOW 365 with per-tier intervals on); an attached red_team report counts too.',
   oversight: 'Whether a human must review outputs before they are acted on. Uncheck only for genuinely autonomous systems — which then require a declared autonomous scope.',
   scope: "The boundary of what this model may do without per-action human sign-off — e.g. 'may draft tier-1 replies; escalate disputes to a human'. Empty means fully supervised. RBI FREE-AI Recommendation 16 requires clear autonomous action limits for any model without human oversight.",
   useCase: 'What this system does, in plain language. Auto-drafted from the code scan — review and confirm before governance sign-off.',
@@ -154,7 +154,14 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     }
   }, []);
 
+  // Seed the form once per opened component. Keyed on the id, not the object:
+  // every reload hands over a new object, and re-seeding then would wipe edits
+  // the user has not saved yet.
+  const componentId = component?.id ?? null;
+  const seedRef = useRef(component);
+  seedRef.current = component;
   useEffect(() => {
+    const component = seedRef.current;
     if (open && component) {
       setForm({
         owner: component.owner,
@@ -168,13 +175,19 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
           ? SUTRA_ENUM.map((v) => component.sutras!.includes(v))
           : SUTRAS.map((_, i) => i < component.sutrasDeclared),
       });
-      setRemediation(component.gapRemediation ?? '');
       void refreshCheck(component.id);
       void fetchControl(component.id);
       void fetchApproval(component.id);
       setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
     }
-  }, [open, component, refreshCheck, fetchControl, fetchApproval]);
+  }, [open, componentId, refreshCheck, fetchControl, fetchApproval]);
+
+  // The plan follows the server, which checks it against the live gaps on every
+  // read, so it updates as gaps close instead of keeping the first scan's list.
+  const serverPlan = component?.gapRemediation ?? '';
+  useEffect(() => {
+    if (open) setRemediation(serverPlan);
+  }, [open, componentId, serverPlan]);
 
   useEffect(() => {
     if (!open) return;
@@ -238,8 +251,9 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     try {
       const r = await api<{ draft: string | null; open_gaps: number; message?: string }>(
         `/inventory/models/${component.id}/draft-remediation`, { method: 'POST' });
-      if (!r.draft) { toast(r.message ?? 'No open gaps — nothing to remediate.'); return; }
+      if (!r.draft) { toast(r.message ?? 'No open gaps — nothing to remediate.'); setRemediation(''); return; }
       setRemediation(r.draft);
+      await load();
       toast(`Remediation drafted for ${r.open_gaps} open gap(s) — review before attaching`, 'positive');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Draft failed', 'negative');
@@ -471,6 +485,14 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                   <PenLine size={9} /> {busy === 'remediation' ? 'Drafting…' : remediation ? 'Re-draft' : 'Draft plan'}
                 </button>
               </div>
+              {component.gapRemediationStale && remediation && (
+                <p role="status" className="mb-1.5 rounded border border-warning bg-warning-soft px-2 py-1 text-[10px] leading-snug text-warning">
+                  Drafted for an earlier set of gaps
+                  {component.gapRemediationClosed ? `: ${component.gapRemediationClosed} closed since` : ''}
+                  {component.gapRemediationNew ? `${component.gapRemediationClosed ? ',' : ':'} ${component.gapRemediationNew} new` : ''}
+                  . Re-draft before attaching it as evidence.
+                </p>
+              )}
               {remediation ? (
                 <>
                   <textarea

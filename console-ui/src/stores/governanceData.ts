@@ -30,6 +30,9 @@ export const useGovernanceData = create<GovernanceDataState>((set) => ({
 
   async load() {
     set({ loading: true, error: null });
+    // Writes go through several endpoints (evidence, evals, drift), not only the
+    // provider, so a reload must never be served from the provider's read cache.
+    provider.invalidate?.();
     try {
       const [components, gaps, calendar, grievances] = await Promise.all([
         provider.getComponents(),

@@ -42,7 +42,11 @@ export function KpiBand({
   const highGaps = gaps.filter((g) => g.severity === 'HIGH').length;
   const driftAlerts = components.filter((c) => c.drift === 'alert').length;
   const driftWarns = components.filter((c) => c.drift === 'warn').length;
-  const redteamOverdue = components.filter((c) => c.lastRedTeamDaysAgo > 90).length;
+  // The server applies the validators' rule (per-tier interval, attached
+  // red_team reports count); fall back to 90 days only for the mock provider.
+  const redteamOverdue = components.filter((c) => c.redTeamOverdue ?? c.lastRedTeamDaysAgo > (c.redTeamIntervalDays ?? 90)).length;
+  const intervals = [...new Set(components.map((c) => c.redTeamIntervalDays ?? 90))];
+  const redteamPolicy = intervals.length === 1 ? `>${intervals[0]} day policy` : 'per-tier interval';
   const openGrv = grievances.filter((g) => g.status === 'open').length;
   const unresolvedGrv = grievances.filter((g) => g.status !== 'resolved').length;
 
@@ -64,7 +68,7 @@ export function KpiBand({
     {
       label: 'Red-team Overdue',
       value: String(redteamOverdue),
-      sub: '>90 day policy',
+      sub: redteamPolicy,
       valueClass: redteamOverdue > 0 ? 'text-negative' : 'text-positive',
     },
     {

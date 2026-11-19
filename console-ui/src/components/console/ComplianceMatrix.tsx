@@ -123,9 +123,9 @@ export function ComplianceMatrix({
                 <td className={TD} title={`Drift: ${DRIFT_TITLE[c.drift]}`}><DriftCell drift={c.drift} /></td>
                 <td
                   className={TD}
-                  title={c.lastRedTeamDaysAgo >= 9999 ? 'Red-team: never performed' : `Red-team: last performed ${c.lastRedTeamDaysAgo} days ago (policy ≤ 90d)`}
+                  title={c.lastRedTeamDaysAgo >= 9999 ? 'Red-team: never performed' : `Red-team: last performed ${c.lastRedTeamDaysAgo} days ago (policy ≤ ${c.redTeamIntervalDays ?? 90}d for ${c.riskTier} risk)`}
                 >
-                  <RedTeamAge days={c.lastRedTeamDaysAgo} />
+                  <RedTeamAge days={c.lastRedTeamDaysAgo} interval={c.redTeamIntervalDays} />
                 </td>
                 <td className={TD} title={gc > 0 ? `${gc} open governance gap${gc === 1 ? '' : 's'}` : 'No open gaps'}>
                   {gc > 0 ? (

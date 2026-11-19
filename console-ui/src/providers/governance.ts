@@ -27,6 +27,10 @@ export interface AIComponent {
   autonomousScope: string | null;
   drift: DriftStatus;
   lastRedTeamDaysAgo: number;
+  /** Red-team interval that applies to this component's risk tier (days). */
+  redTeamIntervalDays?: number;
+  /** Server verdict: no red-team evidence within the interval. */
+  redTeamOverdue?: boolean;
   sutrasDeclared: number; // out of 7
   incidents30d: number;
   boardPolicyRef: string | null;
@@ -37,6 +41,10 @@ export interface AIComponent {
   riskRationaleSource?: string | null;
   gapRemediation?: string | null;
   gapRemediationSource?: string | null;
+  /** The saved plan was drafted for a different set of gaps than are open now. */
+  gapRemediationStale?: boolean;
+  gapRemediationClosed?: number;
+  gapRemediationNew?: number;
   /** Files this record covers; more than one means duplicate hits were merged. */
   sourceRefs?: string[];
   mergeHistory?: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
@@ -94,6 +102,8 @@ export interface GovernanceProvider {
    *  model the grievance concerns (required by the live backend; mock ignores). */
   fileGrievance(g: Pick<Grievance, 'subject' | 'description'> & { componentId?: string }): Promise<{ id: string }>;
   exportAudit(): Promise<{ url: string }>;
+  /** Drop any cached reads so the next load reflects writes made elsewhere. */
+  invalidate?(): void;
 }
 
 export const SUTRAS = [
