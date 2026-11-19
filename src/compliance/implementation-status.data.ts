@@ -19,7 +19,7 @@ type Row = [id: string, before: ImplStatus, withGovernance: ImplStatus, flags: s
 
 export const IMPLEMENTATION_ASSESSED = { on: '2026-11-19', commit: '7564fd8' };
 
-export const IMPLEMENTATION_STATUS: Record<string, { unit: string; source: string; rows: Row[] }> = {
+export const IMPLEMENTATION_STATUS: Record<string, { unit: string; source: string; rows: Row[]; assessed?: { on: string; commit: string } }> = {
   nist_ai_rmf: {
     unit: 'playbook subcategories',
     source: 'SentRAI-NIST-AI-RMF-coverage-status-gov-phase3.xlsx',
@@ -296,6 +296,7 @@ export const IMPLEMENTATION_STATUS: Record<string, { unit: string; source: strin
   eu_ai_act: {
     unit: 'requirements',
     source: 'SentRAI-EU-AI-Act-gap-analysis-status-eu-act.xlsx',
+    assessed: { on: '2026-11-19', commit: '7af948d' },
     // "Before" is the status without the governance work: partial where the built-in
     // EU validator already evaluated the article, pending otherwise. Rows the EU AI Act
     // workspace closes need GOV_E5_1_EU_ACT (and the governance settings it reads);
@@ -378,6 +379,9 @@ export interface ImplementationSummary {
   unit: string;
   /** Rows counted at their earlier status because a flag they need is off here. */
   heldBackByFlags: number;
+  /** When and at which commit this framework was last re-assessed. */
+  assessedOn: string;
+  commit: string;
 }
 
 /** Implementation status for a framework with this deployment's flags; null when no assessment exists. */
@@ -401,5 +405,7 @@ export function implementationSummary(frameworkId: string, flags: FeatureFlags):
     total: fw.rows.length,
     unit: fw.unit,
     heldBackByFlags: held,
+    assessedOn: (fw.assessed ?? IMPLEMENTATION_ASSESSED).on,
+    commit: (fw.assessed ?? IMPLEMENTATION_ASSESSED).commit,
   };
 }

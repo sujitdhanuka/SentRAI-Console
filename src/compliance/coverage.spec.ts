@@ -71,7 +71,8 @@ describe('depth labels follow the reviewed implementation status and the flags',
   it('with every flag on: every framework, the EU AI Act included, is deep', () => {
     const f = byId();
     for (const id of ['nist_ai_rmf', 'iso_42001', 'rbi_free_ai', 'au_dta', 'us_2026', 'eu_ai_act']) expect(f[id].depth).toBe('deep');
-    expect(f.eu_ai_act.implementation).toMatchObject({ implemented: 45, partial: 0, gap: 0, notApplicable: 14, applicable: 45 });
+    expect(f.eu_ai_act.implementation).toMatchObject({ implemented: 45, partial: 0, gap: 0, notApplicable: 14, applicable: 45, commit: '7af948d' });
+    expect(f.nist_ai_rmf.implementation!.commit).toBe('7564fd8');
     expect(f.nist_ai_rmf.implementation).toMatchObject({ implemented: 66, partial: 6, applicable: 72 });
     expect(f.iso_42001.implementation).toMatchObject({ implemented: 63, partial: 2, applicable: 65 });
     expect(f.rbi_free_ai.implementation).toMatchObject({ implemented: 19, applicable: 20, notApplicable: 13 });

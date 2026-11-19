@@ -25,7 +25,7 @@ import { FeatureFlags, getFeatureFlags } from '../common/feature-flags';
 import { getControl } from '../governance/controls/control-library';
 import { BUILT_IN_PACKS } from '../governance/packs/pack-loader';
 import type { PackClause, PackDefinition } from '../governance/packs/pack.types';
-import { IMPLEMENTATION_ASSESSED, implementationSummary, ImplementationSummary } from './implementation-status.data';
+import { implementationSummary, ImplementationSummary } from './implementation-status.data';
 
 type Flag = keyof Omit<FeatureFlags, 'governanceV2'>;
 
@@ -184,10 +184,11 @@ export const COVERAGE: FrameworkCoverage[] = [
       '(Articles 9–15, 17), value-chain and deployer duties (Articles 25, 26, 27) and post-market ' +
       'monitoring (Article 72) for high-risk systems, and the Article 50 transparency duty for ' +
       'limited-risk systems. Minimal-risk systems are recorded as passing the general guidelines ' +
-      'entry without a check. The risk tier comes from the model’s functional area. Conformity ' +
-      'assessment, CE-marking and EU-database registration (e.g. Article 16) are process/paperwork ' +
-      'obligations we do not implement — we deliberately do not claim them. Full Annex III use-case ' +
-      'classification is on the roadmap.',
+      'entry without a check. The risk tier comes from the model’s functional area. The operator ' +
+      'role, Article 5 screening, Annex III classification, conformity assessment, declaration, CE ' +
+      'marking, EU database registration and the Article 73 clocks come with the EU AI Act workspace, ' +
+      'which needs the governance features (GOVERNANCE_V2 with GOV_E5_1_EU_ACT); they are off in this ' +
+      'deployment, so we do not claim them here.',
   },
   {
     id: 'iso_42001',
@@ -505,7 +506,7 @@ function packCoverage(flags: FeatureFlags, at: Date): FrameworkCoverage[] {
         ? { availability: 'Opt-in: applies only to organisations that switch this pack on in Governance settings. It never changes results for anyone else.' }
         : {}),
       basis: `Pack ${def.id} v${def.version}, in force from ${def.effectiveFrom}`,
-      ...(impl ? { implementation: { ...impl, assessedOn: IMPLEMENTATION_ASSESSED.on, commit: IMPLEMENTATION_ASSESSED.commit } } : {}),
+      ...(impl ? { implementation: impl } : {}),
     });
   }
   return out;
