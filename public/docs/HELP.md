@@ -247,23 +247,14 @@ Governance is the organisation-level programme around your models: who is accoun
 
 Who can do what, in short: **officers** (OWNER, CISO, ADMIN) approve, sign off and change policy-level records; **maintainers** (officers plus APPROVER and REVIEWER) keep day-to-day records such as readings, test results and register entries; **governance settings** are edited only by an organisation's OWNER or CISO. Wherever a record needs a second person (approving a threat model, a retirement, a validation), the same person cannot both raise and approve it. Press **?** on any tab to open the help for that tab.
 
-#### Risk register
-Risks scoped to a model, a use case, a vendor or the whole organisation. Rate each risk twice on your organisation's matrix: **inherent** (before controls) and **residual** (after controls), and see them on the heatmap. Add treatments and actions, then accept the residual risk: the approver must be the one your risk appetite names for that residual band (by default executive sign-off, the accountable official, for HIGH and CRITICAL). Risks come up for re-review on a date or on an event (for example a CI risk escalation or a material change), and a rating made on an older scoring matrix asks to be re-scored. The **residual-risk deploy gate** blocks or warns (per tier, from Settings) when a model would go live with residual risk nobody has accepted.
+The tabs are grouped into **sections**. The top row picks a section, and the row under it shows that section's tabs; the number next to a section is how many of its tabs are switched on here, and a section with none is hidden. Reopening a section returns to the tab you last had open in it.
 
-#### Impact assessments
-A dated, signed snapshot of a model's context profile, its risks and the pack questionnaires. It moves **DRAFT → FINAL** (signed, hashed and immutable). A re-review trigger on the register sets it to **REVALIDATION_REQUIRED**, and a newer FINAL supersedes it. An in-scope, high-impact or HIGH/CRITICAL model needs a FINAL assessment to go live (block or warn, from Settings). ISO 42001 8.4 is evaluated only while this tab is switched on; otherwise it is reported NOT ASSESSED.
-
-#### Context profiles
-A structured profile per model: intended purpose and users, deployment context, known limitations, out-of-scope uses, the oversight pattern and the cost of errors. Impact assessments, the public transparency card and the NIST MAP 3.2 and ISO A.6.2.2 / A.8.2 checks read it.
-
-#### AIMS workspace
-One workspace per organisation for the ISO/IEC 42001 management-system records: context and interested parties, AIMS scope, AI policy, objectives, competence and awareness, the internal audit programme and management reviews. The **Organisation controls** panel shows the organisation-level ISO and RBI checks these records satisfy. SentRAI records these processes; your organisation still runs them.
-
-#### Corrective actions
-One nonconformity and corrective-action register (ISO 10.2), fed by failed controls, audit findings, incidents, validation findings, management reviews and resolved grievances. **Raise action** buttons on the Incidents and Consumer Grievances screens open one directly; other actions are raised here. An action closes only with a **root cause** and an **effectiveness review**; overdue actions show in the gaps queue on Model Inventory.
-
-#### Documents
-Document control (ISO 7.5) for policies and evidence: versions, approver and approval date, review and retention dates, and a SHA-256 hash of the content. Superseded versions are kept. If stored content no longer matches its hash the document is flagged. Evidence counts only from approved versions, and the author of a policy cannot approve it. Review-due reminders run daily.
+- **Setup**: Settings & risk appetite, Accountability, Context profiles, Change history.
+- **Risk & impact**: Risk register, Impact assessments, Model validation, Fair lending, Decisions & appeals.
+- **ISO management system**: AIMS workspace, Corrective actions, Documents, Statement of Applicability, Training.
+- **Data & suppliers**: Data register, Vendors & AI BOM, External AI & export.
+- **Operations & assurance**: Red team & audit, TEVV & retirement, Incident sign-off & ITSM, AI security, Energy.
+- **Transparency & regional**: Disclosures, Engagement records, Australia (DTA).
 
 #### Settings & risk appetite
 The organisation's governance settings, edited by its OWNER or CISO:
@@ -278,14 +269,17 @@ Every save needs a reason and can take an effective date.
 #### Accountability
 Name the **accountable official** (the Chief AI Officer in the US) and the **AI governance board**, with a change history. The owner register lists a named owner per model. The accountable official is the executive whose sign-off the default risk appetite requires for HIGH and CRITICAL risk acceptances.
 
+#### Context profiles
+A structured profile per model: intended purpose and users, deployment context, known limitations, out-of-scope uses, the oversight pattern and the cost of errors. Impact assessments, the public transparency card and the NIST MAP 3.2 and ISO A.6.2.2 / A.8.2 checks read it.
+
 #### Change history
 Every change to governance settings: who, their role, when, the reason and the exact values changed.
 
-#### Australia (DTA)
-For organisations that switch on the Australia pack (DTA policy v2.1): the **AI use case register** in the DTA layout with CSV / XLSX export, a record of each share with the DTA and a 6-monthly reminder, the **in-scope tracker** (Appendix C test) with bulk draft assessments, the high-risk report signed by the accountable official, and submissions to the DTA.
+#### Risk register
+Risks scoped to a model, a use case, a vendor or the whole organisation. Rate each risk twice on your organisation's matrix: **inherent** (before controls) and **residual** (after controls), and see them on the heatmap. Add treatments and actions, then accept the residual risk: the approver must be the one your risk appetite names for that residual band (by default executive sign-off, the accountable official, for HIGH and CRITICAL). Risks come up for re-review on a date or on an event (for example a CI risk escalation or a material change), and a rating made on an older scoring matrix asks to be re-scored. The **residual-risk deploy gate** blocks or warns (per tier, from Settings) when a model would go live with residual risk nobody has accepted.
 
-#### Decisions & appeals
-The US kit: a **reason-code map** per model (Reg B principal reasons, with the sign convention of the model's explanations), **decision lookup** and **adverse-action notices** generated from the model's own explanation, **appeals and human reconsideration**, and decision-record retention with a purge. Consumers can also request reconsideration through a public path. On the Grievances page each grievance gets a **Decision…** action (link, view, reconsideration, appeal) while this tab is on.
+#### Impact assessments
+A dated, signed snapshot of a model's context profile, its risks and the pack questionnaires. It moves **DRAFT → FINAL** (signed, hashed and immutable). A re-review trigger on the register sets it to **REVALIDATION_REQUIRED**, and a newer FINAL supersedes it. An in-scope, high-impact or HIGH/CRITICAL model needs a FINAL assessment to go live (block or warn, from Settings). ISO 42001 8.4 is evaluated only while this tab is switched on; otherwise it is reported NOT ASSESSED.
 
 #### Model validation
 SR 26-2 model risk management: decide which models are in **MRM scope** (generative and agentic AI are outside SR 26-2 and need an exclusion reason), record **validations** with independence checks (the validator cannot be the model's named owner, its developer or the person who registered it) and an officer attestation by someone other than the validator, send findings to corrective actions, and grant **temporary-use exceptions**. Open findings show at the deploy gate.
@@ -293,8 +287,20 @@ SR 26-2 model risk management: decide which models are in **MRM scope** (generat
 #### Fair lending
 ECOA / Reg B evidence per model: a **proxy scan** of the model's features for prohibited bases and likely proxies, justifications for features you keep, **disparate-impact** results and the **search for less discriminatory alternatives**.
 
-#### Vendors & AI BOM
-The **vendor register** with scored due-diligence assessments (versioned) and contract terms, and each model's **AI bill of materials**: upstream models, libraries, APIs and datasets with version and licence class. Changing a component's version opens a risk review.
+#### Decisions & appeals
+The US kit: a **reason-code map** per model (Reg B principal reasons, with the sign convention of the model's explanations), **decision lookup** and **adverse-action notices** generated from the model's own explanation, **appeals and human reconsideration**, and decision-record retention with a purge. Consumers can also request reconsideration through a public path. On the Grievances page each grievance gets a **Decision…** action (link, view, reconsideration, appeal) while this tab is on.
+
+#### AIMS workspace
+One workspace per organisation for the ISO/IEC 42001 management-system records: context and interested parties, AIMS scope, AI policy, objectives, competence and awareness, the internal audit programme and management reviews. The **Organisation controls** panel shows the organisation-level ISO and RBI checks these records satisfy. SentRAI records these processes; your organisation still runs them.
+
+#### Corrective actions
+One nonconformity and corrective-action register (ISO 10.2), fed by failed controls, audit findings, incidents, validation findings, management reviews and resolved grievances. **Raise action** buttons on the Incidents and Consumer Grievances screens open one directly; other actions are raised here. An action closes only with a **root cause** and an **effectiveness review**; overdue actions show in the gaps queue on Model Inventory.
+
+#### Documents
+Document control (ISO 7.5) for policies and evidence: versions, approver and approval date, review and retention dates, and a SHA-256 hash of the content. Superseded versions are kept. If stored content no longer matches its hash the document is flagged. Evidence counts only from approved versions, and the author of a policy cannot approve it. Review-due reminders run daily.
+
+#### Statement of Applicability
+All 38 ISO 42001 Annex A controls with **included / excluded** and a justification (required, at least 10 characters, for an exclusion). Status comes from the mapped library checks across your systems; a status you record only fills a gap SentRAI cannot evidence. An officer approves a version, which freezes it with a hash. Export to PDF or XLSX.
 
 #### Training
 Courses, evidenced **completions** and **policy acknowledgements**, the completion matrix and a CSV export. While this tab is on, the Users page shows each person's mandatory AI training status.
@@ -302,32 +308,35 @@ Courses, evidenced **completions** and **policy acknowledgements**, the completi
 #### Data register
 Datasets with lawful basis, provenance and retention, linked to the models that use them; **deletion orders** traced to every model trained on the data; retention due in the next 90 days; and a lineage view.
 
+#### Vendors & AI BOM
+The **vendor register** with scored due-diligence assessments (versioned) and contract terms, and each model's **AI bill of materials**: upstream models, libraries, APIs and datasets with version and licence class. Changing a component's version opens a risk review.
+
+#### External AI & export
+For federal and other restricted customers: the **external AI policy** (ALLOWED, ATTESTED_ONLY or BLOCKED) applies to every AI path, for both your organisation and the organisation that owns the data; **no-training attestations** bind a provider host and model; and the **full organisation export** (officers only, recorded in the audit ledger) is a zip of every organisation table with a SHA-256 manifest, with password hashes, keys, webhook secrets and URL credentials removed.
+
 #### Red team & audit
 The rules that decide when testing is due: a red team after a CI risk escalation, a pre-deploy red team for HIGH-risk models, the audit interval and the third-party audit rule from your risk appetite, and the periodic **framework review** cycle (RBI Rec 24).
-
-#### Statement of Applicability
-All 38 ISO 42001 Annex A controls with **included / excluded** and a justification (required, at least 10 characters, for an exclusion). Status comes from the mapped library checks across your systems; a status you record only fills a gap SentRAI cannot evidence. An officer approves a version, which freezes it with a hash. Export to PDF or XLSX.
-
-#### Disclosures
-The annual **transparency statement** built from the inventory, grievances and incidents: you write the narrative sections, publishing sets a 12-month review date with reminders, and each notification is logged. Also the **RBI inspection** and **OMB inventory** exports (JSON with field completeness, CSV, XLSX), and the **Colorado developer disclosure** with the deployer register. A material change, context change or vendor change opens a draft update notice when a model has active deployers.
-
-#### Incident sign-off & ITSM
-While this tab is on, a P1 or P2 incident cannot be resolved or closed without **senior sign-off** (an officer or the accountable official) and a **notice to affected people**, or a recorded reason none is needed. Connect **Jira, ServiceNow, a SIEM or a webhook** (https only, no credentials in the URL, private hosts refused; secrets are encrypted and never shown again; bodies are HMAC-signed). Each incident maps to the CISA playbook, and a DTA notification can be recorded.
 
 #### TEVV & retirement
 Per model: **test sets** with acceptance criteria and segment results, validation-report evidence and scheduled **metric-effectiveness reviews**. SentRAI checks the results you record; it does not run the tests. **Retirement** replaces the direct move to DECOMMISSIONED: an officer other than the requester approves, all six checklist items must be done, and a MODEL_RETIRED ledger event records the checklist hash.
 
-#### Energy
-Energy use (kWh) and emissions (kg CO2e) per model, shown on the transparency card and in the transparency statement. **Record a reading** from posted GPU power samples, an nvidia-smi CSV log, or a metered kWh figure; overlapping periods are refused. CO2e uses the grid factor from Settings or the jurisdiction default. A platform ADMIN can see the server's live GPU draw, but SentRAI does **not** sample GPUs in the background or attribute power to models automatically: the figures are only as complete as the readings you record.
+#### Incident sign-off & ITSM
+While this tab is on, a P1 or P2 incident cannot be resolved or closed without **senior sign-off** (an officer or the accountable official) and a **notice to affected people**, or a recorded reason none is needed. Connect **Jira, ServiceNow, a SIEM or a webhook** (https only, no credentials in the URL, private hosts refused; secrets are encrypted and never shown again; bodies are HMAC-signed). Each incident maps to the CISA playbook, and a DTA notification can be recorded.
 
 #### AI security
 A **threat model** per model from a 12-category template mapped to MITRE ATLAS, OWASP LLM Top 10 (2025) and NIST AI 100-2, with applicability by model type. Approval by an officer other than the author raises each applicable threat as a SECURITY risk in the register. Record **security evaluations** per attack category; they become evidence for the AI security check. SentRAI does not run the attacks itself.
 
+#### Energy
+Energy use (kWh) and emissions (kg CO2e) per model, shown on the transparency card and in the transparency statement. **Record a reading** from posted GPU power samples, an nvidia-smi CSV log, or a metered kWh figure; overlapping periods are refused. CO2e uses the grid factor from Settings or the jurisdiction default. A platform ADMIN can see the server's live GPU draw, but SentRAI does **not** sample GPUs in the background or attribute power to models automatically: the figures are only as complete as the readings you record.
+
+#### Disclosures
+The annual **transparency statement** built from the inventory, grievances and incidents: you write the narrative sections, publishing sets a 12-month review date with reminders, and each notification is logged. Also the **RBI inspection** and **OMB inventory** exports (JSON with field completeness, CSV, XLSX), and the **Colorado developer disclosure** with the deployer register. A material change, context change or vendor change opens a draft update notice when a model has active deployers.
+
 #### Engagement records
 Light organisational records: consultations, expert input, team composition, human-subject studies (a consent reference is required) and non-AI alternatives considered (linked to a model). Participants are stored as roles or groups, not names. Items your settings mark as customer-owned refuse records and report the owner instead.
 
-#### External AI & export
-For federal and other restricted customers: the **external AI policy** (ALLOWED, ATTESTED_ONLY or BLOCKED) applies to every AI path, for both your organisation and the organisation that owns the data; **no-training attestations** bind a provider host and model; and the **full organisation export** (officers only, recorded in the audit ledger) is a zip of every organisation table with a SHA-256 manifest, with password hashes, keys, webhook secrets and URL credentials removed.
+#### Australia (DTA)
+For organisations that switch on the Australia pack (DTA policy v2.1): the **AI use case register** in the DTA layout with CSV / XLSX export, a record of each share with the DTA and a 6-monthly reminder, the **in-scope tracker** (Appendix C test) with bulk draft assessments, the high-risk report signed by the accountable official, and submissions to the DTA.
 
 ---
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client';
 import { navigate, Route, useRoute } from '../../stores/route';
-import { governanceTabLabel } from '../../pages/governanceTabs';
+import { governanceGroupLabel, governanceTabLabel } from '../../pages/governanceTabs';
 
 /**
  * Which HELP.md section belongs to each screen. public/docs/HELP.md stays the
@@ -95,11 +95,13 @@ export function ContextHelp() {
   const title = HELP_SECTIONS[route];
   // On Governance, "?" opens the help for the tab you are on.
   const [sub, setSub] = useState<string | null>(null);
+  const [group, setGroup] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const tab = route === 'governance' ? governanceTabLabel() : null;
     setSub(tab);
+    setGroup(tab ? governanceGroupLabel() : null);
     setLoading(true);
     getDocs()
       .then((md) => {
@@ -152,13 +154,19 @@ export function ContextHelp() {
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-6 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
-          aria-label={`Help for ${sub ? `${title}: ${sub}` : title}`}
+          aria-label={`Help for ${sub ? `${title}: ${group ? `${group}, ` : ''}${sub}` : title}`}
         >
           <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
             <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
               <CircleHelp size={13} className="text-accent" />
               <h2 className="font-heading text-[12px] font-medium text-text">
                 Help <span className="text-text-tertiary">·</span> {title}
+                {group && (
+                  <>
+                    {' '}
+                    <span className="text-text-tertiary">·</span> {group}
+                  </>
+                )}
                 {sub && (
                   <>
                     {' '}

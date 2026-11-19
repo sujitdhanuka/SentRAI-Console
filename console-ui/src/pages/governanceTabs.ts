@@ -1,38 +1,60 @@
 /**
- * Governance tabs, each shown only while its feature flag is on. Shared by the
- * Governance page and the help panel: the open tab is kept in the URL
- * (#/governance?tab=risks) so a tab can be linked to and "?" opens the help
- * for that tab.
+ * Governance tabs, each shown only while its feature flag is on, grouped into
+ * sections so the page shows a short row of sections and then the tabs of the
+ * open section. Shared by the Governance page and the help panel: the open tab
+ * is kept in the URL (#/governance?tab=risks) so a tab can be linked to and
+ * "?" opens the help for that tab.
  */
-export type GovernanceTab = { id: string; label: string; flag: string };
+export type GovernanceGroupId = 'setup' | 'risk' | 'aims' | 'data' | 'operations' | 'transparency';
+export type GovernanceGroup = { id: GovernanceGroupId; label: string; hint: string };
+export type GovernanceTab = { id: string; label: string; flag: string; group: GovernanceGroupId };
+
+/** Sections, in the order they are shown. */
+export const GOVERNANCE_GROUPS: GovernanceGroup[] = [
+  { id: 'setup', label: 'Setup', hint: 'Risk appetite, frameworks, who is accountable and what changed' },
+  { id: 'risk', label: 'Risk & impact', hint: 'Risks, impact assessments, validation, fairness and decisions' },
+  { id: 'aims', label: 'ISO management system', hint: 'ISO/IEC 42001 AIMS, actions, controlled documents, SoA and training' },
+  { id: 'data', label: 'Data & suppliers', hint: 'Datasets, vendors and the AI bill of materials, external AI' },
+  { id: 'operations', label: 'Operations & assurance', hint: 'Red team, audit, TEVV, incidents, security and energy' },
+  { id: 'transparency', label: 'Transparency & regional', hint: 'Public disclosures, engagement records and country packs' },
+];
 
 export const GOVERNANCE_TABS: GovernanceTab[] = [
-  { id: 'risks', label: 'Risk register', flag: 'riskRegister' },
-  { id: 'impact', label: 'Impact assessments', flag: 'impactAssessment' },
-  { id: 'context', label: 'Context profiles', flag: 'contextProfile' },
-  { id: 'aims', label: 'AIMS workspace', flag: 'aims' },
-  { id: 'actions', label: 'Corrective actions', flag: 'correctiveActions' },
-  { id: 'documents', label: 'Documents', flag: 'documentControl' },
-  { id: 'settings', label: 'Settings & risk appetite', flag: 'governanceSettings' },
-  { id: 'accountability', label: 'Accountability', flag: 'accountability' },
-  { id: 'history', label: 'Change history', flag: 'governanceSettings' },
-  { id: 'au', label: 'Australia (DTA)', flag: 'auPack' },
-  { id: 'decisions', label: 'Decisions & appeals', flag: 'usKit' },
-  { id: 'validation', label: 'Model validation', flag: 'modelValidation' },
-  { id: 'fairLending', label: 'Fair lending', flag: 'fairLending' },
-  { id: 'vendors', label: 'Vendors & AI BOM', flag: 'vendors' },
-  { id: 'training', label: 'Training', flag: 'training' },
-  { id: 'datasets', label: 'Data register', flag: 'dataRegister' },
-  { id: 'assurance', label: 'Red team & audit', flag: 'redTeamAuditRules' },
-  { id: 'soa', label: 'Statement of Applicability', flag: 'soa' },
-  { id: 'disclosures', label: 'Disclosures', flag: 'disclosures' },
-  { id: 'incidentExt', label: 'Incident sign-off & ITSM', flag: 'incidentExtensions' },
-  { id: 'tevv', label: 'TEVV & retirement', flag: 'tevv' },
-  { id: 'energy', label: 'Energy', flag: 'energy' },
-  { id: 'security', label: 'AI security', flag: 'aiSecurity' },
-  { id: 'engagement', label: 'Engagement records', flag: 'orgRecords' },
-  { id: 'federal', label: 'External AI & export', flag: 'federalVendor' },
+  // Setup
+  { id: 'settings', label: 'Settings & risk appetite', flag: 'governanceSettings', group: 'setup' },
+  { id: 'accountability', label: 'Accountability', flag: 'accountability', group: 'setup' },
+  { id: 'context', label: 'Context profiles', flag: 'contextProfile', group: 'setup' },
+  { id: 'history', label: 'Change history', flag: 'governanceSettings', group: 'setup' },
+  // Risk & impact
+  { id: 'risks', label: 'Risk register', flag: 'riskRegister', group: 'risk' },
+  { id: 'impact', label: 'Impact assessments', flag: 'impactAssessment', group: 'risk' },
+  { id: 'validation', label: 'Model validation', flag: 'modelValidation', group: 'risk' },
+  { id: 'fairLending', label: 'Fair lending', flag: 'fairLending', group: 'risk' },
+  { id: 'decisions', label: 'Decisions & appeals', flag: 'usKit', group: 'risk' },
+  // ISO management system
+  { id: 'aims', label: 'AIMS workspace', flag: 'aims', group: 'aims' },
+  { id: 'actions', label: 'Corrective actions', flag: 'correctiveActions', group: 'aims' },
+  { id: 'documents', label: 'Documents', flag: 'documentControl', group: 'aims' },
+  { id: 'soa', label: 'Statement of Applicability', flag: 'soa', group: 'aims' },
+  { id: 'training', label: 'Training', flag: 'training', group: 'aims' },
+  // Data & suppliers
+  { id: 'datasets', label: 'Data register', flag: 'dataRegister', group: 'data' },
+  { id: 'vendors', label: 'Vendors & AI BOM', flag: 'vendors', group: 'data' },
+  { id: 'federal', label: 'External AI & export', flag: 'federalVendor', group: 'data' },
+  // Operations & assurance
+  { id: 'assurance', label: 'Red team & audit', flag: 'redTeamAuditRules', group: 'operations' },
+  { id: 'tevv', label: 'TEVV & retirement', flag: 'tevv', group: 'operations' },
+  { id: 'incidentExt', label: 'Incident sign-off & ITSM', flag: 'incidentExtensions', group: 'operations' },
+  { id: 'security', label: 'AI security', flag: 'aiSecurity', group: 'operations' },
+  { id: 'energy', label: 'Energy', flag: 'energy', group: 'operations' },
+  // Transparency & regional
+  { id: 'disclosures', label: 'Disclosures', flag: 'disclosures', group: 'transparency' },
+  { id: 'engagement', label: 'Engagement records', flag: 'orgRecords', group: 'transparency' },
+  { id: 'au', label: 'Australia (DTA)', flag: 'auPack', group: 'transparency' },
 ];
+
+/** The tab opened when the URL names none: the risk register, the most used. */
+export const DEFAULT_GOVERNANCE_TAB = 'risks';
 
 /** The tab id in #/governance?tab=…, if it names a known tab. */
 export function governanceTabFromHash(hash: string = window.location.hash): string | null {
@@ -52,4 +74,11 @@ export function setGovernanceTabInHash(id: string): void {
 export function governanceTabLabel(hash: string = window.location.hash): string | null {
   const id = governanceTabFromHash(hash);
   return GOVERNANCE_TABS.find((t) => t.id === id)?.label ?? null;
+}
+
+/** Label of the section holding the open Governance tab, for the help panel. */
+export function governanceGroupLabel(hash: string = window.location.hash): string | null {
+  const id = governanceTabFromHash(hash);
+  const group = GOVERNANCE_TABS.find((t) => t.id === id)?.group;
+  return GOVERNANCE_GROUPS.find((g) => g.id === group)?.label ?? null;
 }

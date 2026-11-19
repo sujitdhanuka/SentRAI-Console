@@ -15,7 +15,13 @@ import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
 import { AssuranceTab, AuDtaTab, DatasetsTab, DecisionsTab, FairLendingTab, TrainingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
 import { DisclosuresTab, EnergyTab, EngagementTab, FederalTab, IncidentsExtTab, SecurityTab, SoaTab, TevvTab } from './GovernancePhase3';
-import { GOVERNANCE_TABS as TABS, governanceTabFromHash, setGovernanceTabInHash } from './governanceTabs';
+import {
+  DEFAULT_GOVERNANCE_TAB,
+  GOVERNANCE_GROUPS as GROUPS,
+  GOVERNANCE_TABS as TABS,
+  governanceTabFromHash,
+  setGovernanceTabInHash,
+} from './governanceTabs';
 
 /* ------------------------------------------------------------------ types */
 
@@ -629,7 +635,7 @@ function HistoryTab() {
 
 /* ----------------------------------------------------------------- page */
 
-// The tab list lives in governanceTabs.ts so the help panel can name the tab you are on.
+// The tab list and its sections live in governanceTabs.ts so the help panel can name the tab you are on.
 
 export function Governance() {
   const features = useGovernanceFeatures((s) => s.features);
@@ -674,7 +680,23 @@ export function Governance() {
 
   const tabs = TABS.filter((t) => features?.[t.flag]);
   const orgId = user?.tenant_id ?? (isGlobal && activeProjectId ? activeOrgId : null);
-  const active = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? 'settings';
+  const active = tabs.some((t) => t.id === tab)
+    ? tab
+    : tabs.some((t) => t.id === DEFAULT_GOVERNANCE_TAB)
+      ? DEFAULT_GOVERNANCE_TAB
+      : tabs[0]?.id ?? 'settings';
+  // Sections with at least one visible tab; the open section is the one holding the open tab.
+  const groups = GROUPS.map((g) => ({ ...g, tabs: tabs.filter((t) => t.group === g.id) })).filter((g) => g.tabs.length > 0);
+  const activeGroup = groups.find((g) => g.tabs.some((t) => t.id === active)) ?? groups[0];
+  // Reopening a section returns to the tab last open in it.
+  const [lastInGroup, setLastInGroup] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (activeGroup) setLastInGroup((m) => (m[activeGroup.id] === active ? m : { ...m, [activeGroup.id]: active }));
+  }, [activeGroup, active]);
+  const openGroup = (g: (typeof groups)[number]) => {
+    const remembered = lastInGroup[g.id];
+    setTab(g.tabs.some((t) => t.id === remembered) ? remembered : g.tabs[0].id);
+  };
   // Keep the open tab in the URL, so it can be linked to and "?" opens its help.
   useEffect(() => {
     if (features) setGovernanceTabInHash(active);
@@ -687,8 +709,25 @@ export function Governance() {
           Working in {scopeOrgName ?? 'the scoped organization'}'s governance, from the selected project scope.
         </div>
       )}
-      <div className="flex min-w-0 shrink-0 flex-wrap gap-x-1 border-b border-border px-2 pt-1" role="tablist">
-        {tabs.map((t) => (
+      <nav className="flex min-w-0 shrink-0 flex-wrap items-center gap-1 border-b border-border px-2 py-1.5" aria-label="Governance sections">
+        {groups.map((g) => {
+          const on = activeGroup?.id === g.id;
+          return (
+            <button
+              key={g.id}
+              aria-current={on ? 'true' : undefined}
+              title={g.hint}
+              onClick={() => openGroup(g)}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] ${on ? 'bg-accent-soft font-medium text-accent' : 'text-text-secondary hover:bg-surface-hover hover:text-text'}`}
+            >
+              {g.label}
+              <span className={`font-mono text-[9px] ${on ? 'text-accent' : 'text-text-tertiary'}`}>{g.tabs.length}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="flex min-w-0 shrink-0 flex-wrap gap-x-1 border-b border-border px-2 pt-1" role="tablist" aria-label={activeGroup ? `${activeGroup.label} tabs` : undefined}>
+        {(activeGroup?.tabs ?? []).map((t) => (
           <button
             key={t.id}
             role="tab"
