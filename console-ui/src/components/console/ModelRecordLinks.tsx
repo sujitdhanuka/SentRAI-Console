@@ -69,15 +69,65 @@ export function NamedOwner({ modelId, onChanged }: { modelId: string; onChanged?
 
 /** Approved AI policies (AIMS records), offered as the model's board policy reference. */
 export function useApprovedPolicies(): string[] {
-  const enabled = useGovernanceFeatures((s) => s.features?.aims);
-  const [titles, setTitles] = useState<string[]>([]);
+  return useAiPolicies().approved;
+}
+
+/** AI policies in the AIMS workspace: approved titles, and drafts waiting for approval. */
+export function useAiPolicies(): { enabled: boolean; loaded: boolean; approved: string[]; drafts: string[] } {
+  const enabled = Boolean(useGovernanceFeatures((s) => s.features?.aims));
+  const [state, setState] = useState<{ loaded: boolean; approved: string[]; drafts: string[] }>({ loaded: false, approved: [], drafts: [] });
   useEffect(() => {
     if (!enabled) return;
-    api<{ records: Array<{ type: string; status: string; title: string }> }>('/governance/aims/records')
-      .then((r) => setTitles(r.records.filter((x) => x.type === 'POLICY' && x.status === 'APPROVED').map((x) => x.title)))
-      .catch(() => setTitles([]));
+    api<{ records: Array<{ type: string; status: string; title: string }> }>('/governance/aims/records?type=POLICY')
+      .then((r) => {
+        const pol = r.records.filter((x) => x.type === 'POLICY');
+        setState({
+          loaded: true,
+          approved: pol.filter((x) => x.status === 'APPROVED').map((x) => x.title),
+          drafts: pol.filter((x) => x.status === 'DRAFT').map((x) => x.title),
+        });
+      })
+      .catch(() => setState({ loaded: true, approved: [], drafts: [] }));
   }, [enabled]);
-  return titles;
+  return { enabled, ...state };
+}
+
+/**
+ * The board-approved AI policy a model operates under. With the AIMS workspace on, it is
+ * chosen from the approved AI policies there; with none approved, it points to where to
+ * create or approve one. A value already saved that is not an approved policy is kept as an
+ * option, flagged, so opening the form never wipes it. With AIMS off it stays free text.
+ */
+export function PolicySelect({ value, onChange, placeholder, ariaLabel = 'Board policy reference' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; ariaLabel?: string;
+}) {
+  const { enabled, loaded, approved, drafts } = useAiPolicies();
+  const setDrawer = useConsoleUi((s) => s.setDrawer);
+  if (!enabled) {
+    return <input aria-label={ariaLabel} className={FIELD} placeholder={placeholder ?? 'e.g. AI-POL-2026-014'} value={value} onChange={(e) => onChange(e.target.value)} autoComplete="off" />;
+  }
+  const href = governanceHref('aims', null, { type: 'POLICY' });
+  const link = (text: string) => <a href={href} onClick={() => setDrawer(false)} className="text-accent hover:underline">{text}</a>;
+  const stale = Boolean(value) && !approved.includes(value);
+  return (
+    <>
+      <select aria-label={ariaLabel} className={FIELD} value={value} disabled={loaded && approved.length === 0 && !value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{!loaded ? 'Loading AI policies…' : approved.length ? 'Choose an approved AI policy' : 'No approved AI policy yet'}</option>
+        {approved.map((t) => <option key={t} value={t}>{t}</option>)}
+        {stale && <option value={value}>{value} (not an approved AI policy)</option>}
+      </select>
+      {loaded && approved.length === 0 && (
+        <p className="mt-0.5 text-[9.5px] text-warning">
+          {drafts.length
+            ? <>{drafts.join(', ')} {drafts.length === 1 ? 'is' : 'are'} still a draft. {link('Approve it in the AIMS workspace ↗')}</>
+            : <>No AI policy in the AIMS workspace yet. {link('Create one ↗')}</>}
+        </p>
+      )}
+      {loaded && approved.length > 0 && stale && (
+        <p className="mt-0.5 text-[9.5px] text-warning">Not one of the approved AI policies in the AIMS workspace. Choose one above.</p>
+      )}
+    </>
+  );
 }
 
 /** Link to the model's context profile, the one place intended use and oversight are kept. */

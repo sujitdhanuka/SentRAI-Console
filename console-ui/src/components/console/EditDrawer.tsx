@@ -9,7 +9,7 @@ import { useSession } from '../../stores/session';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { EvidenceAttach } from './EvidenceAttach';
-import { ContextProfileLink, NamedOwner, useApprovedPolicies } from './ModelRecordLinks';
+import { ContextProfileLink, NamedOwner, PolicySelect } from './ModelRecordLinks';
 import { RecordRedTeam } from './RecordRedTeam';
 
 /** Model tool-authorization + operational-control facts (Pillar 2 — Control). */
@@ -141,7 +141,6 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
   const [approval, setApproval] = useState<BoardApproval | null | 'none'>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const role = useSession((s) => s.user?.role ?? 'VIEWER');
-  const policies = useApprovedPolicies();
   const canControl = role === 'ADMIN' || role === 'CISO';
   const [form, setForm] = useState({
     owner: '', boardPolicyRef: '', humanOversight: true,
@@ -709,12 +708,8 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
                 </div>
                 <div>
                   <label className={LABEL}>Board policy reference<Hint text={HINTS.policy} />
-                    <input className={FIELD} list={`policies-${component.id}`} placeholder={policies.length ? 'Choose an approved AI policy' : 'e.g. AI-POL-2026-014'} value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} />
+                    <PolicySelect value={form.boardPolicyRef} onChange={(v) => setForm({ ...form, boardPolicyRef: v })} />
                   </label>
-                  <datalist id={`policies-${component.id}`}>{policies.map((t) => <option key={t} value={t} />)}</datalist>
-                  {policies.length > 0 && form.boardPolicyRef && !policies.includes(form.boardPolicyRef) && (
-                    <p className="mt-0.5 text-[9.5px] text-warning">Not one of the approved AI policies in the AIMS workspace.</p>
-                  )}
                 </div>
                 <div>
                   <span className={LABEL}>Last red team<Hint text={HINTS.redteam} /></span>

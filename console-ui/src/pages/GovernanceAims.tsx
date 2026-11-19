@@ -8,6 +8,7 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { routeParam } from '../stores/route';
 import { AimsContentForm, blankContent, missingFields } from './aimsForms';
 import { governanceHref } from './governanceTabs';
 import { useGovernanceFeatures } from '../stores/governanceFeatures';
@@ -49,7 +50,8 @@ export function AimsTab() {
   const [types, setTypes] = useState<AimsType[]>([]);
   const [records, setRecords] = useState<AimsRecord[]>([]);
   const [ctl, setCtl] = useState<OrgControls | null>(null);
-  const [type, setType] = useState('SCOPE');
+  // A link can open a record type directly, e.g. ?type=POLICY from a model's policy picker.
+  const [type, setType] = useState(() => (routeParam('type') ?? 'SCOPE').toUpperCase());
   // json is set while the advanced JSON view is open; otherwise the form edits content.
   const [editing, setEditing] = useState<{ id?: string; title: string; content: Record<string, any>; json: string | null } | null>(null);
   const [error, setError] = useState(false);
