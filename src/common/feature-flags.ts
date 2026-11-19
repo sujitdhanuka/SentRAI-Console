@@ -70,6 +70,8 @@ export const EPIC_FLAGS = {
   orgRecords: 'GOV_E3_7_ORG_RECORDS',
   /** E3.8: federal-vendor readiness: external-AI policy, provider no-training attestations, full data export. */
   federalVendor: 'GOV_E3_8_FEDERAL_VENDOR',
+  /** E4.1: model cards: readiness, draft and final versions, staleness, PDF / Markdown / JSON export. */
+  modelCards: 'GOV_E4_1_MODEL_CARDS',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
@@ -79,6 +81,9 @@ export const PHASE2_FLAGS: readonly EpicFlag[] = ['auPack', 'usKit', 'modelValid
 
 /** The Phase 3 epics (E3.1 to E3.8). */
 export const PHASE3_FLAGS: readonly EpicFlag[] = ['soa', 'disclosures', 'incidentExtensions', 'tevv', 'energy', 'aiSecurity', 'orgRecords', 'federalVendor'];
+
+/** Epics added after Phase 3 (E4.1 model cards). */
+export const PHASE4_FLAGS: readonly EpicFlag[] = ['modelCards'];
 
 export interface FeatureFlags {
   governanceV2: boolean;
@@ -110,6 +115,7 @@ export interface FeatureFlags {
   aiSecurity: boolean;
   orgRecords: boolean;
   federalVendor: boolean;
+  modelCards: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -150,6 +156,7 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     aiSecurity: epic(EPIC_FLAGS.aiSecurity),
     orgRecords: epic(EPIC_FLAGS.orgRecords),
     federalVendor: epic(EPIC_FLAGS.federalVendor),
+    modelCards: epic(EPIC_FLAGS.modelCards),
   };
 }
 

@@ -8,29 +8,34 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { useSession } from '../stores/session';
 import { governanceHref, useFixedModel, useGovernanceModel } from './governanceTabs';
 
 /* ------------------------------------------------------------- shared */
 
 interface ModelRow { model_id: string; name: string; risk_level: string }
 
+/** Models for the Governance pickers: only the selected project's while a project scope is set. */
 export function useModels() {
+  const activeProjectId = useSession((s) => s.activeProjectId);
   const [models, setModels] = useState<ModelRow[]>([]);
   useEffect(() => {
-    api<any>('/inventory/models')
+    const qs = activeProjectId ? `?project_id=${encodeURIComponent(activeProjectId)}` : '';
+    api<any>(`/inventory/models${qs}`)
       .then((r) => setModels((Array.isArray(r) ? r : r.models ?? r.items ?? []).map((m: any) => ({ model_id: m.model_id, name: m.name, risk_level: m.risk_level }))))
       .catch(() => setModels([]));
-  }, []);
+  }, [activeProjectId]);
   return models;
 }
 
 function ModelPicker({ models, value, onChange, allowAll }: { models: ModelRow[]; value: string; onChange: (v: string) => void; allowAll?: boolean }) {
   // On the model page the tab is fixed to that model, so there is nothing to choose.
+  const projectName = useSession((s) => (s.activeProjectId ? s.activeProjectName || 'project' : null));
   if (useFixedModel()) return null;
   return (
     <span className="inline-flex items-center gap-1.5">
       <select aria-label="Model" className={`${FIELD} max-w-xs`} value={value} onChange={(e) => onChange(e.target.value)}>
-        {allowAll ? <option value="">All models and organisation risks</option> : <option value="">Choose a model…</option>}
+        {allowAll ? <option value="">{projectName ? `All ${projectName} models and organisation risks` : 'All models and organisation risks'}</option> : <option value="">{models.length ? 'Choose a model…' : projectName ? `No models in ${projectName}` : 'No models'}</option>}
         {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.name} · {m.risk_level}</option>)}
       </select>
       {value && <a className="whitespace-nowrap text-[10px] text-accent hover:underline" href={`#/model?id=${encodeURIComponent(value)}`}>Model page ↗</a>}

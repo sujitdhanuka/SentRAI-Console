@@ -24,6 +24,7 @@ export const ROUTES = [
   'docs',
   'governance',
   'model',
+  'workflows',
 ] as const;
 
 export type Route = (typeof ROUTES)[number];

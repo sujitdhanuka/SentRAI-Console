@@ -2,7 +2,7 @@ import { CheckCircle2, FileStack, Info, Paperclip, PenLine, Power, ShieldAlert, 
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client';
-import { AIComponent, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
+import { AIComponent, frameworkInScope, provider, SUTRA_ENUM, SUTRAS } from '../../providers';
 import { useGovernanceData } from '../../stores/governanceData';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { useSession } from '../../stores/session';
@@ -50,7 +50,12 @@ interface ComplianceCheck extends FrameworkReport {
   nist_rmf?: FrameworkReport;
   eu_ai_act?: FrameworkReport;
   iso_42001?: FrameworkReport;
+  /** Frameworks of the packs enabled for the model's organisation (absent: every framework). */
+  frameworks_in_scope?: string[];
+  frameworks_not_in_scope?: string[];
 }
+
+const FRAMEWORK_ID: Record<'rbi' | 'nist' | 'eu' | 'iso', string> = { rbi: 'rbi_free_ai', nist: 'nist_ai_rmf', eu: 'eu_ai_act', iso: 'iso_42001' };
 
 const FRAMEWORKS: Array<{ key: 'rbi' | 'nist' | 'eu' | 'iso'; label: string }> = [
   { key: 'rbi', label: 'RBI FREE-AI 7 Sutras' },
@@ -119,6 +124,11 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
   const [busy, setBusy] = useState<string | null>(null);
   const [check, setCheck] = useState<ComplianceCheck | null>(null);
   const [checking, setChecking] = useState(false);
+  // Only the frameworks of the organisation's enabled packs are asked for; the
+  // server's check says which, falling back to the matrix row before it loads.
+  const inScope = (key: 'rbi' | 'nist' | 'eu' | 'iso') =>
+    check?.frameworks_in_scope ? check.frameworks_in_scope.includes(FRAMEWORK_ID[key]) : frameworkInScope(component, key);
+  const offScope = FRAMEWORKS.map((f) => f.key).filter((k) => !inScope(k));
   const [remediation, setRemediation] = useState('');
   const [evalForm, setEvalForm] = useState({ suite: 'promptfoo', passed: '', total: '' });
   const [ctrl, setCtrl] = useState<ControlInfo | null>(null);
@@ -442,7 +452,7 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
           {/* ── Left: the glance — verdicts, gaps, remediation ── */}
           <div className="space-y-3 border-b border-border p-4 lg:col-span-2 lg:border-b-0 lg:border-r">
             <div className="grid gap-2">
-              {FRAMEWORKS.map(({ key, label }) => {
+              {FRAMEWORKS.filter(({ key }) => inScope(key)).map(({ key, label }) => {
                 const fw = frameworkOf(check, key);
                 const pass = fw?.overall_pass ?? null;
                 const gaps = fw?.blocking_gaps ?? [];
@@ -469,6 +479,12 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
                   </section>
                 );
               })}
+              {offScope.length > 0 && (
+                <p className="text-[10px] leading-snug text-text-tertiary">
+                  {offScope.map((k) => FRAMEWORKS.find((f) => f.key === k)!.label).join(', ')} {offScope.length === 1 ? 'is' : 'are'} switched off in{' '}
+                  <a className="text-accent hover:underline" href="#/governance?tab=settings">Governance › Setup</a>, so {offScope.length === 1 ? 'its' : 'their'} criteria are not asked for or counted. Anything already recorded is kept.
+                </p>
+              )}
             </div>
 
             <section className="rounded-md border border-border p-2.5">
@@ -754,7 +770,7 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
                   value={form.riskRationale} onChange={(e) => setForm({ ...form, riskRationale: e.target.value })} />
               </div>
 
-              <fieldset className="rounded-md border border-border p-2.5">
+              {inScope('rbi') && <fieldset className="rounded-md border border-border p-2.5">
                 <legend className="px-1 text-[9px] font-medium uppercase tracking-widest text-text-tertiary">7 Sutras declared<Hint text={HINTS.sutras} /></legend>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {SUTRAS.map((s, i) => (
@@ -773,7 +789,7 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
                     </label>
                   ))}
                 </div>
-              </fieldset>
+              </fieldset>}
             </div>
 
             <footer className="flex shrink-0 items-center gap-2 border-t border-border p-3">

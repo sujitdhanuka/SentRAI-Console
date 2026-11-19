@@ -10,6 +10,9 @@ export const USER_KEY = 'sentrai_user';
 /** Organization of the selected project scope. A global OWNER/ADMIN works in
  *  that organization's governance; the server ignores it for org members. */
 export const ACTIVE_ORG_KEY = 'sentrai_active_org_id';
+/** The selected project scope. Governance lists and overviews show only this
+ *  project's models (plus organisation-level records) while it is set. */
+export const ACTIVE_PROJECT_KEY = 'sentrai_active_project_id';
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -20,9 +23,11 @@ export class ApiError extends Error {
 function authHeader(): Record<string, string> {
   const token = localStorage.getItem(TOKEN_KEY);
   const org = localStorage.getItem(ACTIVE_ORG_KEY);
+  const project = localStorage.getItem(ACTIVE_PROJECT_KEY);
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(org ? { 'X-SentrAI-Org': org } : {}),
+    ...(project ? { 'X-SentrAI-Project': project } : {}),
   };
 }
 

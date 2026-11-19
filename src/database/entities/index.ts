@@ -57,6 +57,7 @@ import { ThreatModelEntity } from './threat-model.entity';
 import { SecurityEvaluationEntity } from './security-evaluation.entity';
 import { EngagementRecordEntity } from './engagement-record.entity';
 import { AiProviderAttestationEntity } from './ai-provider-attestation.entity';
+import { ModelCardEntity } from './model-card.entity';
 
 export {
   OrganizationEntity,
@@ -118,6 +119,7 @@ export {
   SecurityEvaluationEntity,
   EngagementRecordEntity,
   AiProviderAttestationEntity,
+  ModelCardEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -180,4 +182,5 @@ export const ALL_ENTITIES = [
   SecurityEvaluationEntity,
   EngagementRecordEntity,
   AiProviderAttestationEntity,
+  ModelCardEntity,
 ];

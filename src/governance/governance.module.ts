@@ -51,6 +51,8 @@ import {
   TestSetEntity,
   TevvRunEntity,
   ThreatModelEntity,
+  ModelCardEntity,
+  ModelApprovalEntity,
 } from '../database/entities';
 import { ComplianceModule } from '../compliance/compliance.module';
 import { NotifierService } from '../common/notifier.service';
@@ -107,6 +109,8 @@ import { EngagementController } from './engagement/engagement.controller';
 import { EngagementService } from './engagement/engagement.service';
 import { FederalVendorController } from './federal/federal.controller';
 import { FederalVendorService } from './federal/federal.service';
+import { ModelCardsController } from './model-cards/model-cards.controller';
+import { ModelCardsService } from './model-cards/model-cards.service';
 
 /**
  * Governance module (plan section 3): everything shared across frameworks.
@@ -119,6 +123,7 @@ import { FederalVendorService } from './federal/federal.service';
  * red-team and audit rules. Phase 3: E3.1 Statement of Applicability; E3.2
  * disclosures; E3.3 incident extensions; E3.4 TEVV and retirement; E3.5
  * energy; E3.6 AI security; E3.7 engagement records; E3.8 federal vendor.
+ * E4.1 model cards.
  * Each Phase 2 and Phase 3 route answers 404 while its flag is off.
  */
 @Module({
@@ -133,6 +138,7 @@ import { FederalVendorService } from './federal/federal.service';
       TrainingRecordEntity, DatasetEntity, ModelDatasetEntity,
       AiProviderAttestationEntity, AiProviderConfigEntity, BcpStateEntity, DisclosureEntity, EnergyReadingEntity, EngagementRecordEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity,
       ModelDeployerEntity, ModelRetirementEntity, SecurityEvaluationEntity, SoaEntryEntity, SoaStatementEntity, TestSetEntity, TevvRunEntity, ThreatModelEntity,
+      ModelCardEntity, ModelApprovalEntity,
     ]),
     InventoryModule,
     ComplianceModule, // board-pack inputs for management review (E1.6)
@@ -144,7 +150,7 @@ import { FederalVendorService } from './federal/federal.service';
     AuDtaController, DecisionsController, FairLendingController, ValidationController, VendorsController,
     TrainingController, DatasetsController, RedTeamAuditController,
     SoaController, DisclosuresController, IncidentExtensionsController, TevvController, EnergyController,
-    AiSecurityController, EngagementController, FederalVendorController,
+    AiSecurityController, EngagementController, FederalVendorController, ModelCardsController,
   ],
   providers: [
     ActingOrgInterceptor,
@@ -153,7 +159,7 @@ import { FederalVendorService } from './federal/federal.service';
     AuDtaService, DecisionsService, FairLendingService, ValidationService, VendorsService, TrainingService,
     DatasetsService, RedTeamAuditService,
     SoaService, DisclosuresService, IncidentExtensionsService, TevvService, EnergyService, AiSecurityService,
-    EngagementService, FederalVendorService,
+    EngagementService, FederalVendorService, ModelCardsService,
   ],
   exports: [
     PacksService, GovernanceSettingsService, AccountabilityService, RisksService, ImpactAssessmentService,

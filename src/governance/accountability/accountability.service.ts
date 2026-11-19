@@ -15,6 +15,7 @@ import { CurrentUser } from '../../common/interfaces/current-user.interface';
 import { AIModelEntity, ModelLedgerEventEntity, OrganizationEntity, ProjectEntity, UserEntity } from '../../database/entities';
 import { assertFlag, modelForUser } from '../governance-access';
 import { v4 as uuidv4 } from 'uuid';
+import { scopedProjectId } from '../project-scope';
 
 const EDITORS: Role[] = [Role.OWNER, Role.CISO];
 
@@ -133,6 +134,7 @@ export class AccountabilityService {
       .createQueryBuilder('m')
       .innerJoin(ProjectEntity, 'p', 'p.id = m.projectId')
       .where('p.tenantId = :orgId AND m.isActive = 1', { orgId })
+      .andWhere(scopedProjectId() ? 'p.id = :projectId' : '1 = 1', { projectId: scopedProjectId() })
       .orderBy('m.name', 'ASC')
       .getMany();
     const ids = [...new Set(models.map((m) => m.ownerUserId).filter(Boolean))] as string[];

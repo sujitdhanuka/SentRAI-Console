@@ -56,6 +56,8 @@ interface MatrixRow {
   merge_history: Array<{ source_ref: string; merged_at: string; matched_on: string }>;
   source_locations?: Array<{ file: string; lines: number[] }>;
   frameworks: Record<'rbi' | 'nist' | 'eu' | 'iso', { status: CheckStatus }>;
+  frameworks_in_scope?: Array<'rbi' | 'nist' | 'eu' | 'iso'>;
+  packs_in_scope?: string[] | null;
 }
 
 export class HttpGovernanceProvider implements GovernanceProvider {
@@ -146,6 +148,8 @@ export class HttpGovernanceProvider implements GovernanceProvider {
           eu: { status: r.frameworks.eu.status, evidenceUrl: evidence(r.frameworks.eu.status) },
           iso: { status: r.frameworks.iso.status, evidenceUrl: evidence(r.frameworks.iso.status) },
         },
+        frameworksInScope: r.frameworks_in_scope,
+        packsInScope: r.packs_in_scope ?? null,
       };
     });
   }

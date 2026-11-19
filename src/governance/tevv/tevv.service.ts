@@ -33,7 +33,7 @@ import {
 import { InventoryService } from '../../inventory/inventory.service';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, governanceHooks } from '../hooks';
-import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgModels, reqText, requireRole, isFuture } from '../phase2-util';
+import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, scopedOrgModels, reqText, requireRole, isFuture } from '../phase2-util';
 import { checklistOpen, ChecklistItem, evaluateRun, newChecklist, parseCriteria, parseResults, RETIREMENT_ITEMS, reviewDue, TEST_PURPOSES } from './tevv.model';
 
 const OPEN_INCIDENT = ['REPORTED', 'UNDER_INVESTIGATION', 'REMEDIATION_IN_PROGRESS'];
@@ -166,7 +166,7 @@ export class TevvService implements OnModuleInit {
   async overview(user: CurrentUser, q: { org_id?: string }) {
     this.assert();
     const orgId = orgFor(user, q.org_id);
-    const models = await orgModels(this.models, this.projects, orgId);
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
     const out: Array<Record<string, any>> = [];
     for (const m of models) out.push({ model_id: m.id, name: m.name, risk_level: m.riskLevel, lifecycle_stage: m.lifecycleStage, ...(await this.facts(m.id)) });
     const retirements = await this.retirements.find({ where: { orgId }, order: { requestedAt: 'DESC' }, take: 200 });

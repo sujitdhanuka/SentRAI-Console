@@ -14,6 +14,8 @@ import {
   validateIso42001,
   validateNistRmf,
 } from './frameworks.validator';
+import { GovernanceProgramme } from './governance-programme';
+import { coverageBlock, frameworksInScopeBlock, modelCardsBlock, scopeFooter } from './report-sections';
 
 export function generateCompliancePdf(entry: AIModelEntry, ctx: ValidationContext = {}): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -59,9 +61,11 @@ export function generateCompliancePdf(entry: AIModelEntry, ctx: ValidationContex
 }
 
 /**
- * Portfolio-level framework readiness report — an executive rollup across all
- * models, not a single model. Renders the aggregate summary, per-framework
- * readiness, risk-tier distribution, and the most common blocking gaps.
+ * Portfolio-level framework readiness report: an operational snapshot across
+ * every model in scope. Only the frameworks of the packs enabled for the
+ * organisation are assessed; the packs switched off are named, not counted.
+ * With the governance programme it adds reviewed coverage, register counts
+ * and model-card status.
  */
 export function generatePortfolioPdf(report: {
   generated_at: string;
@@ -69,6 +73,7 @@ export function generatePortfolioPdf(report: {
   risk_tiers: Record<string, number>;
   frameworks: Array<{ name: string; models_assessed: number; models_passing: number; pass_rate: number; open_gaps: number; readiness: string }>;
   top_gaps: Array<{ framework: string; control: string; count: number; statement: string }>;
+  governance?: GovernanceProgramme;
 }): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margins: { top: 40, bottom: 40, left: 40, right: 40 } });
@@ -76,11 +81,13 @@ export function generatePortfolioPdf(report: {
     doc.on('data', (c: Buffer) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
+    const g = report.governance;
+    const h = (t: string) => doc.moveDown(0.8).font('Helvetica-Bold').fontSize(13).fillColor('#0f172a').text(t, 40);
 
     doc.font('Helvetica-Bold').fontSize(22).fillColor('#1e293b').text('AI Governance — Portfolio Readiness');
     doc.moveDown(0.3);
-    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text(`Generated ${new Date(report.generated_at).toUTCString()}`);
-    doc.moveDown(0.8);
+    doc.font('Helvetica').fontSize(9).fillColor('#64748b').text(`Generated ${new Date(report.generated_at).toUTCString()}${g ? ` · SentRAI ${g.version}` : ''}`);
+    doc.moveDown(0.5);
 
     doc.font('Helvetica-Bold').fontSize(13).fillColor('#0f172a').text('Executive Summary');
     doc.moveDown(0.2).font('Helvetica').fontSize(10).fillColor('#334155').text(report.summary.headline);
@@ -91,28 +98,49 @@ export function generatePortfolioPdf(report: {
         `High-risk: ${s.high_risk_models}    Open blocking gaps: ${s.open_blocking_gaps}`,
     );
 
-    doc.moveDown(0.8).font('Helvetica-Bold').fontSize(13).fillColor('#0f172a').text('Framework Readiness');
+    if (g) {
+      h('Frameworks in Scope');
+      doc.moveDown(0.2);
+      frameworksInScopeBlock(doc, g, 9);
+    }
+
+    h('Framework Readiness');
+    if (!report.frameworks.length) doc.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#64748b').text('No framework assessed in this scope.');
     for (const f of report.frameworks) {
       const ok = f.open_gaps === 0 && f.models_assessed > 0;
-      doc.moveDown(0.25).font('Helvetica-Bold').fontSize(10).fillColor(ok ? '#166534' : '#991b1b').text(f.name);
+      doc.moveDown(0.25).font('Helvetica-Bold').fontSize(10).fillColor(ok ? '#166534' : '#991b1b').text(f.name, { continued: true })
+        .font('Helvetica').fillColor('#64748b').text(`   ${f.models_passing}/${f.models_assessed} models · ${Math.round(f.pass_rate * 100)}%${ok ? '' : ` · ${f.open_gaps} gaps`}`);
       doc.font('Helvetica').fontSize(9).fillColor('#334155').text(f.readiness, { indent: 10 });
     }
 
-    doc.moveDown(0.8).font('Helvetica-Bold').fontSize(13).fillColor('#0f172a').text('Risk-Tier Distribution');
+    if (g) {
+      h('Coverage (reviewed)');
+      coverageBlock(doc, g, 8.5);
+    }
+
+    h('Risk-Tier Distribution');
     const tiers = Object.entries(report.risk_tiers).map(([k, v]) => `${k}: ${v}`).join('    ') || 'none';
     doc.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#334155').text(tiers);
 
-    doc.moveDown(0.8).font('Helvetica-Bold').fontSize(13).fillColor('#0f172a').text('Most Common Blocking Gaps');
+    if (g) {
+      h('Model Documentation');
+      doc.moveDown(0.2);
+      modelCardsBlock(doc, g, 9);
+    }
+
+    h('Most Common Blocking Gaps');
     if (report.top_gaps.length === 0) {
       doc.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#166534').text('No blocking gaps across the portfolio.');
     } else {
-      for (const g of report.top_gaps) {
-        doc.moveDown(0.15).font('Helvetica').fontSize(9).fillColor('#334155').text(`• [${g.framework} · ${g.control}] ${g.statement}`);
+      for (const g2 of report.top_gaps) {
+        doc.moveDown(0.15).font('Helvetica').fontSize(9).fillColor('#334155').text(`• [${g2.framework} · ${g2.control}] ${g2.statement}`);
       }
     }
 
     doc.moveDown(1).font('Helvetica').fontSize(7).fillColor('#94a3b8').text(
-      'SentrAI operationalizes RBI FREE-AI, NIST AI RMF, the EU AI Act, and ISO/IEC 42001. This report reflects registered-model metadata and observed evidence; it does not by itself constitute regulatory certification.',
+      g ? scopeFooter(g, 'It reflects registered-model metadata and observed evidence.')
+        : 'SentrAI operationalizes RBI FREE-AI, NIST AI RMF, the EU AI Act, and ISO/IEC 42001. This report reflects registered-model metadata and observed evidence; it does not by itself constitute regulatory certification.',
+      40,
     );
 
     doc.end();

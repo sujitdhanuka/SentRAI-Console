@@ -2556,16 +2556,23 @@ describe('SentrAI Console (e2e)', () => {
       const detail = (await request(http).get(`/api/v1/inventory/models/${t.modelId}`).set(auth(t.token)).expect(200)).body;
       const project = (await request(http).get(`/api/v1/projects/${t.projectId}`).set(auth(t.token)).expect(200)).body;
       const cc = (await request(http).get(`/api/v1/inventory/models/${t.modelId}/compliance-check`).set(auth(t.token)).expect(200)).body;
-      return { list: row.compliance_pass, detail: detail.compliance_pass, project: project.compliant_count === 1, cc: cc.overall_pass, gaps: [row.open_gap_count, detail.open_gap_count, project.open_gap_count, cc.blocking_gaps.length] };
+      // Every view counts the frameworks of the organisation's enabled packs.
+      const fw = (id: string) => (id === 'rbi_free_ai' ? cc : id === 'nist_ai_rmf' ? cc.nist_rmf : id === 'eu_ai_act' ? cc.eu_ai_act : cc.iso_42001);
+      const inScope: string[] = cc.frameworks_in_scope;
+      const ccGaps = inScope.reduce((n, id) => n + fw(id).blocking_gaps.length, 0);
+      return { list: row.compliance_pass, detail: detail.compliance_pass, project: project.compliant_count === 1, cc: ccGaps === 0, gaps: [row.open_gap_count, detail.open_gap_count, project.open_gap_count, ccGaps] };
     };
 
     const prev = process.env.GOVERNANCE_V2;
     process.env.GOVERNANCE_V2 = 'true';
     const notify = jest.spyOn(NotifierService.prototype, 'notify').mockResolvedValue(undefined);
     try {
+      // Rec 21 is an RBI criterion: it counts once the RBI pack is switched on for the organisation.
+      await request(http).put('/api/v1/governance/settings').set(auth(a.token)).send({ settings: { enabledPacks: ['rbi-free-ai'] }, reason: 'RBI regulated entity' }).expect(200);
       const before = await views(a);
+      expect((await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.token)).expect(200)).body.frameworks_in_scope).toEqual(['rbi_free_ai', 'nist_ai_rmf', 'iso_42001']);
       expect(new Set([before.list, before.detail, before.project, before.cc])).toEqual(new Set([false]));
-      expect(new Set(before.gaps).size).toBe(1);
+      expect(before.gaps).toEqual([before.gaps[3], before.gaps[3], before.gaps[3], before.gaps[3]]);
 
       // A FAILED drill does not satisfy Rec 21, and is reported as the latest result.
       const failed = await request(http).post(path(a.modelId)).set(auth(a.token)).send({ ...drill, result: 'FAILED' }).expect(201);
@@ -2794,6 +2801,51 @@ describe('SentrAI Console (e2e)', () => {
       // A global admin can read but still cannot edit settings (not an editor role).
       await request(http).put('/api/v1/governance/settings').set(as(a.admin, a.orgId))
         .send({ settings: { gateMode: { HIGH: 'WARN' } }, reason: 'Admin should not edit settings' }).expect(403);
+    });
+  });
+
+  it('PROJECT SCOPE: X-SentrAI-Project narrows governance lists to that project\'s models; org records stay; other orgs\' projects are ignored', async () => {
+    const a = await govOrg('ScopeOrgA');
+    const b = await govOrg('ScopeOrgB');
+    const { auth } = a;
+    const other = (await request(http).post('/api/v1/projects').set(auth(a.owner)).send({ name: 'ScopeOrgA Other', root_directory: process.cwd() }).expect(201)).body;
+    const otherModel = (await request(http).post('/api/v1/inventory/models').set(auth(a.owner)).send({
+      name: 'ScopeOrgA Fraud', model_type: 'MACHINE_LEARNING', functional_area: 'fraud_detection',
+      use_case_description: 'Flags suspicious card transactions for review', human_oversight_required: true,
+      board_policy_ref: 'BP-2', project_id: other.project_id,
+    }).expect(201)).body;
+    const as = (t: string, project?: string) => ({ ...auth(t), ...(project ? { 'X-SentrAI-Project': project } : {}) });
+
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const R = '/api/v1/governance/risks';
+      const mine = (await request(http).post(R).set(auth(a.owner)).send({ scope_type: 'MODEL', scope_id: a.modelId, category: 'FAIRNESS', title: 'Thin-file applicants scored low' }).expect(201)).body;
+      const theirs = (await request(http).post(R).set(auth(a.owner)).send({ scope_type: 'MODEL', scope_id: otherModel.model_id, category: 'SECURITY', title: 'Fraud model evasion' }).expect(201)).body;
+      const org = (await request(http).post(R).set(auth(a.owner)).send({ scope_type: 'ORG', category: 'LEGAL', title: 'No AI policy owner' }).expect(201)).body;
+      const ids = (body: any) => body.risks.map((r: any) => r.risk_id).sort();
+
+      // Unscoped: the whole organisation.
+      expect(ids((await request(http).get(R).set(auth(a.owner)).expect(200)).body)).toEqual([mine.risk_id, theirs.risk_id, org.risk_id].sort());
+      // Scoped: this project's model risks plus organisation risks.
+      const scoped = (await request(http).get(R).set(as(a.owner, a.projectId)).expect(200)).body;
+      expect(ids(scoped)).toEqual([mine.risk_id, org.risk_id].sort());
+      expect(scoped.summary.total).toBe(2);
+      expect(ids((await request(http).get(R).set(as(a.owner, other.project_id)).expect(200)).body)).toEqual([theirs.risk_id, org.risk_id].sort());
+      // Naming one model (a model page) still shows that model's risks.
+      expect(ids((await request(http).get(`${R}?model_id=${otherModel.model_id}`).set(as(a.owner, a.projectId)).expect(200)).body)).toEqual([theirs.risk_id]);
+      // Organisation risks only.
+      expect(ids((await request(http).get(`${R}?scope_type=ORG`).set(as(a.owner, a.projectId)).expect(200)).body)).toEqual([org.risk_id]);
+
+      // Model overviews and the owner register list only the project's models.
+      const names = (rows: any[]) => rows.map((m: any) => m.name).sort();
+      expect(names((await request(http).get(`/api/v1/organizations/${a.orgId}/owner-register`).set(auth(a.owner)).expect(200)).body.models)).toEqual(['ScopeOrgA Credit', 'ScopeOrgA Fraud']);
+      expect(names((await request(http).get(`/api/v1/organizations/${a.orgId}/owner-register`).set(as(a.owner, a.projectId)).expect(200)).body.models)).toEqual(['ScopeOrgA Credit']);
+      expect(names((await request(http).get('/api/v1/governance/tevv').set(as(a.owner, other.project_id)).expect(200)).body.models)).toEqual(['ScopeOrgA Fraud']);
+
+      // A project in another organisation is ignored: the scope can only narrow.
+      expect(ids((await request(http).get(R).set(as(a.owner, b.projectId)).expect(200)).body)).toEqual([mine.risk_id, theirs.risk_id, org.risk_id].sort());
+      expect((await request(http).get(R).set(as(b.owner, a.projectId)).expect(200)).body.risks).toEqual([]);
+      // An unknown project is ignored too.
+      expect(ids((await request(http).get(R).set(as(a.owner, 'no-such-project')).expect(200)).body)).toHaveLength(3);
     });
   });
 
@@ -4211,6 +4263,189 @@ describe('SentrAI Console (e2e)', () => {
       // The CI Gate Ledger is shown to organisation owners, so they can read it.
       await request(http).get('/api/v1/ci/events').set(auth(a.owner)).expect(200);
       await request(http).get('/api/v1/ci/events').set(auth(a.viewer)).expect(403);
+    });
+  });
+
+  /* ------------------------------------------------- jurisdiction-aware criteria and model cards */
+
+  it('JURISDICTION SCOPE: only the enabled packs are asked for and counted; switching a pack on brings its criteria back with the data kept', async () => {
+    const a = await govOrg('JurisScopeOrg');
+    const { auth } = a;
+    // Flag off: every framework applies, exactly as before.
+    const off = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
+    expect(off.frameworks_in_scope).toEqual(['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001']);
+    const offPortfolio = (await request(http).get('/api/v1/compliance/portfolio').set(auth(a.owner)).expect(200)).body;
+    expect(offPortfolio.frameworks.map((f: any) => f.id)).toEqual(['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001']);
+    expect(offPortfolio.summary.headline).toContain('all four frameworks');
+
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      // Sutras declared while RBI applied are kept when the pack is off.
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/governance`).set(auth(a.owner)).send({ sutras_alignment: ['PEOPLE_FIRST', 'ACCOUNTABILITY'] }).expect(200);
+
+      // Default settings: the NIST + ISO baseline only.
+      const cc = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
+      expect(cc.frameworks_in_scope).toEqual(['nist_ai_rmf', 'iso_42001']);
+      expect(cc.frameworks_not_in_scope).toEqual(['rbi_free_ai', 'eu_ai_act']);
+      expect(cc.packs_in_scope).toEqual(['nist-ai-rmf', 'iso-42001']);
+      // The reports for switched-off packs are still computed (nothing is deleted), just not counted.
+      expect(cc.eu_ai_act).toBeTruthy();
+
+      const matrix = (await request(http).get(`/api/v1/compliance/matrix?project_id=${a.projectId}`).set(auth(a.owner)).expect(200)).body;
+      expect(matrix.frameworks_in_scope).toEqual(['nist', 'iso']);
+      const row = matrix.components.find((c: any) => c.model_id === a.modelId);
+      expect(row.frameworks.rbi.status).toBe('na');
+      expect(row.frameworks.eu.status).toBe('na');
+      expect(row.frameworks_in_scope).toEqual(['nist', 'iso']);
+      expect(matrix.gaps.filter((g: any) => g.model_id === a.modelId).map((g: any) => g.framework).sort()).toEqual(
+        [...cc.nist_rmf.blocking_gaps.map(() => 'NIST AI RMF'), ...cc.iso_42001.blocking_gaps.map(() => 'ISO 42001')].sort(),
+      );
+      expect(matrix.gaps.some((g: any) => g.framework === 'RBI FREE-AI' || g.framework === 'EU AI Act')).toBe(false);
+
+      const portfolio = (await request(http).get(`/api/v1/compliance/portfolio?project_id=${a.projectId}`).set(auth(a.owner)).expect(200)).body;
+      expect(portfolio.frameworks.map((f: any) => f.id)).toEqual(['nist_ai_rmf', 'iso_42001']);
+      expect(portfolio.frameworks_not_in_scope).toEqual(['RBI FREE-AI (7 Sutras)', 'EU AI Act']);
+      expect(portfolio.summary.headline).toContain('the 2 in-scope frameworks (NIST AI RMF, ISO/IEC 42001)');
+      expect(portfolio.summary.open_blocking_gaps).toBe(cc.nist_rmf.blocking_gaps.length + cc.iso_42001.blocking_gaps.length);
+      expect(portfolio.packs.map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001']);
+      expect(portfolio.top_gaps.every((g: any) => ['NIST AI RMF', 'ISO/IEC 42001'].includes(g.framework))).toBe(true);
+
+      // The model list, the model and the project count the same in-scope gaps.
+      const detail = (await request(http).get(`/api/v1/inventory/models/${a.modelId}`).set(auth(a.owner)).expect(200)).body;
+      const project = (await request(http).get(`/api/v1/projects/${a.projectId}`).set(auth(a.owner)).expect(200)).body;
+      expect(detail.open_gap_count).toBe(portfolio.summary.open_blocking_gaps);
+      expect(project.open_gap_count).toBe(portfolio.summary.open_blocking_gaps);
+
+      // Switching RBI on brings its criteria back, with the sutras declared earlier still there.
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { enabledPacks: ['rbi-free-ai'] }, reason: 'RBI regulated entity' }).expect(200);
+      const on = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/compliance-check`).set(auth(a.owner)).expect(200)).body;
+      expect(on.frameworks_in_scope).toEqual(['rbi_free_ai', 'nist_ai_rmf', 'iso_42001']);
+      expect((await request(http).get(`/api/v1/inventory/models/${a.modelId}`).set(auth(a.owner)).expect(200)).body.sutras_alignment).toEqual(['PEOPLE_FIRST', 'ACCOUNTABILITY']);
+      const p2 = (await request(http).get(`/api/v1/compliance/portfolio?project_id=${a.projectId}`).set(auth(a.owner)).expect(200)).body;
+      expect(p2.frameworks.map((f: any) => f.id)).toEqual(['rbi_free_ai', 'nist_ai_rmf', 'iso_42001']);
+      // The pack selector still narrows within the enabled packs.
+      const sel = (await request(http).get(`/api/v1/compliance/portfolio?project_id=${a.projectId}&packs=nist-ai-rmf`).set(auth(a.owner)).expect(200)).body;
+      expect(sel.frameworks.map((f: any) => f.id)).toEqual(['nist_ai_rmf']);
+    });
+  });
+
+  it('E4.1 MODEL CARDS: live card mapped to enabled packs, readiness, draft any time, final gated on required fields and role, stale after a change, PDF/MD/JSON export, isolation', async () => {
+    const a = await govOrg('CardOrgA');
+    const b = await govOrg('CardOrgB');
+    const { auth } = a;
+    const C = `/api/v1/governance/models/${a.modelId}/model-card`;
+    await request(http).get(C).set(auth(a.owner)).expect(404);
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E4_1_MODEL_CARDS: 'false' }, async () => {
+      await request(http).get(C).set(auth(a.owner)).expect(404);
+    });
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      expect((await request(http).get('/api/v1/governance/features').set(auth(a.viewer)).expect(200)).body.modelCards).toBe(true);
+      await request(http).get(C).set(auth(b.owner)).expect(404);
+      const live = (await request(http).get(C).set(auth(a.viewer)).expect(200)).body;
+      expect(live.status).toBe('NONE');
+      expect(live.card.packs_in_scope.map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001']);
+      const cited = live.card.sections.flatMap((s: any) => s.frameworks.map((f: any) => f.pack_id));
+      expect(new Set(cited)).toEqual(new Set(['nist-ai-rmf', 'iso-42001']));
+      const details = live.card.sections.find((s: any) => s.id === 'details');
+      expect(details.frameworks.find((f: any) => f.pack_id === 'nist-ai-rmf').clauses).toContain('GOVERN 2.1');
+      expect(live.readiness.final_allowed).toBe(false);
+      const missing = live.readiness.missing_required.map((m: any) => m.label);
+      expect(missing).toEqual(expect.arrayContaining(['Accountable owner', 'Why this tier', 'Evaluation evidence']));
+      expect(live.readiness.percent).toBeGreaterThan(0);
+      expect(live.readiness.percent).toBeLessThan(100);
+
+      // A draft any time (maintainers); viewers cannot; a final is refused while required fields are missing.
+      await request(http).post(`${C}/versions`).set(auth(a.viewer)).send({ status: 'DRAFT' }).expect(403);
+      const d1 = (await request(http).post(`${C}/versions`).set(auth(a.owner)).send({ status: 'DRAFT', note: 'First pass' }).expect(201)).body;
+      expect(d1).toMatchObject({ version: 1, status: 'DRAFT', stale: false });
+      const refused = await request(http).post(`${C}/versions`).set(auth(a.owner)).send({ status: 'FINAL' }).expect(400);
+      expect(refused.body.blockers.join(' ')).toContain('Accountable owner');
+
+      // Complete the required fields.
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/governance`).set(auth(a.owner))
+        .send({ owner_team: 'Credit Risk', risk_rationale: 'Credit decisions about SME applicants are consequential and regulated.' }).expect(200);
+      await request(http).post(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).send({ type: 'bias_test', ref: 'BIAS-2026-11' }).expect(201);
+      const ready = (await request(http).get(C).set(auth(a.owner)).expect(200)).body;
+      expect(ready.readiness.missing_required).toEqual([]);
+      // The draft no longer matches the model, and says which sections changed.
+      const v1 = ready.versions.find((v: any) => v.version === 1);
+      expect(v1.stale).toBe(true);
+      expect(v1.changed_sections).toEqual(expect.arrayContaining(['Model details', 'Risk and impact', 'Evaluation and testing']));
+
+      expect(ready.readiness.gate_blockers).toEqual([]);
+      expect(ready.readiness.final_allowed).toBe(true);
+      {
+        // Final needs an officer: a reviewer may draft but not issue it.
+        const f = (await request(http).post(`${C}/versions`).set(auth(a.ciso)).send({ status: 'FINAL', note: 'Approved by the risk committee' }).expect(201)).body;
+        expect(f).toMatchObject({ version: 2, status: 'FINAL', stale: false, current_final: true });
+        const now = (await request(http).get(C).set(auth(a.viewer)).expect(200)).body;
+        expect(now.status).toBe('FINAL_CURRENT');
+
+        // Exports: JSON, Markdown and PDF, for the frozen version and the live draft.
+        const json = (await request(http).get(`${C}/export?format=json&version=2`).set(auth(a.viewer)).expect(200)).body;
+        expect(json).toMatchObject({ status: 'FINAL', version: 2, stale: false });
+        expect(json.card.sections.length).toBe(7);
+        const md = await request(http).get(`${C}/export?format=md&version=2`).set(auth(a.viewer)).expect(200);
+        expect(md.headers['content-type']).toContain('text/markdown');
+        expect(md.text).toContain('# Model card: CardOrgA Credit');
+        expect(md.text).toContain('**Status:** FINAL (version 2)');
+        expect(md.text).not.toContain('RBI');
+        const pdf = await request(http).get(`${C}/export?format=pdf`).set(auth(a.viewer)).buffer(true).parse((res, cb) => { const c: Buffer[] = []; res.on('data', (x: Buffer) => c.push(x)); res.on('end', () => cb(null, Buffer.concat(c))); }).expect(200);
+        expect(pdf.headers['content-type']).toContain('application/pdf');
+        expect((pdf.body as Buffer).slice(0, 4).toString()).toBe('%PDF');
+        await request(http).get(`${C}/export?format=docx`).set(auth(a.viewer)).expect(400);
+        await request(http).get(`${C}/export?format=json&version=9`).set(auth(a.viewer)).expect(404);
+
+        // A change to the model makes the final card stale.
+        await request(http).patch(`/api/v1/inventory/models/${a.modelId}/governance`).set(auth(a.owner)).send({ use_case_description: 'Scores SME and micro-enterprise credit applications for underwriting.' }).expect(200);
+        const stale = (await request(http).get(C).set(auth(a.viewer)).expect(200)).body;
+        expect(stale.status).toBe('FINAL_STALE');
+        expect(stale.current_final.changed_sections).toContain('Intended use');
+        const staleMd = await request(http).get(`${C}/export?format=md&version=2`).set(auth(a.viewer)).expect(200);
+        expect(staleMd.text).toContain('STALE');
+
+        // Enabling a pack maps the card to it as well.
+        await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { enabledPacks: ['eu-ai-act'] }, reason: 'EU deployment' }).expect(200);
+        const eu = (await request(http).get(C).set(auth(a.viewer)).expect(200)).body;
+        expect(eu.card.sections.find((s: any) => s.id === 'details').frameworks.map((f: any) => f.pack_id)).toContain('eu-ai-act');
+        expect(eu.current_final.changed_sections).toContain('Frameworks in scope');
+
+        // The board report counts the cards.
+        const board = await app.get(ComplianceService).boardReport({ email: 'ciso@cardorga.test', role: Role.CISO, tenantId: a.orgId } as any, a.projectId);
+        expect(board.governance.model_cards).toMatchObject({ models: 1, final_current: 0, final_stale: 1 });
+      }
+    });
+  });
+
+  it('REPORTS: the readiness PDF and the board report follow the enabled packs and carry the governance programme', async () => {
+    const a = await govOrg('ReportOrgA');
+    const { auth } = a;
+    const svc = app.get(ComplianceService);
+    const user = { email: 'owner@reportorga.test', role: Role.OWNER, tenantId: a.orgId } as any;
+    // Flag off: the board report keeps its earlier shape (four frameworks, no programme counts).
+    const before = await svc.boardReport(user, a.projectId);
+    expect(before.frameworks).toHaveLength(4);
+    expect(before.governance.governance_on).toBe(false);
+    expect(before.governance.registers).toBeNull();
+    expect(before.org_name).toBe('ReportOrgA');
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const board = await svc.boardReport(user, a.projectId);
+      expect(board.frameworks.map((f: any) => f.id)).toEqual(['nist_ai_rmf', 'iso_42001']);
+      expect(board.frameworks_not_in_scope).toEqual(['RBI FREE-AI (7 Sutras)', 'EU AI Act']);
+      const g = board.governance;
+      expect(g.version).toBe('1.8.0');
+      expect(g.packs_in_scope.map((p: any) => p.pack_id)).toEqual(['nist-ai-rmf', 'iso-42001']);
+      expect(g.packs_off.map((p: any) => p.pack_id)).toEqual(expect.arrayContaining(['rbi-free-ai', 'eu-ai-act', 'au-dta', 'us-2026']));
+      expect(g.coverage.map((c: any) => c.framework)).toEqual(expect.arrayContaining([expect.stringContaining('NIST'), expect.stringContaining('42001')]));
+      expect(g.coverage.some((c: any) => /RBI|EU AI/.test(c.framework))).toBe(false);
+      expect(g.capabilities.map((c: any) => c.group)).toEqual(['Foundations (Phases 0 and 1)', 'Regional packs and assurance (Phase 2)', 'Disclosure and operations (Phase 3)', 'Documentation (1.8)']);
+      expect(g.capabilities[3].on).toEqual(['Model cards with draft and final versions']);
+      expect(g.registers).toMatchObject({ risks_open: expect.any(Number), actions_open: 0, impact_final_models: 0 });
+      expect(g.model_cards).toMatchObject({ models: 1, none: 1 });
+      for (const path of [`/api/v1/compliance/portfolio/export-pdf?project_id=${a.projectId}`, `/api/v1/compliance/board-report/export-pdf?project_id=${a.projectId}`]) {
+        const res = await request(http).get(path).set(auth(a.owner)).buffer(true).parse((r, cb) => { const c: Buffer[] = []; r.on('data', (x: Buffer) => c.push(x)); r.on('end', () => cb(null, Buffer.concat(c))); }).expect(200);
+        expect(res.headers['content-type']).toContain('application/pdf');
+        expect((res.body as Buffer).slice(0, 4).toString()).toBe('%PDF');
+      }
     });
   });
 });

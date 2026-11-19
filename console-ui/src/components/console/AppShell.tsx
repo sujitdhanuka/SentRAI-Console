@@ -1,7 +1,8 @@
-import { LogOut, Moon, ShieldCheck, Sun, X } from 'lucide-react';
+import { ArrowLeft, LogOut, Moon, ShieldCheck, Sun, X } from 'lucide-react';
 import { ReactNode, useEffect, useState } from 'react';
 
 import { useConsoleUi } from '../../stores/consoleUi';
+import { navigate, useRoute } from '../../stores/route';
 import { useSession } from '../../stores/session';
 import { Toasts } from '../ui/Toast';
 import { ContextHelp } from './ContextHelp';
@@ -16,6 +17,30 @@ function useClock(): string {
   }, []);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;
+}
+
+const WORKFLOW_BACK_KEY = 'sentrai_workflow_back';
+
+/** "Back to workflow" while a form was opened from a step on the Workflows page. */
+function WorkflowBackBar() {
+  const route = useRoute();
+  const [, bump] = useState(0);
+  let back: { query: Record<string, string>; label: string } | null = null;
+  try { back = JSON.parse(sessionStorage.getItem(WORKFLOW_BACK_KEY) ?? 'null'); } catch { back = null; }
+  if (!back || route === 'workflows') return null;
+  const clear = () => { try { sessionStorage.removeItem(WORKFLOW_BACK_KEY); } catch { /* ignore */ } bump((n) => n + 1); };
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-accent bg-accent-soft px-3 py-1 text-[11px] text-accent">
+      <button
+        onClick={() => { const q = back!.query; clear(); navigate('workflows', q); }}
+        className="flex items-center gap-1 font-medium hover:underline"
+      >
+        <ArrowLeft size={12} /> Back to workflow
+      </button>
+      <span className="min-w-0 truncate text-text-secondary">{back.label}</span>
+      <button onClick={clear} aria-label="Dismiss" className="ml-auto text-text-tertiary hover:text-text"><X size={12} /></button>
+    </div>
+  );
 }
 
 /**
@@ -89,6 +114,7 @@ export function AppShell({ title, actions, children }: { title: string; actions?
             </div>
           </header>
 
+          <WorkflowBackBar />
           {children}
 
           <footer className="shrink-0 border-t border-border py-1 text-center font-mono text-[8.5px] text-text-tertiary">

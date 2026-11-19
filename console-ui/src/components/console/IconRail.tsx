@@ -16,6 +16,7 @@ import {
   Siren,
   Signature,
   Users,
+  Workflow,
 } from 'lucide-react';
 
 import { navigate, Route, useRoute } from '../../stores/route';
@@ -48,6 +49,7 @@ const GROUPS: NavItem[][] = [
   ],
   // Compliance and governance: is it compliant, approved and on record.
   [
+    { route: 'workflows', icon: Workflow, label: 'Workflows' },
     { route: 'compliance', icon: ClipboardCheck, label: 'Compliance Rollup' },
     { route: 'governance', icon: Landmark, label: 'Governance', flag: 'governanceSettings' },
     { route: 'alignment', icon: Signature, label: 'Alignment · Board Sign-off' },
@@ -115,7 +117,11 @@ export function IconRail() {
       key={route}
       aria-label={label}
       aria-current={active === route || (route === 'inventory' && active === 'model') ? 'page' : undefined}
-      onClick={() => navigate(route)}
+      onClick={() => {
+        // Leaving through the rail ends a trip from a workflow step.
+        try { sessionStorage.removeItem('sentrai_workflow_back'); } catch { /* ignore */ }
+        navigate(route);
+      }}
       className={`group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors ${
         active === route || (route === 'inventory' && active === 'model')
           ? "bg-accent-soft text-accent before:absolute before:left-[-6px] before:top-1/2 before:h-6 before:w-[2.5px] before:-translate-y-1/2 before:rounded-r-full before:bg-accent before:content-['']"

@@ -41,6 +41,7 @@ import {
   maskUrl,
   webhookUrlProblem,
 } from './incident-ext.model';
+import { scopedProjectId } from '../project-scope';
 
 const NOTICE_CHANNELS = ['LETTER', 'EMAIL', 'SMS', 'PHONE', 'IN_APP', 'PUBLIC_NOTICE', 'OTHER'] as const;
 const MODEL_EVENT_TO_INTEGRATION: Record<string, string> = { INCIDENT: 'INCIDENT_REPORTED', DRIFT_ALERT: 'DRIFT_ALERT', RED_TEAM_FINDING: 'RED_TEAM_FINDING', RISK_ESCALATION: 'RISK_ESCALATION' };
@@ -140,7 +141,8 @@ export class IncidentExtensionsService implements OnModuleInit {
   async queue(user: CurrentUser, q: { org_id?: string }) {
     this.assert();
     const orgId = orgFor(user, q.org_id);
-    const projectIds = (await this.projects.find({ where: { tenantId: orgId }, select: ['id'] })).map((p) => p.id);
+    const scoped = scopedProjectId();
+    const projectIds = (await this.projects.find({ where: scoped ? { tenantId: orgId, id: scoped } : { tenantId: orgId }, select: ['id'] })).map((p) => p.id);
     if (!projectIds.length) return { org_id: orgId, incidents: [] };
     const modelIds = (await this.models.find({ where: { projectId: In(projectIds) }, select: ['id'] })).map((m) => m.id);
     const rows = await this.incidents.find({ where: [{ projectId: In(projectIds) }, ...(modelIds.length ? [{ modelId: In(modelIds) }] : [])], order: { createdAt: 'DESC' }, take: 500 });

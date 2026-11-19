@@ -359,6 +359,18 @@ One page per model, so you work on the model without choosing it again on each G
 
 Organisation-wide registers (all risks, all vendors, settings) stay on the Governance page. A tab is shown only while its feature is on.
 
+### 20. Workflows
+*Visible to: everyone. Owners and CISOs can also change the jurisdiction from here.*
+
+The governance workflows of the User Guide (Part B, W0 to W12) as a checklist, grouped into stages in the order the work happens: set up, onboard, assess, evidence and test, approve and ship, operate, review and disclose, retire.
+
+- **Organisation / Per model.** The Organisation view holds the once-per-organisation work (W0 set-up, the project steps of W1, periodic review and disclosure). Per model holds everything from onboarding to retirement for the model you pick; the list shows each model's progress and blockers.
+- **Stages and steps.** Click a stage to see its steps. Each step names who does it, where in the console, why it matters and what makes it done. **Open** takes you to the real form; the bar under the header then offers **Back to workflow**.
+- **Done is checked, not ticked.** A step completes only when its records exist and the framework-pack checks behind it pass: the same checks as the compliance check, the deploy gate and the readiness report. When a check still fails, the step says which gap remains. Progress counts only real steps, not links (View), things anyone can start (Start) or what SentRAI does itself (Automatic).
+- **Next best action and blockers.** The banner picks the step that clears a blocker first, then the earliest unfinished step. Blockers in red include the deploy gate, an unapproved AI policy, unauthorised tools, an overdue audit and incidents without sign-off. A step that waits on another one shows it, with a link (for example, the AI policy in the Organisation view).
+- **Recurring work.** Red teams, audits, drift, drills, reviews and the attestation campaign come back as *Due again* when their interval lapses; the Periodic review stage lists them all with their next due date.
+- **Jurisdiction.** The first time an Owner or CISO opens the page while the organisation is still on default settings, it asks where you operate: India (RBI FREE-AI), the European Union (EU AI Act), Australia (DTA), the United States (OMB memo and Colorado) or global only. Saving writes a new version of Governance › Setup › Settings (with your reason in the change history), and the workflow then shows only the steps of the packs in force: for example, the Sutras for RBI, the DTA register for Australia, adverse-action notices for the US. **Change** next to the jurisdiction chip opens the same choice later.
+
 ---
 
 ## Roles & permissions

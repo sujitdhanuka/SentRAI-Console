@@ -47,6 +47,7 @@ import {
   topFactors,
   validateReasonCodeMap,
 } from './decisions.model';
+import { scopeModelWhere } from '../project-scope';
 
 const OPEN_APPEAL = ['OPEN'];
 
@@ -216,7 +217,7 @@ export class DecisionsService implements OnModuleInit {
     if (q.model_id) where.modelId = q.model_id;
     if (q.decision_ref) where.decisionRef = q.decision_ref;
     if (q.inconsistent === 'true') where.consistent = false;
-    return { org_id: orgId, notices: (await this.notices.find({ where, order: { createdAt: 'DESC' } })).map((n) => this.noticeView(n)) };
+    return { org_id: orgId, notices: (await this.notices.find({ where: await scopeModelWhere(this.models, where), order: { createdAt: 'DESC' } })).map((n) => this.noticeView(n)) };
   }
 
   /** Everything recorded about one decision in the caller's organisation. */
@@ -385,8 +386,8 @@ export class DecisionsService implements OnModuleInit {
     if (q.model_id) where.modelId = q.model_id;
     if (q.type) where.type = q.type;
     if (q.overdue === 'true') Object.assign(where, { status: 'OPEN', dueAt: LessThan(new Date()) });
-    const rows = await this.appeals.find({ where, order: { createdAt: 'DESC' } });
-    const open = await this.appeals.find({ where: { orgId, status: 'OPEN' } });
+    const rows = await this.appeals.find({ where: await scopeModelWhere(this.models, where), order: { createdAt: 'DESC' } });
+    const open = await this.appeals.find({ where: await scopeModelWhere(this.models, { orgId, status: 'OPEN' }) });
     return {
       org_id: orgId,
       appeals: rows.map((a) => this.appealView(a)),

@@ -15,7 +15,7 @@ import { AIModelEntity, EnergyReadingEntity, ProjectEntity } from '../../databas
 import { getGpuPower } from '../../monitoring/gpu-monitor';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addCardFields, addModelFacts } from '../hooks';
-import { MAINTAINERS, oneOf, optDate, optText, orgFor, orgModels, requireRole } from '../phase2-util';
+import { MAINTAINERS, oneOf, optDate, optText, orgFor, scopedOrgModels, requireRole } from '../phase2-util';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import { co2eKg, DEFAULT_GRID_FACTORS, DEFAULT_MAX_GAP_S, integrateKwh, parseNvidiaSmiCsv, parseSamples, PowerSample, round } from './energy.model';
 
@@ -77,7 +77,7 @@ export class EnergyService implements OnModuleInit {
   async overview(user: CurrentUser, q: { org_id?: string }) {
     this.assert();
     const orgId = orgFor(user, q.org_id);
-    const models = await orgModels(this.models, this.projects, orgId);
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
     const measured = models.filter((m) => m.energyKwh !== null && m.energyKwh !== undefined);
     return {
       org_id: orgId, grid_factor: await this.gridFactor(orgId),

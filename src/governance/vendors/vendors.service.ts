@@ -19,7 +19,7 @@ import { NotifierService } from '../../common/notifier.service';
 import { AiBomItemEntity, AIModelEntity, ProjectEntity, VendorAssessmentEntity, VendorEntity } from '../../database/entities';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, emitModelEvent } from '../hooks';
-import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgModels, reqText, requireRole } from '../phase2-util';
+import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, scopedOrgModels, reqText, requireRole } from '../phase2-util';
 import {
   Answer,
   BOM_KINDS,
@@ -372,7 +372,7 @@ export class VendorsService implements OnModuleInit {
   async summary(user: CurrentUser, q: { org_id?: string }) {
     this.assert();
     const orgId = orgFor(user, q.org_id);
-    const models = await orgModels(this.models, this.projects, orgId);
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
     const items = await this.bom.find({ where: { orgId } });
     const byLicence: Record<string, number> = {};
     for (const i of items) byLicence[i.licenceClass] = (byLicence[i.licenceClass] ?? 0) + 1;

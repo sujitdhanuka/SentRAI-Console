@@ -70,7 +70,8 @@ export class ComplianceController {
     @Query('project_id') projectId?: string,
   ): Promise<void> {
     const report = await this.compliance.portfolio(user, projectId ?? null);
-    const pdf = await generatePortfolioPdf(report);
+    const governance = await this.compliance.programme(user, projectId ?? null, report);
+    const pdf = await generatePortfolioPdf({ ...report, governance });
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'attachment; filename=sentrai-portfolio-readiness.pdf',

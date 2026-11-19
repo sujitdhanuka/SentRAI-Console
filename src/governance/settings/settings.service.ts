@@ -67,6 +67,10 @@ export class GovernanceSettingsService implements OnModuleInit {
         extraSources: [{ source: 'settings', version: String(s.version), parameters: s.settings.appetite.parameters ?? {} }],
       };
     });
+    governanceHooks.orgPackIds = async (orgId, at = new Date()) => {
+      if (!this.flags.isEnabled('governanceSettings') || !orgId) return undefined;
+      return [...BASELINE_PACK_IDS, ...(await this.inForce(orgId, at)).settings.enabledPacks];
+    };
     governanceHooks.orgPackParams = async (orgId, at = new Date()) => {
       if (!this.flags.isEnabled('packEngine') || !this.flags.isEnabled('governanceSettings') || !orgId) return undefined;
       const ctx = await this.packs.contextFor(orgId, at);

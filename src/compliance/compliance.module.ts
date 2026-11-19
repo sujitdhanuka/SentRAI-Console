@@ -6,7 +6,14 @@ import {
   AIIncidentEntity,
   AIModelEntity,
   AuditEventEntity,
+  ControlledDocumentEntity,
+  CorrectiveActionEntity,
   DeploymentGateEventEntity,
+  ImpactAssessmentEntity,
+  OrganizationEntity,
+  RiskEntity,
+  SoaStatementEntity,
+  VendorEntity,
   DriftReportEntity,
   GrievanceEntity,
   ProjectEntity,
@@ -21,6 +28,8 @@ import { ComplianceService } from './compliance.service';
     TypeOrmModule.forFeature([
       AIModelEntity, ProjectEntity, DeploymentGateEventEntity, DriftReportEntity,
       AIIncidentEntity, GrievanceEntity, AuditEventEntity, AgentActionEventEntity,
+      // Governance register counts for the board report and the readiness PDF.
+      OrganizationEntity, RiskEntity, ImpactAssessmentEntity, CorrectiveActionEntity, ControlledDocumentEntity, SoaStatementEntity, VendorEntity,
     ]),
     InventoryModule, // provides InventoryService (per-model complianceCheck)
     SummarizerModule, // provides SummarizerService (executive narrative drafting)

@@ -24,8 +24,8 @@ import { WORKSPACES_DIR } from '../common/paths';
 import { RemoteRepoConnector } from '../discovery/connectors/repo-connector';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { candidateAsDict, scanDirectory } from '../discovery/codebase-scanner';
-import { modelEntityToEntry } from '../inventory/model.mapper';
-import { sutrasBlockingGaps, sutrasOverallPass, validateSutrasCompliance } from '../compliance/sutras.validator';
+import { frameworkScopeForOrg } from '../compliance/framework-scope';
+import { InventoryService } from '../inventory/inventory.service';
 import { CreateProjectDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
 
 @Injectable()
@@ -39,6 +39,7 @@ export class ProjectsService {
     @InjectRepository(BcpDrillEntity) private readonly bcpDrills: Repository<BcpDrillEntity>,
     private readonly config: ConfigService,
     private readonly treeSitter: TreeSitterService,
+    private readonly inventory: InventoryService,
   ) {}
 
   private validateDirectory(path: string): void {
@@ -59,10 +60,13 @@ export class ProjectsService {
     let compliant = 0;
     let openGaps = 0;
     const drills = await latestSuccessfulDrills(this.bcpDrills, models.map((m) => m.id));
+    // With governance settings, the project counts the frameworks of its
+    // organisation's enabled packs; otherwise the RBI Sutras, as before.
+    const scope = await frameworkScopeForOrg(orm.tenantId ?? null);
     for (const m of models) {
-      const report = validateSutrasCompliance(modelEntityToEntry(m), { bcpDrillLastConducted: drills.get(m.id) ?? null });
-      if (sutrasOverallPass(report)) compliant += 1;
-      else openGaps += sutrasBlockingGaps(report).length;
+      const v = await this.inventory.verdictFor(m, drills.get(m.id) ?? null, scope);
+      if (v.pass) compliant += 1;
+      else openGaps += v.gaps;
     }
 
     let tenantName: string | null = null;

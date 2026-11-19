@@ -992,6 +992,24 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'model_cards', // governance E4.1
+    createSql: `CREATE TABLE IF NOT EXISTS \`model_cards\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`content\` MEDIUMTEXT NOT NULL,
+      \`contentHash\` VARCHAR(64) NOT NULL,
+      \`note\` VARCHAR(1000) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_model_cards_orgId\` (\`orgId\`),
+      INDEX \`IDX_model_cards_modelId\` (\`modelId\`),
+      UNIQUE KEY \`UQ_model_cards_model_version\` (\`modelId\`, \`version\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'energy_readings', // governance Phase 3
     createSql: `CREATE TABLE IF NOT EXISTS \`energy_readings\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

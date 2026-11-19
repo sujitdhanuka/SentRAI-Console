@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { AppShell } from '../components/console/AppShell';
 import { ModelWorkspace } from '../components/console/EditDrawer';
 import { Badge, BadgeTone } from '../components/ui/Badge';
+import { packInScope } from '../providers';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useGovernanceData } from '../stores/governanceData';
@@ -12,10 +13,11 @@ import { useGovernanceFeatures } from '../stores/governanceFeatures';
 import { routeParam } from '../stores/route';
 import { useSession } from '../stores/session';
 import { EnergyTab, SecurityTab, TevvTab } from './GovernancePhase3';
+import { ModelCardTab } from './ModelCard';
 import { FairLendingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 
-type TabId = 'overview' | 'risk' | 'testing' | 'approvals' | 'operations' | 'data' | 'history';
+type TabId = 'overview' | 'risk' | 'testing' | 'approvals' | 'operations' | 'data' | 'card' | 'history';
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'overview', label: 'Overview & gaps' },
@@ -24,6 +26,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'approvals', label: 'Approvals & lifecycle' },
   { id: 'operations', label: 'Operations' },
   { id: 'data', label: 'Data & suppliers' },
+  { id: 'card', label: 'Model card' },
   { id: 'history', label: 'History' },
 ];
 
@@ -181,7 +184,8 @@ export function ModelPage() {
       <Section show={f.riskRegister}><RiskRegisterTab /></Section>
       <Section show={f.impactAssessment}><ImpactTab /></Section>
       <Section show={f.modelValidation}><ValidationTab /></Section>
-      <Section show={f.fairLending}><FairLendingTab /></Section>
+      {/* Fair lending (ECOA / Reg B) is a US-pack criterion: asked for only while the US pack is enabled. */}
+      <Section show={f.fairLending && packInScope(component, 'us-2026')}><FairLendingTab /></Section>
       {!f.contextProfile && !f.riskRegister && !f.impactAssessment && <p className="text-[11px] text-text-secondary">Risk and impact records appear here once the governance features are on.</p>}
     </>
   );
@@ -210,6 +214,9 @@ export function ModelPage() {
       {!f.vendors && <p className="text-[11px] text-text-secondary">Vendors, the AI bill of materials and linked datasets appear here once the vendor register is on.</p>}
     </>
   );
+  else if (tab === 'card') body = f.modelCards
+    ? <ModelCardTab modelId={modelId} />
+    : <p className="text-[11px] text-text-secondary">Model cards appear here once the model card feature is on (GOV_E4_1_MODEL_CARDS).</p>;
   else body = <ModelHistory modelId={modelId} />;
 
   return (

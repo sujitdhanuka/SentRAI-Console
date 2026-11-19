@@ -24,6 +24,7 @@ import {
   RiskEntity,
 } from '../../database/entities';
 import { assertFlag, modelForUser } from '../governance-access';
+import { scopeModelWhere, scopeRiskWhere } from '../project-scope';
 
 export const CA_SOURCES = ['AUDIT', 'CONTROL', 'INCIDENT', 'VALIDATION', 'MGMT_REVIEW', 'GRIEVANCE', 'OTHER'] as const;
 const OPEN = ['OPEN', 'IN_PROGRESS', 'AWAITING_EFFECTIVENESS'];
@@ -129,8 +130,9 @@ export class CorrectiveActionsService {
     if (q.model_id) where.modelId = q.model_id;
     if (q.source_id) where.sourceId = q.source_id;
     if (q.overdue === 'true') Object.assign(where, { status: In(OPEN), dueAt: LessThan(new Date()) });
-    const rows = q.source === 'RISK' ? [] : await this.rows.find({ where, order: { createdAt: 'DESC' } });
-    const all = await this.rows.find({ where: { orgId, status: In(OPEN) } });
+    // A project scope keeps organisation-level actions (no model) and the project's own.
+    const rows = q.source === 'RISK' ? [] : await this.rows.find({ where: await scopeModelWhere(this.models, where, 'modelId', true), order: { createdAt: 'DESC' } });
+    const all = await this.rows.find({ where: await scopeModelWhere(this.models, { orgId, status: In(OPEN) }, 'modelId', true) });
     const treatments = await this.riskTreatments(orgId, q);
     return {
       org_id: orgId,
@@ -158,7 +160,7 @@ export class CorrectiveActionsService {
     const wanted = q.status ? q.status.split(',') : null;
     const riskWhere: Record<string, any> = { orgId };
     if (q.source_id) riskWhere.id = q.source_id;
-    const risks = await this.risks.find({ where: riskWhere });
+    const risks = await this.risks.find({ where: await scopeRiskWhere(this.models, riskWhere) });
     if (!risks.length) return [];
     const byId = new Map(risks.map((r) => [r.id, r]));
     const acts = await this.riskActions.find({ where: { riskId: In([...byId.keys()]) }, order: { createdAt: 'DESC' } });

@@ -16,6 +16,7 @@ import { addOrgFacts } from '../hooks';
 import { MAINTAINERS, optDate, optText, orgFor, reqText, requireRole, isFuture } from '../phase2-util';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import { ENGAGEMENT_TYPES, engagementStatus, engagementType, parseParticipants } from './engagement.model';
+import { scopeModelWhere } from '../project-scope';
 
 @Injectable()
 export class EngagementService implements OnModuleInit {
@@ -57,7 +58,7 @@ export class EngagementService implements OnModuleInit {
     const where: Record<string, any> = { orgId };
     if (q.type) where.type = String(q.type).toUpperCase();
     if (q.model_id) where.modelId = q.model_id;
-    const recs = await this.rows.find({ where, order: { occurredAt: 'DESC' }, take: 500 });
+    const recs = await this.rows.find({ where: await scopeModelWhere(this.models, where, 'modelId', true), order: { occurredAt: 'DESC' }, take: 500 });
     return { org_id: orgId, types: ENGAGEMENT_TYPES, items: await this.status(orgId), records: recs.map((r) => this.view(r)) };
   }
 

@@ -31,7 +31,7 @@ import { ImpactAssessmentService } from '../impact/impact.service';
 import { canonicalJson } from '../packs/pack-loader';
 import { phase2Param } from '../packs/parameter-resolver';
 import { PacksService } from '../packs/packs.service';
-import { addMonths, DAY_MS, OFFICERS, optText, orgFor, orgModels, orgParams, packApplies, reqText, requireRole, toCsv } from '../phase2-util';
+import { addMonths, DAY_MS, OFFICERS, optText, orgFor, scopedOrgModels, orgParams, packApplies, reqText, requireRole, toCsv } from '../phase2-util';
 import { AU_ETHICS_PRINCIPLES, AU_TECHNICAL_STANDARD_STAGES, auHighRiskArea } from './au-reference';
 import { buildXlsx } from './xlsx';
 
@@ -137,7 +137,7 @@ export class AuDtaService implements OnModuleInit {
     const orgId = orgFor(user, q.org_id);
     const org = await this.orgs.findOne({ where: { id: orgId } });
     if (!org) throw new NotFoundException('Organization not found');
-    const models = await orgModels(this.models, this.projects, orgId);
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
     const userIds = [...new Set([...models.map((m) => m.ownerUserId), org.accountableOfficialUserId].filter((x): x is string => !!x))];
     const people = userIds.length ? await this.users.find({ where: { id: In(userIds) } }) : [];
     const who = (id: string | null | undefined) => {
@@ -279,7 +279,7 @@ export class AuDtaService implements OnModuleInit {
     const orgId = orgFor(user, q.org_id);
     const deadline = new Date(q.deadline ?? AU_EXISTING_USE_CASE_DEADLINE);
     if (Number.isNaN(deadline.getTime())) throw new BadRequestException('deadline must be a date');
-    const models = await orgModels(this.models, this.projects, orgId);
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
     const rows: any[] = [];
     for (const m of models) {
       const ia = await this.latestAuAssessment(m.id);

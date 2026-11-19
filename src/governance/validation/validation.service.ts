@@ -29,7 +29,8 @@ import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts } from '../hooks';
 import { phase2Param } from '../packs/parameter-resolver';
 import { PacksService } from '../packs/packs.service';
-import { addMonths, DAY_MS, MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgMember, orgModels, orgParams, reqText, requireRole } from '../phase2-util';
+import { addMonths, DAY_MS, MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgMember, scopedOrgModels, orgParams, reqText, requireRole } from '../phase2-util';
+import { scopeModelWhere, scopedProjectId } from '../project-scope';
 import { RisksService } from '../risks/risks.service';
 
 export const VALIDATION_RESULTS = ['APPROVED', 'APPROVED_WITH_CONDITIONS', 'REJECTED'] as const;
@@ -221,7 +222,7 @@ export class ValidationService implements OnModuleInit {
     const where: Record<string, any> = { orgId };
     if (q.model_id) where.modelId = q.model_id;
     if (q.status) where.status = q.status;
-    return { org_id: orgId, validations: (await this.rows.find({ where, order: { createdAt: 'DESC' } })).map((r) => this.view(r)) };
+    return { org_id: orgId, validations: (await this.rows.find({ where: await scopeModelWhere(this.models, where), order: { createdAt: 'DESC' } })).map((r) => this.view(r)) };
   }
 
   async get(user: CurrentUser, id: string) {
@@ -359,8 +360,9 @@ export class ValidationService implements OnModuleInit {
   async aggregate(user: CurrentUser, q: { org_id?: string }) {
     this.assert();
     const orgId = orgFor(user, q.org_id);
-    const models = await orgModels(this.models, this.projects, orgId);
-    const projects = await this.projects.find({ where: { tenantId: orgId } });
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
+    const scoped = scopedProjectId();
+    const projects = await this.projects.find({ where: scoped ? { tenantId: orgId, id: scoped } : { tenantId: orgId } });
     const now = Date.now();
     const groups: any[] = [];
     let totals = { models: 0, in_scope: 0, excluded: 0, undecided: 0, validated: 0, exception: 0, missing: 0, open_findings: 0 };

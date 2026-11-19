@@ -51,6 +51,7 @@ import {
   validateRating,
   withinAppetite,
 } from './risk.model';
+import { scopeRiskWhere } from '../project-scope';
 
 const DAY = 86_400_000;
 export const RISK_WRITERS: Role[] = [Role.OWNER, Role.CISO, Role.ADMIN, Role.APPROVER, Role.REVIEWER];
@@ -256,7 +257,7 @@ export class RisksService implements OnModuleInit {
     if (q.scope_id) where.scopeId = q.scope_id;
     if (q.status) where.status = In(q.status.split(','));
     if (q.category) where.category = q.category;
-    const rows = await this.risks.find({ where, order: { updatedAt: 'DESC' } });
+    const rows = await this.risks.find({ where: await scopeRiskWhere(this.models, where), order: { updatedAt: 'DESC' } });
     const s = (await this.settings.inForce(orgId)).settings;
     const risks: Array<Record<string, any>> = [];
     for (const r of rows) risks.push(await this.view(r, s));
@@ -552,7 +553,7 @@ export class RisksService implements OnModuleInit {
     if (q.model_id) Object.assign(where, { scopeType: 'MODEL', scopeId: q.model_id });
     let counted = 0;
     let skipped = 0;
-    for (const r of await this.risks.find({ where })) {
+    for (const r of await this.risks.find({ where: await scopeRiskWhere(this.models, where) })) {
       const a = await this.latestAssessment(r.id);
       if (!a) continue;
       // Risks scored on another matrix cannot be placed on this grid until re-scored.

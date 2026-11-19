@@ -1,7 +1,7 @@
 import { AlertTriangle, Eye } from 'lucide-react';
 import { KeyboardEvent } from 'react';
 
-import { AIComponent, FrameworkCheck, GovernanceGap } from '../../providers';
+import { AIComponent, FRAMEWORK_COLUMNS, frameworkInScope, FrameworkCheck, GovernanceGap } from '../../providers';
 import { EnvFilter, useConsoleUi } from '../../stores/consoleUi';
 import { Badge } from '../ui/Badge';
 import { Panel, PanelError } from '../ui/Panel';
@@ -42,6 +42,8 @@ export function ComplianceMatrix({
   onRetry: () => void;
 }) {
   const select = useConsoleUi((s) => s.select);
+  // A framework column shows only while its pack is enabled for at least one listed model.
+  const columns = FRAMEWORK_COLUMNS.filter((f) => !components.length || components.some((c) => frameworkInScope(c, f.key)));
   const gapCount = (id: string) => gaps.filter((g) => g.componentId === id).length;
 
   const onKey = (e: KeyboardEvent<HTMLTableRowElement>, id: string, idx: number) => {
@@ -75,10 +77,7 @@ export function ComplianceMatrix({
             <th className={TH}>Component</th>
             <th className={TH}>Env</th>
             <th className={TH}>Risk Tier</th>
-            <th className={`${TH} text-center`}>RBI FREE-AI</th>
-            <th className={`${TH} text-center`}>NIST RMF</th>
-            <th className={`${TH} text-center`}>EU AI Act</th>
-            <th className={`${TH} text-center`}>ISO 42001</th>
+            {columns.map((f) => <th key={f.key} className={`${TH} text-center`}>{f.label}</th>)}
             <th className={`${TH} text-center`}>Oversight</th>
             <th className={TH}>Drift</th>
             <th className={TH}>Red-team</th>
@@ -106,10 +105,11 @@ export function ComplianceMatrix({
                 </td>
                 <td className={TD}><Badge tone={ENV_TONE[c.env]}>{c.env}</Badge></td>
                 <td className={TD} title={`Risk tier: ${c.riskTier}${c.riskRationale ? ` — ${c.riskRationale}` : ''}`}><Badge tone={TIER_TONE[c.riskTier]}>{c.riskTier}</Badge></td>
-                <td className={`${TD} text-center`} title={fwTitle('RBI FREE-AI', c.frameworks.rbi)}><StatusCell check={c.frameworks.rbi} framework="RBI FREE-AI" /></td>
-                <td className={`${TD} text-center`} title={fwTitle('NIST RMF', c.frameworks.nist)}><StatusCell check={c.frameworks.nist} framework="NIST RMF" /></td>
-                <td className={`${TD} text-center`} title={fwTitle('EU AI Act', c.frameworks.eu)}><StatusCell check={c.frameworks.eu} framework="EU AI Act" /></td>
-                <td className={`${TD} text-center`} title={fwTitle('ISO 42001', c.frameworks.iso)}><StatusCell check={c.frameworks.iso} framework="ISO 42001" /></td>
+                {columns.map((f) => (
+                  <td key={f.key} className={`${TD} text-center`} title={frameworkInScope(c, f.key) ? fwTitle(f.label, c.frameworks[f.key]) : `${f.label}: pack switched off for this model's organisation (Governance › Setup)`}>
+                    <StatusCell check={c.frameworks[f.key]} framework={f.label} />
+                  </td>
+                ))}
                 <td
                   className={`${TD} text-center`}
                   title={c.humanOversight ? 'Oversight: human-in-the-loop required' : `Oversight: autonomous${c.autonomousScope ? ` — ${c.autonomousScope}` : ''}`}

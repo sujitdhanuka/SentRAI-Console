@@ -34,6 +34,7 @@ export interface GovernanceFeatures {
   aiSecurity?: boolean;
   orgRecords?: boolean;
   federalVendor?: boolean;
+  modelCards?: boolean;
   [k: string]: boolean | undefined;
 }
 

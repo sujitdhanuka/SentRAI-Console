@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { ACTIVE_ORG_KEY, api, TOKEN_KEY, USER_KEY } from '../api/client';
+import { ACTIVE_ORG_KEY, ACTIVE_PROJECT_KEY, api, TOKEN_KEY, USER_KEY } from '../api/client';
 
 export interface SessionUser {
   email: string;
@@ -44,7 +44,7 @@ export const useSession = create<SessionState>((set) => ({
   authed: Boolean(localStorage.getItem(TOKEN_KEY)),
   busy: false,
   error: null,
-  activeProjectId: localStorage.getItem('sentrai_active_project_id') || null,
+  activeProjectId: localStorage.getItem(ACTIVE_PROJECT_KEY) || null,
   activeProjectName: localStorage.getItem('sentrai_active_project_name') || null,
   activeOrgId: localStorage.getItem(ACTIVE_ORG_KEY) || null,
 
@@ -78,10 +78,10 @@ export const useSession = create<SessionState>((set) => ({
 
   setActiveProject(id, name, orgId) {
     if (id) {
-      localStorage.setItem('sentrai_active_project_id', id);
+      localStorage.setItem(ACTIVE_PROJECT_KEY, id);
       localStorage.setItem('sentrai_active_project_name', name ?? '');
     } else {
-      localStorage.removeItem('sentrai_active_project_id');
+      localStorage.removeItem(ACTIVE_PROJECT_KEY);
       localStorage.removeItem('sentrai_active_project_name');
     }
     if (id && orgId) localStorage.setItem(ACTIVE_ORG_KEY, orgId);

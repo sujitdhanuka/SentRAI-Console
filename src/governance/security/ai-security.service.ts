@@ -16,7 +16,7 @@ import { AIModelEntity, ProjectEntity, SecurityEvaluationEntity, ThreatModelEnti
 import { InventoryService } from '../../inventory/inventory.service';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts } from '../hooks';
-import { MAINTAINERS, OFFICERS, optDate, optText, orgFor, orgModels, reqText, requireRole, saveVersioned, isFuture } from '../phase2-util';
+import { MAINTAINERS, OFFICERS, optDate, optText, orgFor, scopedOrgModels, reqText, requireRole, saveVersioned, isFuture } from '../phase2-util';
 import { RisksService } from '../risks/risks.service';
 import {
   approvalProblems, ATTACK_CATEGORIES, EvalCategory, mergeThreats, parseEvalCategories, securityFacts, templateThreats, Threat,
@@ -79,7 +79,7 @@ export class AiSecurityService implements OnModuleInit {
   async overview(user: CurrentUser, q: { org_id?: string }) {
     this.assert();
     const orgId = orgFor(user, q.org_id);
-    const models = await orgModels(this.models, this.projects, orgId);
+    const models = await scopedOrgModels(this.models, this.projects, orgId);
     const rows: Array<Record<string, any>> = [];
     for (const m of models) rows.push({ model_id: m.id, name: m.name, model_type: m.modelType, ...(await this.factsFor(m.id)) });
     return { org_id: orgId, template_id: TEMPLATE_ID, models: rows };

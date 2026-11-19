@@ -7,8 +7,9 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { emitModelEvent, governanceHooks } from '../governance/hooks';
+import { FrameworkScope, frameworkScopeForOrg, scopedVerdict, UNRESTRICTED_SCOPE } from '../compliance/framework-scope';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { ConfigService } from '@nestjs/config';
@@ -183,8 +184,8 @@ export class InventoryService implements OnModuleInit {
 
   /** `lastDrill` is the model's latest successful BCP drill (E0.4); pass it from
    *  latestSuccessfulDrills so the list agrees with the compliance check. */
-  private buildResponse(orm: AIModelEntity, triagedRisk?: RiskLevel, lastDrill: Date | null = null): ModelResponse {
-    const report = validateSutrasCompliance(modelEntityToEntry(orm), { bcpDrillLastConducted: lastDrill });
+  private async buildResponse(orm: AIModelEntity, triagedRisk?: RiskLevel, lastDrill: Date | null = null, scope: FrameworkScope = UNRESTRICTED_SCOPE): Promise<ModelResponse> {
+    const verdict = await this.verdictFor(orm, lastDrill, scope);
     return {
       model_id: orm.id,
       name: orm.name,
@@ -195,8 +196,8 @@ export class InventoryService implements OnModuleInit {
       source_ref: orm.sourceRef,
       project_id: orm.projectId,
       registered_at: orm.registeredAt,
-      compliance_pass: sutrasOverallPass(report),
-      open_gap_count: sutrasBlockingGaps(report).length,
+      compliance_pass: verdict.pass,
+      open_gap_count: verdict.gaps,
       use_case_description: orm.useCaseDescription,
       owner_team: orm.ownerTeam,
       board_policy_ref: orm.boardPolicyRef,
@@ -313,7 +314,7 @@ export class InventoryService implements OnModuleInit {
 
     const planWarning = await this.checkPlanSoftLimit(entry.projectId);
     const lastDrill = await latestSuccessfulDrill(this.bcpDrills, orm.id);
-    return { ...this.buildResponse(orm, triaged, lastDrill), plan_warning: planWarning };
+    return { ...(await this.buildResponse(orm, triaged, lastDrill, await this.frameworkScope(orm))), plan_warning: planWarning };
   }
 
   /**
@@ -393,7 +394,15 @@ export class InventoryService implements OnModuleInit {
     if (opts.projectId) qb.andWhere('m.projectId = :pid', { pid: opts.projectId });
     const rows = await qb.getMany();
     const drills = await latestSuccessfulDrills(this.bcpDrills, rows.map((r) => r.id));
-    return rows.map((r) => this.buildResponse(r, undefined, drills.get(r.id) ?? null));
+    // One scope lookup per organisation, not per model.
+    const tenantOf = new Map<string, string | null>();
+    const projectIds = [...new Set(rows.map((r) => r.projectId).filter((p): p is string => Boolean(p)))];
+    if (projectIds.length) for (const p of await this.projects.find({ where: { id: In(projectIds) }, select: ['id', 'tenantId'] })) tenantOf.set(p.id, p.tenantId ?? null);
+    const scopes = new Map<string | null, FrameworkScope>();
+    for (const t of new Set([...tenantOf.values(), null])) scopes.set(t, await frameworkScopeForOrg(t));
+    const out: ModelResponse[] = [];
+    for (const r of rows) out.push(await this.buildResponse(r, undefined, drills.get(r.id) ?? null, scopes.get(r.projectId ? tenantOf.get(r.projectId) ?? null : null)));
+    return out;
   }
 
   private async getOrThrow(modelId: string): Promise<AIModelEntity> {
@@ -406,7 +415,7 @@ export class InventoryService implements OnModuleInit {
    *  read tool authorization and operational state. */
   async getModel(modelId: string): Promise<ModelResponse> {
     const orm = await this.getOrThrow(modelId);
-    return this.buildResponse(orm, undefined, await latestSuccessfulDrill(this.bcpDrills, orm.id));
+    return this.buildResponse(orm, undefined, await latestSuccessfulDrill(this.bcpDrills, orm.id), await this.frameworkScope(orm));
   }
 
   /**
@@ -843,6 +852,7 @@ export class InventoryService implements OnModuleInit {
     compliance.nist_rmf = frameworkReportAsDict(validateNistRmf(finalEntry, ctx));
     compliance.eu_ai_act = frameworkReportAsDict(validateEuAiAct(finalEntry, ctx));
     compliance.iso_42001 = frameworkReportAsDict(validateIso42001(finalEntry, ctx));
+    this.withFrameworkScope(compliance, await this.frameworkScope(orm));
 
     return {
       model_id: modelId,
@@ -860,6 +870,34 @@ export class InventoryService implements OnModuleInit {
     res.nist_rmf = frameworkReportAsDict(validateNistRmf(entry, ctx));
     res.eu_ai_act = frameworkReportAsDict(validateEuAiAct(entry, ctx));
     res.iso_42001 = frameworkReportAsDict(validateIso42001(entry, ctx));
+    return this.withFrameworkScope(res, await this.frameworkScope(orm));
+  }
+
+  /**
+   * The verdict the model list, model detail and project counts show: the
+   * in-scope frameworks, evaluated with the same context as the compliance
+   * check (the RBI Sutras with the drill date only, as before, without settings).
+   */
+  async verdictFor(orm: AIModelEntity, lastDrill: Date | null, scope: FrameworkScope): Promise<{ pass: boolean; gaps: number }> {
+    const ctx = scope.restricted ? await this.buildValidationContext(orm.id) : { bcpDrillLastConducted: lastDrill };
+    return scopedVerdict(modelEntityToEntry(orm), ctx, scope);
+  }
+
+  /** The report frameworks that apply to a model: its organisation's enabled packs (every one without settings). */
+  async frameworkScope(orm: Pick<AIModelEntity, 'id' | 'projectId'>): Promise<FrameworkScope> {
+    const project = orm.projectId ? await this.projects.findOne({ where: { id: orm.projectId }, select: ['id', 'tenantId'] }) : null;
+    return frameworkScopeForOrg(project?.tenantId ?? null);
+  }
+
+  /**
+   * Mark which frameworks apply. Reports for switched-off packs stay in the
+   * response (nothing is deleted) but every consumer reads frameworks_in_scope
+   * and neither shows nor counts the others.
+   */
+  private withFrameworkScope(res: Record<string, any>, scope: FrameworkScope): Record<string, any> {
+    res.frameworks_in_scope = scope.frameworks;
+    res.frameworks_not_in_scope = scope.excluded;
+    res.packs_in_scope = scope.pack_ids;
     return res;
   }
 

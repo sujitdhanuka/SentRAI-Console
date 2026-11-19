@@ -58,7 +58,31 @@ export interface AIComponent {
     eu: FrameworkCheck;
     iso: FrameworkCheck;
   };
+  /**
+   * Frameworks whose packs are enabled for the model's organisation (Governance
+   * › Setup). Others read "na" and are neither asked for nor counted. Absent:
+   * every framework applies.
+   */
+  frameworksInScope?: FrameworkKey[];
+  /** Packs that apply to the model's organisation (null/absent: every pack, no settings in force). */
+  packsInScope?: string[] | null;
 }
+
+export type FrameworkKey = 'rbi' | 'nist' | 'eu' | 'iso';
+
+/** The report frameworks in display order. */
+export const FRAMEWORK_COLUMNS: Array<{ key: FrameworkKey; label: string; long: string }> = [
+  { key: 'rbi', label: 'RBI FREE-AI', long: 'RBI FREE-AI 7 Sutras' },
+  { key: 'nist', label: 'NIST RMF', long: 'NIST AI RMF 1.0' },
+  { key: 'eu', label: 'EU AI Act', long: 'EU AI Act' },
+  { key: 'iso', label: 'ISO 42001', long: 'ISO 42001' },
+];
+
+/** Whether a framework applies to a component (every framework when the server sent no scope). */
+export const frameworkInScope = (c: Pick<AIComponent, 'frameworksInScope'>, key: FrameworkKey) => !c.frameworksInScope || c.frameworksInScope.includes(key);
+
+/** Whether a pack applies to a component (every pack when no settings are in force). */
+export const packInScope = (c: Pick<AIComponent, 'packsInScope'> | null | undefined, packId: string) => !c?.packsInScope || c.packsInScope.includes(packId);
 
 export interface GovernanceGap {
   id: string;

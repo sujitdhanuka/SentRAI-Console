@@ -1,13 +1,20 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, LessThan, Not, Repository } from 'typeorm';
 
 import {
   AgentActionEventEntity,
   AIIncidentEntity,
   AIModelEntity,
   AuditEventEntity,
+  ControlledDocumentEntity,
+  CorrectiveActionEntity,
   DeploymentGateEventEntity,
+  ImpactAssessmentEntity,
+  OrganizationEntity,
+  RiskEntity,
+  SoaStatementEntity,
+  VendorEntity,
   DriftReportEntity,
   GrievanceEntity,
   ProjectEntity,
@@ -18,6 +25,9 @@ import { InventoryService } from '../inventory/inventory.service';
 import { SummarizerService } from '../summarizer/summarizer.service';
 import { governanceHooks } from '../governance/hooks';
 import { FRAMEWORK_NAMES, frameworkReadiness, gapStatement } from './control-plain-english';
+import { capabilities, coverageFor, GovernanceProgramme, packSplit, PROGRAMME_VERSION } from './governance-programme';
+import { OPEN_STATUSES as OPEN_RISK_STATUSES } from '../governance/risks/risk.model';
+import { ALL_REPORT_FRAMEWORKS, frameworkKey, frameworkReportOf, frameworkScopeForOrg, frameworksInScopeOf, REPORT_FRAMEWORKS } from './framework-scope';
 import { sourceLocationsOf } from '../discovery/source-locations';
 import { getFeatureFlags } from '../common/feature-flags';
 import { packRegistry } from '../governance/packs/pack-loader';
@@ -27,6 +37,13 @@ import { daysBetween, LEGACY_RED_TEAM_INTERVAL_DAYS, lastRedTeamEvidenceAt, redT
 
 const FRAMEWORK_IDS = ['rbi_free_ai', 'nist_ai_rmf', 'eu_ai_act', 'iso_42001'] as const;
 const HIGH_RISK = new Set(['HIGH', 'CRITICAL', 'PROHIBITED']);
+
+/** "all four frameworks", or "the 2 frameworks in scope (NIST AI RMF, ISO/IEC 42001)". */
+function frameworksPhrase(ids: readonly string[], selected: boolean): string {
+  if (ids.length === FRAMEWORK_IDS.length) return 'all four frameworks';
+  const names = ids.map((id) => FRAMEWORK_NAMES[id] ?? id).join(', ');
+  return `the ${ids.length} ${selected ? 'selected' : 'in-scope'} framework${ids.length === 1 ? '' : 's'}${names ? ` (${names})` : ''}`;
+}
 
 export interface PortfolioReport {
   generated_at: string;
@@ -50,6 +67,12 @@ export interface PortfolioReport {
     readiness: string;
   }>;
   top_gaps: Array<{ framework: string; control: string; count: number; statement: string }>;
+  /** Packs that apply to the models in scope (union over their organisations); null with no models. */
+  pack_ids_in_scope: string[] | null;
+  /** Frameworks assessed: those of the packs enabled for the models' organisations. */
+  frameworks_in_scope: string[];
+  /** Frameworks whose packs are switched off for every model in scope (not asked for, not counted). */
+  frameworks_not_in_scope: string[];
   /** Shift-left signal from the CI pre-deployment gate ledger. */
   /** Packs in force and which are selected (E1.1, only with the pack engine on). */
   packs?: Array<{ pack_id: string; name: string; version: string; legacy_framework_id: string; baseline: boolean; region: string | null; selected: boolean }>;
@@ -78,9 +101,74 @@ export class ComplianceService {
     private readonly auditEvents: Repository<AuditEventEntity>,
     @InjectRepository(AgentActionEventEntity)
     private readonly actions: Repository<AgentActionEventEntity>,
+    @InjectRepository(OrganizationEntity) private readonly orgs: Repository<OrganizationEntity>,
+    @InjectRepository(RiskEntity) private readonly risks: Repository<RiskEntity>,
+    @InjectRepository(ImpactAssessmentEntity) private readonly impacts: Repository<ImpactAssessmentEntity>,
+    @InjectRepository(CorrectiveActionEntity) private readonly correctiveActions: Repository<CorrectiveActionEntity>,
+    @InjectRepository(ControlledDocumentEntity) private readonly documents: Repository<ControlledDocumentEntity>,
+    @InjectRepository(SoaStatementEntity) private readonly soas: Repository<SoaStatementEntity>,
+    @InjectRepository(VendorEntity) private readonly vendors: Repository<VendorEntity>,
     private readonly inventory: InventoryService,
     private readonly summarizer: SummarizerService,
   ) {}
+
+  /** The organisation the report is for: the project's, else the caller's. */
+  private async orgName(user: CurrentUser, projectOrg: string | null): Promise<string | null> {
+    const id = projectOrg ?? user.tenantId ?? null;
+    return id ? (await this.orgs.findOne({ where: { id }, select: ['id', 'name'] }))?.name ?? null : null;
+  }
+
+  /** Active models in scope (tenant + optional project), with their organisation. */
+  private async scopedModels(user: CurrentUser, projectId?: string | null): Promise<Array<{ id: string; orgId: string | null }>> {
+    const qb = this.models.createQueryBuilder('m').leftJoin(ProjectEntity, 'p', 'p.id = m.projectId')
+      .select('m.id', 'id').addSelect('p.tenantId', 'orgId').where('m.isActive = 1');
+    if (user.role !== Role.ADMIN && user.tenantId) qb.andWhere('p.tenantId = :tid', { tid: user.tenantId });
+    if (projectId) qb.andWhere('m.projectId = :pid', { pid: projectId });
+    return qb.getRawMany();
+  }
+
+  /**
+   * The governance programme for the reports: packs that apply and those
+   * switched off, capabilities on in this deployment, reviewed coverage of the
+   * frameworks in scope, register counts and model cards.
+   */
+  async programme(user: CurrentUser, projectId: string | null, report: Pick<PortfolioReport, 'pack_ids_in_scope'>): Promise<GovernanceProgramme> {
+    const flags = getFeatureFlags();
+    const scoped = await this.scopedModels(user, projectId);
+    const modelIds = scoped.map((m) => m.id);
+    const orgIds = [...new Set([...scoped.map((m) => m.orgId), user.tenantId ?? null].filter((o): o is string => Boolean(o)))];
+    let packIds = report.pack_ids_in_scope;
+    if (!packIds) packIds = (await frameworkScopeForOrg(user.tenantId ?? null)).pack_ids;
+    let registers: GovernanceProgramme['registers'] = null;
+    if (flags.governanceV2 && orgIds.length) {
+      const now = new Date();
+      const org = { orgId: In(orgIds) };
+      const ia = modelIds.length ? await this.impacts.find({ where: { modelId: In(modelIds) }, select: ['id', 'modelId', 'status'] }) : [];
+      const soa = await this.soas.findOne({ where: org, order: { version: 'DESC' } });
+      registers = {
+        risks_open: flags.riskRegister ? await this.risks.count({ where: { ...org, status: In(OPEN_RISK_STATUSES) } }) : null,
+        risks_total: flags.riskRegister ? await this.risks.count({ where: { ...org, status: Not('DISMISSED') } }) : null,
+        impact_final_models: flags.impactAssessment ? new Set(ia.filter((r) => r.status === 'FINAL').map((r) => r.modelId)).size : null,
+        impact_draft: flags.impactAssessment ? ia.filter((r) => r.status === 'DRAFT').length : null,
+        impact_revalidation: flags.impactAssessment ? ia.filter((r) => r.status === 'REVALIDATION_REQUIRED').length : null,
+        actions_open: flags.correctiveActions ? await this.correctiveActions.count({ where: { ...org, status: Not('CLOSED') } }) : null,
+        actions_overdue: flags.correctiveActions ? await this.correctiveActions.count({ where: { ...org, status: Not('CLOSED'), dueAt: LessThan(now) } }) : null,
+        documents_approved: flags.documentControl ? await this.documents.count({ where: { ...org, status: 'APPROVED' } }) : null,
+        documents_review_due: flags.documentControl ? await this.documents.count({ where: { ...org, status: 'APPROVED', reviewDueAt: LessThan(now) } }) : null,
+        soa_version: flags.soa ? (soa ? `v${soa.version} approved ${soa.approvedAt.toISOString().slice(0, 10)}` : 'not approved yet') : null,
+        vendors_active: flags.vendors ? await this.vendors.count({ where: { ...org, status: 'ACTIVE' } }) : null,
+      };
+    }
+    return {
+      version: PROGRAMME_VERSION,
+      governance_on: flags.governanceV2,
+      ...packSplit(packIds),
+      capabilities: capabilities(flags),
+      coverage: coverageFor(packIds, flags),
+      registers,
+      model_cards: (await governanceHooks.modelCardSummary?.(modelIds)) ?? null,
+    };
+  }
 
   /**
    * Fleet matrix for the dashboard UI: one call returning, per model, the four
@@ -120,19 +208,23 @@ export class ComplianceService {
 
     const components = [] as Record<string, any>[];
     const gaps = [] as Record<string, any>[];
+    const scopeUnion = new Set<string>();
     for (const m of models) {
       const report = await this.inventory.complianceCheck(m.id);
-      const perFw: Array<[string, string, any]> = [
-        ['rbi', 'RBI FREE-AI', report],
-        ['nist', 'NIST AI RMF', report.nist_rmf],
-        ['eu', 'EU AI Act', report.eu_ai_act],
-        ['iso', 'ISO 42001', report.iso_42001],
-      ];
+      // Only the frameworks of the organisation's enabled packs are asked for:
+      // a switched-off one reads "na" and its gaps are not listed or counted.
+      const inScope = frameworksInScopeOf(report);
+      inScope.forEach((id) => scopeUnion.add(frameworkKey(id)));
       const frameworks: Record<string, { status: string }> = {};
-      for (const [key, label, r] of perFw) {
-        frameworks[key] = { status: r?.overall_pass ? 'ok' : 'gap' };
+      for (const f of REPORT_FRAMEWORKS) {
+        const r = frameworkReportOf(report, f.id);
+        if (!inScope.includes(f.id)) {
+          frameworks[f.key] = { status: 'na' };
+          continue;
+        }
+        frameworks[f.key] = { status: r?.overall_pass ? 'ok' : 'gap' };
         for (const g of r?.blocking_gaps ?? []) {
-          gaps.push({ model_id: m.id, framework: label, description: g, severity: severity(m.riskLevel) });
+          gaps.push({ model_id: m.id, framework: f.label, description: g, severity: severity(m.riskLevel) });
         }
       }
       const plan = currentPlan(m, gapLinesOf(report));
@@ -175,9 +267,12 @@ export class ComplianceService {
         merge_history: m.mergeHistory ?? [],
         source_locations: sourceLocationsOf(m),
         frameworks,
+        frameworks_in_scope: inScope.map(frameworkKey),
+        packs_in_scope: report.packs_in_scope ?? null,
       });
     }
-    return { generated_at: new Date().toISOString(), red_team_policy: redTeamPolicy, components, gaps };
+    const frameworksInScope = models.length ? REPORT_FRAMEWORKS.filter((f) => scopeUnion.has(f.key)).map((f) => f.key) : REPORT_FRAMEWORKS.map((f) => f.key);
+    return { generated_at: new Date().toISOString(), red_team_policy: redTeamPolicy, frameworks_in_scope: frameworksInScope, components, gaps };
   }
 
   /**
@@ -216,18 +311,22 @@ export class ComplianceService {
     let fullyCompliant = 0;
     let totalGaps = 0;
     let highRisk = 0;
+    const assessedIds = new Set<string>();
+    const packUnion = new Set<string>();
 
     for (const m of models) {
       riskTiers[m.riskLevel] = (riskTiers[m.riskLevel] ?? 0) + 1;
       if (HIGH_RISK.has(m.riskLevel)) highRisk += 1;
 
       const report = await this.inventory.complianceCheck(m.id);
-      const perFw: Array<[string, any]> = [
-        ['rbi_free_ai', report], // the sutras report is the top-level object
-        ['nist_ai_rmf', report.nist_rmf],
-        ['eu_ai_act', report.eu_ai_act],
-        ['iso_42001', report.iso_42001],
-      ].filter(([id]) => fwIds.includes(id as string)) as Array<[string, any]>;
+      // A framework counts for a model only while its pack is enabled for the
+      // model's organisation (and, with a pack selector, selected).
+      const inScope = frameworksInScopeOf(report);
+      const perFw: Array<[string, any]> = ALL_REPORT_FRAMEWORKS
+        .filter((id) => fwIds.includes(id) && inScope.includes(id))
+        .map((id) => [id, frameworkReportOf(report, id)]);
+      for (const [id] of perFw) assessedIds.add(id);
+      for (const id of report.packs_in_scope ?? packRegistry().defaultPackIds()) packUnion.add(id);
 
       let allPass = true;
       for (const [fwId, r] of perFw) {
@@ -261,6 +360,9 @@ export class ComplianceService {
     }
 
     const total = models.length;
+    // Frameworks no model in scope assesses (every model's organisation has the pack off) are left out.
+    const reported = total ? fwIds.filter((id) => assessedIds.has(id)) : fwIds;
+    const notInScope = FRAMEWORK_IDS.filter((id) => fwIds.includes(id) && !reported.includes(id));
     const topGaps = [...gapCounts.values()]
       .sort((a, b) => b.count - a.count)
       .slice(0, 8)
@@ -277,7 +379,7 @@ export class ComplianceService {
     const headline =
       total === 0
         ? 'No AI models registered yet — add models to assess portfolio compliance.'
-        : `${fullyCompliant} of ${total} models (${Math.round(rate * 100)}%) fully compliant across ${fwIds.length === FRAMEWORK_IDS.length ? 'all four frameworks' : `the ${fwIds.length} selected framework${fwIds.length === 1 ? '' : 's'}`}; ` +
+        : `${fullyCompliant} of ${total} models (${Math.round(rate * 100)}%) fully compliant across ${frameworksPhrase(reported, fwIds.length < FRAMEWORK_IDS.length)}; ` +
           `${highRisk} high-risk, ${totalGaps} blocking control gap${totalGaps === 1 ? '' : 's'} open.`;
 
     return {
@@ -292,7 +394,10 @@ export class ComplianceService {
         headline,
       },
       risk_tiers: riskTiers,
-      frameworks: fwIds.map((id) => ({
+      pack_ids_in_scope: total ? [...packUnion] : null,
+      frameworks_in_scope: reported.map((id) => FRAMEWORK_NAMES[id] ?? id),
+      frameworks_not_in_scope: notInScope.map((id) => FRAMEWORK_NAMES[id] ?? id),
+      frameworks: reported.map((id) => ({
         id,
         name: FRAMEWORK_NAMES[id],
         models_assessed: fw[id].assessed,
@@ -305,7 +410,8 @@ export class ComplianceService {
       ci_gate: ciGate,
       ...(packsOn
         ? {
-            packs: inForce.map((p) => ({
+            // Only the packs that apply to the models in scope: a pack switched off in Governance › Setup is not offered.
+            packs: inForce.filter((p) => !total || packUnion.has(p.definition.id)).map((p) => ({
               pack_id: p.definition.id,
               name: p.definition.name,
               version: p.definition.version,
@@ -368,10 +474,11 @@ export class ComplianceService {
     const deviationModels = new Set(actions.filter((a) => a.flagged).map((a) => a.modelId)).size;
 
     const project = projectId ? await this.projects.findOne({ where: { id: projectId } }) : null;
+    const governance = await this.programme(user, projectId ?? null, report);
 
     return {
       generated_at: report.generated_at,
-      org_name: incidents.find((i) => i.reName)?.reName ?? project?.name ?? 'Organization',
+      org_name: (await this.orgName(user, project?.tenantId ?? null)) ?? incidents.find((i) => i.reName)?.reName ?? project?.name ?? 'Organization',
       scope_name: project?.name ?? 'All projects',
       narrative: project?.execNarrative ?? null,
       summary: report.summary,
@@ -391,6 +498,8 @@ export class ComplianceService {
       incidents: { total: incidents.length, open: incidentsOpen, by_severity: bySeverity },
       grievances: { total: grievances.length, open: grievancesOpen, resolved: grievancesResolved },
       audit: { chained_events: chained, intact: true },
+      frameworks_not_in_scope: report.frameworks_not_in_scope,
+      governance,
     };
   }
 
@@ -421,7 +530,7 @@ export class ComplianceService {
 
     const portfolioStats = [
       `${s.total_models} models registered`,
-      `${s.fully_compliant} fully compliant across all four frameworks (${Math.round(s.compliance_rate * 100)}%)`,
+      `${s.fully_compliant} fully compliant across ${frameworksPhrase(report.frameworks.map((f) => f.id), false)} (${Math.round(s.compliance_rate * 100)}%)`,
       `${s.high_risk_models} high-risk`,
       `${s.open_blocking_gaps} blocking control gaps open`,
       ...report.frameworks.map((f) => `${f.name}: ${f.models_passing}/${f.models_assessed} passing`),
@@ -442,7 +551,7 @@ export class ComplianceService {
       'exec_narrative',
       { portfolio_stats: portfolioStats, top_gaps: topGaps, ci_metrics: ciMetrics },
       () =>
-        `${s.headline} Across the four frameworks the portfolio shows ` +
+        `${s.headline} Across ${report.frameworks.length === 4 ? 'the four frameworks' : `the ${report.frameworks.length} frameworks in scope`} the portfolio shows ` +
         `${report.frameworks.map((f) => `${f.name} at ${Math.round(f.pass_rate * 100)}%`).join(', ')}. ` +
         `Most material gaps: ${topGaps}. Pre-deployment enforcement: ${ciMetrics}. ` +
         '(Auto-generated — review before board circulation.)',

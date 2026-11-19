@@ -11,6 +11,7 @@ import { AIModelEntity, ProjectEntity, UserEntity } from '../database/entities';
 import { orgScope } from './governance-access';
 import { resolveForPacks } from './packs/pack-engine';
 import { packRegistry } from './packs/pack-loader';
+import { scopedProjectId } from './project-scope';
 import type { PacksService } from './packs/packs.service';
 
 export const DAY_MS = 86_400_000;
@@ -69,6 +70,17 @@ export async function orgModels(models: Repository<AIModelEntity>, projects: Rep
   const projectIds = (await projects.find({ where: { tenantId: orgId }, select: ['id'] })).map((p) => p.id);
   if (!projectIds.length) return [];
   return models.find({ where: { projectId: In(projectIds), isActive: true }, order: { name: 'ASC' } });
+}
+
+/**
+ * Active models in an organisation as the console sees them: only the scoped
+ * project's models while a project is selected (see project-scope.ts). Use for
+ * overviews and lists; organisation-wide documents use orgModels.
+ */
+export async function scopedOrgModels(models: Repository<AIModelEntity>, projects: Repository<ProjectEntity>, orgId: string): Promise<AIModelEntity[]> {
+  const all = await orgModels(models, projects, orgId);
+  const projectId = scopedProjectId();
+  return projectId ? all.filter((m) => m.projectId === projectId) : all;
 }
 
 /** The organisation that owns a model, or null. */

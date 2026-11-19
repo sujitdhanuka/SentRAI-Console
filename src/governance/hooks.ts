@@ -8,6 +8,12 @@
 import type { ResolvedParameters } from './packs/pack.types';
 
 export interface GovernanceHooks {
+  /**
+   * Packs that apply to an organisation (baseline + region packs enabled in its
+   * settings). Undefined while governance settings are off or for a model outside
+   * any organisation: every framework then applies, as before.
+   */
+  orgPackIds?: (orgId: string | null, at?: Date) => Promise<string[] | undefined>;
   /** Parameters for an organisation (enabled packs + settings, strictest wins). */
   orgPackParams?: (orgId: string | null, at?: Date) => Promise<ResolvedParameters | undefined>;
   /** Register-backed facts per model for the controls (risk register, impact assessment). */
@@ -31,6 +37,8 @@ export interface GovernanceHooks {
    * Undefined (or no hook) means calls are allowed, as before.
    */
   externalAiPolicy?: (tenantId: string | null) => Promise<ExternalAiPolicy | undefined>;
+  /** E4.1: model-card counts for these models (current final, stale final, draft only, none); undefined while the flag is off. */
+  modelCardSummary?: (modelIds: string[]) => Promise<{ models: number; final_current: number; final_stale: number; draft_only: number; none: number } | undefined>;
   /** E3.4: a reason a model cannot be moved to DECOMMISSIONED directly (retirement workflow), or null. */
   retirementCheck?: (modelId: string) => Promise<string | null>;
 }

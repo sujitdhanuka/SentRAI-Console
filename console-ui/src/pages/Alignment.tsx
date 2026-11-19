@@ -10,6 +10,7 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { routeParam } from '../stores/route';
 import { useSession } from '../stores/session';
 import { ApprovalsInbox } from '../components/console/ApprovalsInbox';
 
@@ -52,7 +53,11 @@ const CAMPAIGN_ADMIN_ROLES = ['OWNER', 'APPROVER', 'CISO', 'ADMIN'];
  */
 export function Alignment() {
   const toast = useConsoleUi((s) => s.toast);
-  const [tab, setTab] = useState<'inbox' | 'approvals' | 'attestations'>('inbox');
+  // #/alignment?tab=approvals (a workflow step) opens that tab.
+  const [tab, setTab] = useState<'inbox' | 'approvals' | 'attestations'>(() => {
+    const t = routeParam('tab');
+    return t === 'approvals' || t === 'attestations' ? t : 'inbox';
+  });
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);

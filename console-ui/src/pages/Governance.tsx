@@ -751,7 +751,7 @@ export function Governance() {
           </button>
         ))}
       </div>
-      <main key={orgId ?? 'none'} className="min-h-0 flex-1 overflow-y-auto p-2">
+      <main key={`${orgId ?? 'none'}:${activeProjectId ?? 'all'}`} className="min-h-0 flex-1 overflow-y-auto p-2">
         {!features || resolving ? (
           <Skeleton className="h-64 w-full" />
         ) : !features.governanceSettings ? (

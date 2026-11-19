@@ -22,7 +22,7 @@ import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, addOrgFacts, emitModelEvent, governanceHooks } from '../hooks';
 import { phase2Param } from '../packs/parameter-resolver';
 import { PacksService } from '../packs/packs.service';
-import { addMonths, DAY_MS, MAINTAINERS, orgFor, orgModels, orgParams, reqText, requireRole } from '../phase2-util';
+import { addMonths, DAY_MS, MAINTAINERS, orgFor, scopedOrgModels, orgParams, reqText, requireRole } from '../phase2-util';
 import { gateTierOf, GovernanceSettingsDoc } from '../settings/settings.model';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import { RisksService } from '../risks/risks.service';
@@ -233,7 +233,7 @@ export class RedTeamAuditService implements OnModuleInit {
     const params = await orgParams(this.packs, orgId);
     const pre = params['redTeamPreDeployRequired.HIGH'] === true;
     const rows: any[] = [];
-    for (const m of await orgModels(this.models, this.projects, orgId)) {
+    for (const m of await scopedOrgModels(this.models, this.projects, orgId)) {
       const rt = redTeamState(m, pre);
       const tp = await this.thirdPartyRequired(m, orgId);
       const due = await this.auditDueFor(m, params, tp);

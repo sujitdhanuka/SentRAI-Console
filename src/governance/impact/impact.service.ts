@@ -25,6 +25,7 @@ import { GovernanceSettingsService } from '../settings/settings.service';
 import { gateTierOf } from '../settings/settings.model';
 import { checkAnswers, defaultQuestionnaires, deriveFlags, prefillAnswers, QUESTIONNAIRES, questionnaireById } from './questionnaires';
 import { renderReport, REPORT_LAYOUTS } from './reports';
+import { scopeModelWhere } from '../project-scope';
 
 export const IA_SIGNERS: Role[] = [Role.OWNER, Role.CISO, Role.APPROVER];
 
@@ -123,7 +124,7 @@ export class ImpactAssessmentService implements OnModuleInit {
     const where: Record<string, any> = { orgId };
     if (q.model_id) where.modelId = q.model_id;
     if (q.status) where.status = q.status;
-    const rows = await this.rows.find({ where, order: { updatedAt: 'DESC' } });
+    const rows = await this.rows.find({ where: await scopeModelWhere(this.models, where), order: { updatedAt: 'DESC' } });
     return { org_id: orgId, assessments: rows.map((r) => this.view(r)) };
   }
 

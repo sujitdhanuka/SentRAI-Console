@@ -40,6 +40,8 @@ export function heuristicRemediationStep(gap: string): string {
 }
 
 interface ReportLike {
+  /** Frameworks whose criteria apply (enabled packs); every framework when absent. */
+  frameworks_in_scope?: string[];
   blocking_gaps?: string[];
   nist_rmf?: { blocking_gaps?: string[] } | null;
   eu_ai_act?: { blocking_gaps?: string[] } | null;
@@ -48,11 +50,13 @@ interface ReportLike {
 
 /** The open gaps of a compliance-check report, one prefixed line per gap. */
 export function gapLinesOf(report: ReportLike): string[] {
+  // A switched-off pack's gaps are not asked for: they never enter the plan.
+  const on = (id: string) => !Array.isArray(report.frameworks_in_scope) || report.frameworks_in_scope.includes(id);
   return [
-    ...(report.blocking_gaps ?? []).map((g) => `${GAP_LINE_PREFIX.rbi} ${g}`),
-    ...(report.nist_rmf?.blocking_gaps ?? []).map((g) => `${GAP_LINE_PREFIX.nist} ${g}`),
-    ...(report.eu_ai_act?.blocking_gaps ?? []).map((g) => `${GAP_LINE_PREFIX.eu} ${g}`),
-    ...(report.iso_42001?.blocking_gaps ?? []).map((g) => `${GAP_LINE_PREFIX.iso} ${g}`),
+    ...(on('rbi_free_ai') ? report.blocking_gaps ?? [] : []).map((g) => `${GAP_LINE_PREFIX.rbi} ${g}`),
+    ...(on('nist_ai_rmf') ? report.nist_rmf?.blocking_gaps ?? [] : []).map((g) => `${GAP_LINE_PREFIX.nist} ${g}`),
+    ...(on('eu_ai_act') ? report.eu_ai_act?.blocking_gaps ?? [] : []).map((g) => `${GAP_LINE_PREFIX.eu} ${g}`),
+    ...(on('iso_42001') ? report.iso_42001?.blocking_gaps ?? [] : []).map((g) => `${GAP_LINE_PREFIX.iso} ${g}`),
   ];
 }
 
