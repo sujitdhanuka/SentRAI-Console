@@ -4,7 +4,7 @@
  * on the model as kWh and kg CO2e with the organisation's grid factor.
  * Shown on the transparency card and in the transparency statement.
  */
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -87,8 +87,9 @@ export class EnergyService implements OnModuleInit {
   }
 
   /** Current GPU power draw on this server (empty without nvidia-smi). */
-  gpuNow() {
+  gpuNow(user: CurrentUser) {
     this.assert();
+    if (user.role !== 'ADMIN' || user.tenantId) throw new ForbiddenException('Only a platform admin can read the server GPUs');
     return { gpus: getGpuPower() };
   }
 
@@ -125,7 +126,7 @@ export class EnergyService implements OnModuleInit {
       count = samples.length;
       periodStart = samples[0].at;
       periodEnd = samples[samples.length - 1].at;
-      if (r.gaps) note = [note, `${r.gaps} gap(s) longer than ${maxGap}s not counted`].filter(Boolean).join('; ');
+      if (r.gaps) note = [note, `${r.gaps} gap(s) longer than ${maxGap}s not counted`].filter(Boolean).join('; ').slice(0, 500);
     }
     if (periodEnd.getTime() > Date.now() + 60_000) throw new BadRequestException('Readings cannot be in the future');
     // The same period cannot be counted twice.

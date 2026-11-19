@@ -3804,11 +3804,23 @@ describe('SentrAI Console (e2e)', () => {
       expect(dev.content.deployers).toEqual(['Partner Bank']);
       expect(dev.gaps).toEqual(expect.arrayContaining(['known limitations']));
       await request(http).post(D).set(auth(b.owner)).send({ kind: 'CO_DEVELOPER', model_id: a.modelId }).expect(404);
+      // Published only once every required statement is there.
+      const blockedDev = (await request(http).post(`${D}/${dev.disclosure_id}/publish`).set(auth(a.owner)).send({}).expect(400)).body;
+      expect(blockedDev.missing).toEqual(expect.arrayContaining(['known limitations']));
+      // The notification log records where a published statement went.
+      const logged = (await request(http).post(`${D}/${ts.disclosure_id}/notifications`).set(auth(a.owner)).send({ recipient: 'Website', channel: 'WEBSITE' }).expect(201)).body;
+      expect(logged.notifications).toHaveLength(1);
+      // A refused publish (bad public URL) leaves the earlier publication in force.
+      const ts2 = (await request(http).post(D).set(auth(a.owner)).send({ kind: 'TRANSPARENCY_STATEMENT', narrative }).expect(201)).body;
+      await request(http).post(`${D}/${ts2.disclosure_id}/publish`).set(auth(a.owner)).send({ public_url: 'http://insecure' }).expect(400);
+      expect((await request(http).get(`${D}/${ts.disclosure_id}`).set(auth(a.viewer)).expect(200)).body.status).toBe('PUBLISHED');
       const exp = await request(http).get(`${D}/${dev.disclosure_id}/export?format=json`).set(auth(a.viewer)).expect(200);
       expect(JSON.parse(exp.text).content.system.id).toBe(a.modelId);
 
       // Regulator exports.
       const rbi = (await request(http).get('/api/v1/governance/exports/rbi-inspection').set(auth(a.viewer)).expect(200)).body;
+      expect(rbi.completeness.systems).toBe(rbi.rows.length);
+      expect(rbi.completeness.incomplete.length).toBeGreaterThan(0);
       expect(rbi.rows.map((r: any) => r.model_id ?? r.id)).toContain(a.modelId);
       const csv = await request(http).get('/api/v1/governance/exports/omb-inventory?format=csv').set(auth(a.viewer)).expect(200);
       expect(csv.text).toContain('DiscOrgA Credit');
@@ -3858,7 +3870,9 @@ describe('SentrAI Console (e2e)', () => {
       await request(http).get(G).set(auth(a.viewer)).expect(403);
       await request(http).post(G).set(auth(a.owner)).send({ kind: 'WEBHOOK', url: 'http://hooks.example.com/x', events: ['DRIFT_ALERT'] }).expect(400);
       await request(http).post(G).set(auth(a.owner)).send({ kind: 'WEBHOOK', url: 'https://169.254.169.254/latest', events: ['DRIFT_ALERT'] }).expect(400);
-      const hook = (await request(http).post(G).set(auth(a.owner)).send({ kind: 'SIEM', label: 'SOC', url: 'https://soc.example.com/ingest', secret: 'top-secret-hmac', events: ['DRIFT_ALERT'] }).expect(201)).body;
+      await request(http).post(G).set(auth(a.owner)).send({ kind: 'WEBHOOK', url: 'https://[::ffff:127.0.0.1]/x', events: ['DRIFT_ALERT'] }).expect(400);
+      const hook = (await request(http).post(G).set(auth(a.owner)).send({ kind: 'SIEM', label: 'SOC', url: 'https://soc.example.com/ingest/T000/secret-path-token', secret: 'top-secret-hmac', events: ['DRIFT_ALERT'] }).expect(201)).body;
+      expect(hook.url).toBe('https://soc.example.com/ingest/…');
       expect(JSON.stringify(hook)).not.toContain('top-secret-hmac');
       expect((await request(http).get(G).set(auth(b.owner)).expect(200)).body.integrations).toHaveLength(0);
       await request(http).patch(`${G}/${hook.integration_id}`).set(auth(b.owner)).send({ enabled: false }).expect(404);
@@ -3925,6 +3939,10 @@ describe('SentrAI Console (e2e)', () => {
       expect(m.readings).toHaveLength(2);
       const ov = (await request(http).get('/api/v1/governance/energy').set(auth(b.owner)).expect(200)).body;
       expect(ov.totals.kwh).toBe(0);
+      // The server's GPUs are not one organisation's: platform admins only.
+      await request(http).get('/api/v1/governance/energy/gpu').set(auth(a.orgAdmin)).expect(403);
+      await request(http).get('/api/v1/governance/energy/gpu').set(auth(a.owner)).expect(403);
+      await request(http).get('/api/v1/governance/energy/gpu').set(auth(a.admin)).expect(200);
     });
   });
 
@@ -3964,6 +3982,11 @@ describe('SentrAI Console (e2e)', () => {
       expect(ctl.controls.find((c: any) => c.control_id === 'CTL-SEC-AI-01').status).toBe('PASS');
       const ev = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).expect(200)).body;
       expect(JSON.stringify(ev)).toContain('PENTEST-2026-11');
+      // Starting version 2 does not undo the approved version 1.
+      const v2 = (await request(http).post(`/api/v1/governance/models/${a.modelId}/threat-model`).set(auth(a.owner)).expect(201)).body;
+      expect(v2).toMatchObject({ version: 2, status: 'DRAFT' });
+      ctl = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.viewer)).expect(200)).body;
+      expect(ctl.controls.find((c: any) => c.control_id === 'CTL-SEC-AI-01').status).toBe('PASS');
       await request(http).get(`/api/v1/governance/models/${a.modelId}/security`).set(auth(b.owner)).expect(404);
     });
   });
@@ -4023,6 +4046,13 @@ describe('SentrAI Console (e2e)', () => {
       expect(att.status).toBe('CURRENT');
       pol = (await request(http).get('/api/v1/governance/external-ai').set(auth(a.viewer)).expect(200)).body;
       expect(pol.providers.find((p: any) => p.provider_id === ext.provider_id)).toMatchObject({ attested: true, allowed: true });
+      // Pointing the provider somewhere else voids the attestation.
+      await request(http).patch(`/api/v1/ai/providers/${ext.provider_id}`).set(auth(a.owner)).send({ base_url: 'https://other-llm.example.com/v1' }).expect(200);
+      pol = (await request(http).get('/api/v1/governance/external-ai').set(auth(a.viewer)).expect(200)).body;
+      expect(pol.providers.find((p: any) => p.provider_id === ext.provider_id)).toMatchObject({ attested: false, allowed: false });
+      expect((await request(http).get('/api/v1/governance/ai-attestations').set(auth(a.viewer)).expect(200)).body.attestations[0].status).toBe('PROVIDER_CHANGED');
+      await request(http).patch(`/api/v1/ai/providers/${ext.provider_id}`).set(auth(a.owner)).send({ base_url: 'https://llm.example.com/v1' }).expect(200);
+      expect((await request(http).get('/api/v1/governance/external-ai').set(auth(a.viewer)).expect(200)).body.providers.find((p: any) => p.provider_id === ext.provider_id).attested).toBe(true);
       await request(http).post(`/api/v1/governance/ai-attestations/${att.attestation_id}/revoke`).set(auth(b.owner)).expect(404);
       await request(http).post(`/api/v1/governance/ai-attestations/${att.attestation_id}/revoke`).set(auth(a.ciso)).expect(200);
       await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { externalAi: { mode: 'BLOCKED' } }, reason: 'Local endpoints only' }).expect(200);
@@ -4030,6 +4060,12 @@ describe('SentrAI Console (e2e)', () => {
       // Org B is unaffected by A's policy.
       expect((await request(http).get('/api/v1/governance/external-ai').set(auth(b.viewer)).expect(200)).body.mode).toBe('ALLOWED');
 
+      // A manually reported incident (no project) is part of the export too.
+      const fedInc = (await request(http).post('/api/v1/compliance/incident/report').set(auth(a.owner)).send({
+        model_id: a.modelId, model_name: 'FedOrgA Credit', re_name: 'RE', functional_area: 'credit_underwriting', incident_category: 'MODEL_DRIFT',
+        severity: 'P4_LOW', description: 'Mild population-stability shift flagged in the routine drift review', observed_at: '2026-07-11T06:00:00Z',
+        detected_at: '2026-07-11T06:30:00Z', model_risk_level: 'LOW', immediate_action_taken: 'Retrained on the extended window',
+      }).expect(201)).body;
       // Full org export: officers only, audited, no secrets, nothing from org B.
       await request(http).post('/api/v1/governance/org-export').set(auth(a.viewer)).send({}).expect(403);
       const zipRes = await request(http).post('/api/v1/governance/org-export').set(auth(a.owner)).send({}).buffer(true)
@@ -4045,6 +4081,7 @@ describe('SentrAI Console (e2e)', () => {
       expect(all).not.toContain('hashedPassword');
       expect(all).not.toContain('apiKeyEncrypted');
       expect(all).not.toContain('sk-federal-secret-123');
+      expect(zip.getEntry('ai_incidents.json').getData().toString('utf8')).toContain(fedInc.incident_id);
       const manifest = JSON.parse(zip.getEntry('manifest.json').getData().toString('utf8'));
       expect(manifest.secrets_removed).toBe(true);
       const audit = (await request(http).get('/api/v1/audit/events?limit=20').set(auth(a.admin)).expect(200)).body;

@@ -23,6 +23,10 @@ export class AiProviderAttestationEntity {
   @Column('varchar', { length: 500 })
   reference!: string;
 
+  /** The provider's host and model when attested; a later change to either voids the attestation. */
+  @Column('varchar', { length: 500 })
+  endpoint!: string;
+
   @Column('varchar', { length: 36, nullable: true })
   documentId!: string | null;
 

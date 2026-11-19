@@ -158,7 +158,43 @@ export function incidentFacts(rows: IncidentLike[]) {
   };
 }
 
-/** Webhook URL rules: https only, no credentials, no loopback / private literal hosts (unless explicitly allowed). */
+/**
+ * True for addresses a webhook must never reach: loopback, private, link-local,
+ * carrier-grade NAT, "this network", multicast/reserved, unique-local and
+ * IPv4-mapped forms of any of those.
+ */
+export function isPrivateAddress(raw: string): boolean {
+  let ip = raw.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+  const mapped = ip.match(/^(?:0{0,4}:){0,5}(?:0{0,4}:)?ffff:(\d+\.\d+\.\d+\.\d+)$/) ?? ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) ip = mapped[1];
+  const hexMapped = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hexMapped) {
+    const a = parseInt(hexMapped[1], 16);
+    const b = parseInt(hexMapped[2], 16);
+    ip = `${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`;
+  }
+  const v4 = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  if (ip.includes(':')) {
+    if (ip === '::' || ip === '::1') return true;
+    if (/^f[cd][0-9a-f]{0,2}:/.test(ip) || /^fe[89ab][0-9a-f]?:/.test(ip) || /^ff/.test(ip)) return true;
+    if (/^(0{1,4}:){1,7}/.test(ip) && !/[1-9a-f]/.test(ip.replace(/ffff/, ''))) return true;
+    return false;
+  }
+  return false;
+}
+
+const isIpLiteral = (h: string) => /^\d+\.\d+\.\d+\.\d+$/.test(h) || h.includes(':');
+
+/**
+ * Webhook URL rules: https only, no credentials, no loopback / private / link-local
+ * literal hosts or internal names (unless explicitly allowed). Hostnames are
+ * checked again after DNS resolution at send time (see safeFetch).
+ */
 export function webhookUrlProblem(raw: string, allowPrivate = false): string | null {
   let u: URL;
   try {
@@ -169,7 +205,20 @@ export function webhookUrlProblem(raw: string, allowPrivate = false): string | n
   if (u.protocol !== 'https:') return 'url must use https';
   if (u.username || u.password) return 'put credentials in the secret, not the URL';
   const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  const priv = /^(localhost|.*\.localhost|.*\.local|.*\.internal|0\.0\.0\.0|::1?|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|f[cd][0-9a-f]{2}:.*|fe80:.*)$/i;
-  if (!allowPrivate && priv.test(h)) return 'url must not point at a private, loopback or link-local address';
+  if (allowPrivate) return null;
+  if (/^(localhost|.*\.localhost|.*\.local|.*\.internal|.*\.home\.arpa)$/.test(h)) return 'url must not point at a private, loopback or link-local address';
+  if (isIpLiteral(h) && isPrivateAddress(h)) return 'url must not point at a private, loopback or link-local address';
+  if (/^\d+$/.test(h) || /^0x/i.test(h)) return 'url must not point at a private, loopback or link-local address';
   return null;
+}
+
+/** Show a webhook URL without path or query secrets (Slack-style tokens live in the path). */
+export function maskUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const path = u.pathname.length > 1 ? `/${u.pathname.split('/').filter(Boolean)[0] ?? ''}${u.pathname.split('/').filter(Boolean).length > 1 ? '/…' : ''}` : '';
+    return `${u.protocol}//${u.host}${path}${u.search ? '?…' : ''}`;
+  } catch {
+    return '';
+  }
 }

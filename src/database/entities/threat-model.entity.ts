@@ -2,6 +2,7 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /** A versioned AI threat model for one system (governance E3.6). */
 @Entity({ name: 'threat_models' })
+@Index('UQ_threat_models_model_version', ['modelId', 'version'], { unique: true })
 export class ThreatModelEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id!: string;

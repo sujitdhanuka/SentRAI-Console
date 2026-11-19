@@ -23,7 +23,7 @@ import { assertFlag } from '../governance-access';
 import { resolveForPacks } from '../packs/pack-engine';
 import { packRegistry } from '../packs/pack-loader';
 import { PacksService } from '../packs/packs.service';
-import { OFFICERS, oneOf, optText, orgFor, orgModels, requireRole } from '../phase2-util';
+import { OFFICERS, oneOf, optText, orgFor, orgModels, requireRole, saveVersioned } from '../phase2-util';
 import { ANNEX_A, approvalProblems, buildSoa, ControlTally, MANUAL_STATUSES, SoaEntryInput, SoaRow, soaHash, soaSummary } from './soa.model';
 
 @Injectable()
@@ -165,10 +165,10 @@ export class SoaService {
     if (problems.length) throw new BadRequestException({ message: 'The Statement of Applicability cannot be approved yet', problems });
     const latest = await this.latest(orgId);
     const hash = soaHash(rows);
-    const s = await this.statements.save(this.statements.create({
+    const s = await saveVersioned(() => this.statements.save(this.statements.create({
       id: uuidv4(), orgId, version: (latest?.version ?? 0) + 1, content: { rows, summary: soaSummary(rows) }, contentHash: hash,
       approvedBy: user.email, approvedAt: new Date(), note: optText(body.note, 'note', 1000),
-    }));
+    })));
     if (req) req.auditSummary = { soa_approved: { version: s.version, content_hash: hash } };
     return this.statementView(s, true);
   }

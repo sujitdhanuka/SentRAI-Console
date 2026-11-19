@@ -174,6 +174,14 @@ export class InventoryService implements OnModuleInit {
     };
   }
 
+  /** The organisation that owns a model (its project's tenant), for the external-AI policy (E3.8). */
+  private async dataOrgs(modelId: string): Promise<Array<string | null>> {
+    if (!governanceHooks.externalAiPolicy) return [];
+    const model = await this.models.findOne({ where: { id: modelId }, select: ['id', 'projectId'] });
+    const project = model?.projectId ? await this.projects.findOne({ where: { id: model.projectId }, select: ['id', 'tenantId'] }) : null;
+    return project?.tenantId ? [project.tenantId] : [];
+  }
+
   private async governanceContext(modelId: string): Promise<Pick<ValidationContext, 'packParams' | 'governance'>> {
     if (!governanceHooks.orgPackParams && !governanceHooks.modelGovernanceFacts) return {};
     const model = await this.models.findOne({ where: { id: modelId }, select: ['id', 'projectId'] });
@@ -447,7 +455,8 @@ export class InventoryService implements OnModuleInit {
     const orm = await this.getOrThrow(modelId);
     // Provider precedence is per-org: the caller's registered provider (AI
     // Settings) → env-level config → local heuristic.
-    const aiEnabled = await this.summarizer.aiEnabledForOrg(user?.tenantId ?? null);
+    const dataOrgs = await this.dataOrgs(modelId);
+    const aiEnabled = await this.summarizer.aiEnabledForOrg(user?.tenantId ?? null, dataOrgs);
     const ctx: SummarizationContext = {
       name: orm.name,
       modelType: orm.modelType,
@@ -459,7 +468,7 @@ export class InventoryService implements OnModuleInit {
       hasHardcodedSecret: Boolean(orm.securityFindings?.length),
       snippet: await this.readMaskedSnippet(orm, aiEnabled),
     };
-    const result = await this.summarizer.summarizeForOrg(user?.tenantId ?? null, ctx, user?.email ?? 'dashboard_user');
+    const result = await this.summarizer.summarizeForOrg(user?.tenantId ?? null, ctx, user?.email ?? 'dashboard_user', dataOrgs);
 
     orm.useCaseDescription = result.text;
     orm.descriptionSource = result.source;
@@ -516,6 +525,7 @@ export class InventoryService implements OnModuleInit {
         `${orm.name} is classified ${orm.riskLevel} risk. Basis: ${factors.join('; ')}. ` +
         '(Auto-generated rationale — review and confirm before governance sign-off.)',
       user?.email ?? 'dashboard_user',
+      await this.dataOrgs(modelId),
     );
 
     orm.riskRationale = result.text;
@@ -547,7 +557,8 @@ export class InventoryService implements OnModuleInit {
    */
   async draftAutonomousScope(user: CurrentUser, modelId: string) {
     const orm = await this.getOrThrow(modelId);
-    const aiEnabled = await this.summarizer.aiEnabledForOrg(user?.tenantId ?? null);
+    const dataOrgs = await this.dataOrgs(modelId);
+    const aiEnabled = await this.summarizer.aiEnabledForOrg(user?.tenantId ?? null, dataOrgs);
 
     const result = await this.summarizer.draftForOrg(
       user?.tenantId ?? null,
@@ -566,6 +577,7 @@ export class InventoryService implements OnModuleInit {
           ? 'Fully supervised — a human reviews and approves outputs before they are acted on; no autonomous action.'
           : 'Operates without per-action human sign-off. Define the permitted actions, any step/tool limits, and the conditions under which it must escalate to a human. (Heuristic draft — no LLM configured; edit before saving.)',
       user?.email ?? 'dashboard_user',
+      await this.dataOrgs(modelId),
     );
 
     await this.recordLedger(modelId, 'AUTONOMOUS_SCOPE_DRAFTED',
@@ -612,6 +624,7 @@ export class InventoryService implements OnModuleInit {
       },
       () => gapLines.map((g) => `• ${g}\n  → Action: ${heuristicRemediationStep(g)}`).join('\n'),
       user?.email ?? 'dashboard_user',
+      await this.dataOrgs(modelId),
     );
 
     // Persisted like the other generations so it survives a reload and can be

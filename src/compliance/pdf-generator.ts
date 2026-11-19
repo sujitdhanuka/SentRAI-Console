@@ -143,14 +143,14 @@ export function generateGovernancePdf(input: { title: string; subtitle?: string;
     if (input.subtitle) doc.moveDown(0.2).font('Helvetica').fontSize(10).fillColor('#64748b').text(input.subtitle);
     if (input.facts?.length) {
       doc.moveDown(0.5);
-      for (const [k, v] of input.facts) doc.font('Helvetica-Bold').fontSize(9).fillColor('#334155').text(`${k}: `, { continued: true }).font('Helvetica').text(v || '—');
+      for (const [k, v] of input.facts) doc.font('Helvetica-Bold').fontSize(9).fillColor('#334155').text(`${k}: `, { continued: true }).font('Helvetica').text(String(v ?? '') || '—');
     }
     for (const s of input.sections) {
       doc.moveDown(0.8).font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text(s.heading);
-      for (const p of s.paragraphs ?? []) doc.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#334155').text(p);
+      for (const p of s.paragraphs ?? []) doc.moveDown(0.2).font('Helvetica').fontSize(9).fillColor('#334155').text(String(p ?? ''));
       for (const r of s.rows ?? []) {
-        doc.moveDown(0.3).font('Helvetica-Bold').fontSize(9.5).fillColor(color[r.tone ?? 'neutral']).text(r.title);
-        for (const l of r.lines) if (l) doc.font('Helvetica').fontSize(8.5).fillColor('#475569').text(l, { indent: 10 });
+        doc.moveDown(0.3).font('Helvetica-Bold').fontSize(9.5).fillColor(color[r.tone ?? 'neutral']).text(String(r.title ?? '—'));
+        for (const l of r.lines ?? []) if (l) doc.font('Helvetica').fontSize(8.5).fillColor('#475569').text(String(l), { indent: 10 });
       }
     }
     if (input.footer) doc.moveDown(1).font('Helvetica-Oblique').fontSize(8).fillColor('#94a3b8').text(input.footer);

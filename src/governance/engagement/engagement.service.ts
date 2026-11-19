@@ -13,7 +13,7 @@ import { CurrentUser } from '../../common/interfaces/current-user.interface';
 import { AIModelEntity, EngagementRecordEntity, ProjectEntity } from '../../database/entities';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addOrgFacts } from '../hooks';
-import { MAINTAINERS, optDate, optText, orgFor, reqText, requireRole } from '../phase2-util';
+import { MAINTAINERS, optDate, optText, orgFor, reqText, requireRole, isFuture } from '../phase2-util';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import { ENGAGEMENT_TYPES, engagementStatus, engagementType, parseParticipants } from './engagement.model';
 
@@ -80,7 +80,7 @@ export class EngagementService implements OnModuleInit {
       modelId = String(body.model_id);
     }
     if (t.needsModel && !modelId) throw new BadRequestException(`${t.label} records need model_id`);
-    const consentRef = optText(body.consent_ref, 'consent_ref', 500);
+    const consentRef = optText(body.consent_ref, 'consent_ref', 255);
     if (t.needsConsent && !consentRef) throw new BadRequestException('A human-subject study needs consent_ref (the consent record or ethics approval)');
     let participants;
     try {
@@ -89,9 +89,9 @@ export class EngagementService implements OnModuleInit {
       throw new BadRequestException((e as Error).message);
     }
     const occurredAt = optDate(body.occurred_at, 'occurred_at') ?? new Date();
-    if (occurredAt.getTime() > Date.now() + 60_000) throw new BadRequestException('occurred_at cannot be in the future');
+    if (isFuture(occurredAt, body.occurred_at)) throw new BadRequestException('occurred_at cannot be in the future');
     const r = await this.rows.save(this.rows.create({
-      id: uuidv4(), orgId, type: t.type, modelId, title: reqText(body.title, 'title', 3, 300), participants,
+      id: uuidv4(), orgId, type: t.type, modelId, title: reqText(body.title, 'title', 3, 200), participants,
       summary: reqText(body.summary, 'summary', 10, 8000), outcome: optText(body.outcome, 'outcome', 4000), consentRef,
       occurredAt, createdBy: user.email, createdAt: new Date(),
     }));

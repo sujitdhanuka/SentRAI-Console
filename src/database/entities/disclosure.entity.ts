@@ -2,6 +2,7 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /** Generated disclosures and regulator exports with publication and notification log (governance E3.2). */
 @Entity({ name: 'disclosures' })
+@Index('UQ_disclosures_version', ['orgId', 'kind', 'modelId', 'version'], { unique: true })
 export class DisclosureEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id!: string;

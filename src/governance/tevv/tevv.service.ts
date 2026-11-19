@@ -11,7 +11,10 @@ import { createHash } from 'crypto';
 import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
+import { Cron } from '@nestjs/schedule';
+
 import { ModelLifecycleStage } from '../../common/enums';
+import { NotifierService } from '../../common/notifier.service';
 import { FeatureFlagsService } from '../../common/feature-flags';
 import { CurrentUser } from '../../common/interfaces/current-user.interface';
 import {
@@ -30,7 +33,7 @@ import {
 import { InventoryService } from '../../inventory/inventory.service';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, governanceHooks } from '../hooks';
-import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgModels, reqText, requireRole } from '../phase2-util';
+import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgModels, reqText, requireRole, isFuture } from '../phase2-util';
 import { checklistOpen, ChecklistItem, evaluateRun, newChecklist, parseCriteria, parseResults, RETIREMENT_ITEMS, reviewDue, TEST_PURPOSES } from './tevv.model';
 
 const OPEN_INCIDENT = ['REPORTED', 'UNDER_INVESTIGATION', 'REMEDIATION_IN_PROGRESS'];
@@ -51,7 +54,25 @@ export class TevvService implements OnModuleInit {
     @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
     private readonly inventory: InventoryService,
     private readonly flags: FeatureFlagsService,
+    private readonly notifier: NotifierService,
   ) {}
+
+  /** Weekly (Monday 7 AM): active test sets whose metric-effectiveness review is overdue, one notice per organisation. */
+  @Cron('0 7 * * 1')
+  async reviewReminders(now = new Date()): Promise<number> {
+    if (!this.flags.isEnabled('tevv')) return 0;
+    const overdue = (await this.sets.find({ where: { active: true } })).filter((s) => reviewDue(s.lastReviewedAt, s.createdAt, s.reviewIntervalMonths).getTime() < now.getTime());
+    const byOrg = new Map<string, TestSetEntity[]>();
+    for (const s of overdue) byOrg.set(s.orgId, [...(byOrg.get(s.orgId) ?? []), s]);
+    for (const [orgId, sets] of byOrg) {
+      try {
+        await this.notifier.notify('tevv_metric_review_due', { tenant_id: orgId, test_sets: sets.map((s) => ({ test_set_id: s.id, model_id: s.modelId, name: s.name })) });
+      } catch {
+        /* a failed notice never stops the others */
+      }
+    }
+    return overdue.length;
+  }
 
   onModuleInit(): void {
     addModelFacts(async (modelId) => {
@@ -60,8 +81,10 @@ export class TevvService implements OnModuleInit {
     });
     governanceHooks.retirementCheck = async (modelId) => {
       if (!this.flags.isEnabled('tevv')) return null;
-      const done = await this.retirements.findOne({ where: { modelId, status: 'COMPLETED' } });
-      return done ? null : 'Retire the model through the approved retirement workflow (Governance › TEVV & retirement)';
+      // Completion sets the stage itself, so every direct move is refused (an old completed retirement of a
+      // model that was later reactivated does not count).
+      void modelId;
+      return 'Retire the model through the approved retirement workflow (Governance › TEVV & retirement)';
     };
   }
 
@@ -208,7 +231,7 @@ export class TevvService implements OnModuleInit {
     if (!s.active) throw new BadRequestException('This test set is retired');
     const results = this.bad(() => parseResults(body.results));
     const runAt = optDate(body.run_at, 'run_at') ?? new Date();
-    if (runAt.getTime() > Date.now() + 60_000) throw new BadRequestException('run_at cannot be in the future');
+    if (isFuture(runAt, body.run_at)) throw new BadRequestException('run_at cannot be in the future');
     let docId: string | null = null;
     if (body.report_doc_id) {
       const d = await this.docs.findOne({ where: { id: String(body.report_doc_id) } });
@@ -308,6 +331,12 @@ export class TevvService implements OnModuleInit {
       plannedFor: optDate(body.planned_for, 'planned_for'), checklist: newChecklist(await this.checklistDetail(modelId, replacement)),
       requestedBy: user.email, requestedAt: new Date(), decidedBy: null, decidedAt: null, decisionNote: null, completedBy: null, completedAt: null,
     }));
+    // Two requests at the same moment: the earlier one stands and this one is withdrawn.
+    const open = await this.retirements.find({ where: { modelId, status: In(['REQUESTED', 'APPROVED']) }, order: { requestedAt: 'ASC', id: 'ASC' } });
+    if (open.length > 1 && open[0].id !== r.id) {
+      await this.retirements.delete({ id: r.id });
+      throw new BadRequestException('A retirement is already open for this model');
+    }
     if (req) req.auditSummary = { retirement_requested: { retirement_id: r.id, model_id: modelId } };
     return this.retirementView(r);
   }

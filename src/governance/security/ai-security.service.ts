@@ -16,7 +16,7 @@ import { AIModelEntity, ProjectEntity, SecurityEvaluationEntity, ThreatModelEnti
 import { InventoryService } from '../../inventory/inventory.service';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts } from '../hooks';
-import { MAINTAINERS, OFFICERS, optDate, optText, orgFor, orgModels, reqText, requireRole } from '../phase2-util';
+import { MAINTAINERS, OFFICERS, optDate, optText, orgFor, orgModels, reqText, requireRole, saveVersioned, isFuture } from '../phase2-util';
 import { RisksService } from '../risks/risks.service';
 import {
   approvalProblems, ATTACK_CATEGORIES, EvalCategory, mergeThreats, parseEvalCategories, securityFacts, templateThreats, Threat,
@@ -48,7 +48,8 @@ export class AiSecurityService implements OnModuleInit {
   }
 
   async factsFor(modelId: string) {
-    const tm = await this.latest(modelId);
+    // A new draft does not undo the approved version in force; only with no approved version does the draft show.
+    const tm = (await this.tms.findOne({ where: { modelId, status: 'APPROVED' }, order: { version: 'DESC' } })) ?? (await this.latest(modelId));
     const evals = await this.evals.find({ where: { modelId }, order: { evaluatedAt: 'DESC' }, take: 50 });
     return securityFacts(tm ? { status: tm.status, threats: tm.threats } : null, evals.map((e) => ({ evaluatedAt: e.evaluatedAt, categories: e.categories })));
   }
@@ -108,10 +109,10 @@ export class AiSecurityService implements OnModuleInit {
     const base = templateThreats(model.modelType);
     const threats = prev ? base.map((t) => ({ ...t, ...((prev.threats as Threat[]).find((p) => p.category === t.category) ?? {}) })) : base;
     const now = new Date();
-    const row = await this.tms.save(this.tms.create({
+    const row = await saveVersioned(() => this.tms.save(this.tms.create({
       id: uuidv4(), orgId, modelId, version: (prev?.version ?? 0) + 1, templateId: TEMPLATE_ID, threats, status: 'DRAFT',
       approvedBy: null, approvedAt: null, createdBy: user.email, createdAt: now, updatedAt: now,
-    }));
+    })));
     if (req) req.auditSummary = { threat_model_created: { model_id: modelId, version: row.version } };
     return this.tmView(row);
   }
@@ -160,6 +161,8 @@ export class AiSecurityService implements OnModuleInit {
         });
         th.risk_id = (r as any).risk_id ?? (r as any).id ?? null;
         raised++;
+        // Saved after each risk, so a failure part-way and a retry never raise the same threat twice.
+        await this.tms.update({ id: t.id }, { threats });
       }
     }
     // Earlier approved versions are superseded.
@@ -187,7 +190,7 @@ export class AiSecurityService implements OnModuleInit {
       throw new BadRequestException((e as Error).message);
     }
     const at = optDate(body.evaluated_at, 'evaluated_at') ?? new Date();
-    if (at.getTime() > Date.now() + 60_000) throw new BadRequestException('evaluated_at cannot be in the future');
+    if (isFuture(at, body.evaluated_at)) throw new BadRequestException('evaluated_at cannot be in the future');
     const row = await this.evals.save(this.evals.create({
       id: uuidv4(), orgId, modelId, ref, evaluator: optText(body.evaluator, 'evaluator', 255), categories, evaluatedAt: at, recordedBy: user.email, createdAt: new Date(),
     }));

@@ -16,6 +16,14 @@ import { approvalProblems as tmProblems, ATTACK_CATEGORIES, mergeThreats, parseE
 import { ANNEX_A, approvalProblems, buildSoa, deriveStatus, soaHash, soaSummary } from './soa/soa.model';
 import { checklistOpen, evaluateRun, newChecklist, parseCriteria, parseResults, RETIREMENT_ITEMS } from './tevv/tevv.model';
 
+import { isPolicyLocalEndpoint } from '../ai/ai-providers.service';
+import { governanceHooks } from './hooks';
+import { reminderDay } from './disclosures/disclosures.service';
+import { providerEndpoint } from './federal/federal.model';
+import { isPrivateAddress, maskUrl } from './incidents/incident-ext.model';
+import { safeFetch } from './incidents/safe-fetch';
+import { isFuture } from './phase2-util';
+import { SummarizerService } from '../summarizer/summarizer.service';
 const DAY = 86_400_000;
 const run = (id: string, ctx: Record<string, any>) =>
   getControl(id)!.evaluate({ entry: {} as any, ctx: ctx as any, params: { values: {}, sources: {} }, flags: flagSet(true), opts: {}, now: new Date('2026-11-18') });
@@ -286,5 +294,87 @@ describe('Phase 3 pack content hashes', () => {
       const h = hashes();
       for (const id of Object.keys(PHASE2)) expect([id, h[id]]).not.toEqual([id, PHASE2[id as keyof typeof PHASE2]]);
     });
+  });
+});
+
+/* ------------------------------------------------ review fixes (independent review) */
+
+
+describe('review fixes', () => {
+  it('H1: webhook URLs and resolved addresses in private ranges are refused, including mapped and CGNAT forms', () => {
+    for (const ip of ['127.0.0.1', '::ffff:127.0.0.1', '::ffff:169.254.169.254', '::ffff:7f00:1', '100.100.100.200', '0.0.0.1', '10.0.0.5', 'fd00::1', 'fe80::1', '::1', '::']) {
+      expect([ip, isPrivateAddress(ip)]).toEqual([ip, true]);
+    }
+    for (const ip of ['8.8.8.8', '2606:4700::1111', '100.63.0.1']) expect([ip, isPrivateAddress(ip)]).toEqual([ip, false]);
+    for (const u of ['https://[::ffff:127.0.0.1]/', 'https://[::ffff:169.254.169.254]/', 'https://100.100.100.200/', 'https://0.0.0.1/', 'https://2130706433/', 'https://svc.home.arpa/']) {
+      expect([u, webhookUrlProblem(u)]).toEqual([u, expect.stringMatching(/private/)]);
+    }
+  });
+
+  it('H1: a host that resolves to a private address is refused at send time', async () => {
+    const fakeDns: any = (_h: string, _o: unknown, cb: (e: Error | null, a: Array<{ address: string; family: number }>) => void) => cb(null, [{ address: '127.0.0.1', family: 4 }]);
+    await expect(safeFetch('https://127.0.0.1.nip.io/hook', { method: 'POST', headers: {}, body: '{}' }, false, fakeDns)).rejects.toThrow(/blocked/);
+  });
+
+  it('webhook URLs are shown without path or query secrets', () => {
+    expect(maskUrl('https://hooks.slack.com/services/T000/B000/XXXX?x=1')).toBe('https://hooks.slack.com/services/…?…');
+    expect(maskUrl('https://soc.example.com/ingest')).toBe('https://soc.example.com/ingest');
+    expect(scrubRow({ url: 'https://hooks.slack.com/services/T000/B000/XXXX' })).toEqual({ url: 'https://hooks.slack.com/services/redacted' });
+  });
+
+  it('H2: the external-AI policy of the organisation that owns the data applies to a platform admin', async () => {
+    const prev = governanceHooks.externalAiPolicy;
+    governanceHooks.externalAiPolicy = async (t) => (t === 'org-x' ? { mode: 'BLOCKED', attestedProviderIds: [] } : undefined);
+    try {
+      const config: any = { get: () => ({ provider: 'anthropic', apiKey: 'k', baseUrl: 'https://api.anthropic.com', model: 'm', maxSnippetChars: 100 }) };
+      const providers: any = { resolveActiveForOrg: async () => null };
+      const vault: any = { resolveActiveBody: async () => ({ body: '{{name}}' }) };
+      const s = new SummarizerService(config, providers, vault, {} as any);
+      expect(await s.aiEnabledForOrg(null)).toBe(true);
+      expect(await s.aiEnabledForOrg(null, ['org-x'])).toBe(false);
+      const d = await s.draftForOrg(null, 'risk_rationale', { name: 'x' }, () => 'local text', 'admin', ['org-x']);
+      expect(d).toMatchObject({ source: 'heuristic', text: 'local text' });
+    } finally {
+      governanceHooks.externalAiPolicy = prev;
+    }
+  });
+
+  it('M1: an attestation stops counting when the provider is pointed somewhere else', () => {
+    const ep = providerEndpoint({ baseUrl: 'https://llm.example.com/v1', model: 'm-1' });
+    const rows = [{ providerId: 'p', noTraining: true, revokedAt: null, expiresAt: null, endpoint: ep }];
+    expect(attestedProviders(rows, new Date(), new Map([['p', ep]]))).toEqual(['p']);
+    expect(attestedProviders(rows, new Date(), new Map([['p', providerEndpoint({ baseUrl: 'https://other.example.com/v1', model: 'm-1' })]]))).toEqual([]);
+    expect(attestedProviders(rows, new Date(), new Map([['p', providerEndpoint({ baseUrl: 'https://llm.example.com/v1', model: 'm-2' })]]))).toEqual([]);
+  });
+
+  it('L4: transparency review reminders go out 30 and 7 days ahead, on the day and weekly after', () => {
+    const due = new Date('2027-01-31T10:00:00Z');
+    const on = (d: string) => reminderDay(due, new Date(`${d}T07:00:00Z`));
+    expect(['2027-01-01', '2027-01-24', '2027-01-31', '2027-02-07'].map(on)).toEqual([true, true, true, true]);
+    expect(['2027-01-02', '2027-01-30', '2027-02-01', '2027-02-06'].map(on)).toEqual([false, false, false, false]);
+  });
+
+  it('L6: a date-only "today" is not the future for someone ahead of UTC', () => {
+    const now = Date.parse('2026-11-18T11:00:00Z'); // 01:00 on the 19th in UTC+14
+    expect(isFuture(new Date('2026-11-19'), '2026-11-19', now)).toBe(false);
+    expect(isFuture(new Date('2026-11-21'), '2026-11-21', now)).toBe(true);
+    expect(isFuture(new Date('2026-11-19T00:00:00Z'), '2026-11-19T00:00:00Z', now)).toBe(true);
+  });
+
+  it('L7: a .local name does not count as local under the external-AI policy', () => {
+    expect(isPolicyLocalEndpoint('http://gpu-box.local:11434')).toBe(false);
+    expect(isPolicyLocalEndpoint('http://127.0.0.1:11434')).toBe(true);
+    expect(isPolicyLocalEndpoint('http://10.0.0.4:8000')).toBe(true);
+  });
+
+  it('nvidia-smi rows of several GPUs a few milliseconds apart are summed into one sample', () => {
+    const csv = [
+      'timestamp, index, power.draw [W]',
+      '2026/11/01 00:00:00.120, 0, 100.00 W',
+      '2026/11/01 00:00:00.135, 1, 200.00 W',
+      '2026/11/01 01:00:00.118, 0, 100.00 W',
+      '2026/11/01 01:00:00.131, 1, 200.00 W',
+    ].join('\n');
+    expect(parseNvidiaSmiCsv(csv).map((x) => x.powerW)).toEqual([300, 300]);
   });
 });

@@ -842,7 +842,8 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`approvedBy\` VARCHAR(255) NOT NULL,
       \`approvedAt\` DATETIME NOT NULL,
       \`note\` TEXT NULL,
-      INDEX \`IDX_soa_statements_orgId\` (\`orgId\`)
+      INDEX \`IDX_soa_statements_orgId\` (\`orgId\`),
+      UNIQUE KEY \`UQ_soa_statements_org_version\` (\`orgId\`, \`version\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
@@ -868,7 +869,8 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`createdAt\` DATETIME NOT NULL,
       \`updatedAt\` DATETIME NOT NULL,
       INDEX \`IDX_disclosures_orgId\` (\`orgId\`),
-      INDEX \`IDX_disclosures_modelId\` (\`modelId\`)
+      INDEX \`IDX_disclosures_modelId\` (\`modelId\`),
+      UNIQUE KEY \`UQ_disclosures_version\` (\`orgId\`, \`kind\`, \`modelId\`, \`version\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
@@ -1024,7 +1026,8 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`createdAt\` DATETIME NOT NULL,
       \`updatedAt\` DATETIME NOT NULL,
       INDEX \`IDX_threat_models_orgId\` (\`orgId\`),
-      INDEX \`IDX_threat_models_modelId\` (\`modelId\`)
+      INDEX \`IDX_threat_models_modelId\` (\`modelId\`),
+      UNIQUE KEY \`UQ_threat_models_model_version\` (\`modelId\`, \`version\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
@@ -1071,6 +1074,7 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`noTraining\` TINYINT(1) NOT NULL,
       \`retentionDays\` INT NULL,
       \`reference\` VARCHAR(500) NOT NULL,
+      \`endpoint\` VARCHAR(500) NOT NULL,
       \`documentId\` VARCHAR(36) NULL,
       \`attestedBy\` VARCHAR(255) NOT NULL,
       \`attestedAt\` DATETIME NOT NULL,

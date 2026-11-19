@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Role } from '../../common/enums';
 import { CurrentUser as CurrentUserType } from '../../common/interfaces/current-user.interface';
 import { ActingOrgInterceptor } from '../acting-org.interceptor';
 import { MAINTAINERS } from '../phase2-util';
@@ -21,10 +22,11 @@ export class EnergyController {
     return this.e.overview(user, q);
   }
 
+  /** The server's own GPUs: platform admins only (on a shared host they are not one organisation's). */
   @Get('energy/gpu')
-  @Roles(...MAINTAINERS)
-  gpu() {
-    return this.e.gpuNow();
+  @Roles(Role.ADMIN)
+  gpu(@CurrentUser() user: CurrentUserType) {
+    return this.e.gpuNow(user);
   }
 
   @Get('models/:id/energy')

@@ -42,12 +42,36 @@ export function isLocalEndpoint(baseUrl: string): boolean {
 }
 
 /**
+ * Stricter test used by the external-AI policy (governance E3.8): only
+ * loopback, private-range IP literals and Docker's host alias count as local.
+ * A `.local` name is not trusted, since what it resolves to is outside our control.
+ */
+export function isPolicyLocalEndpoint(baseUrl: string): boolean {
+  try {
+    const h = new URL(baseUrl).hostname.toLowerCase();
+    return h !== '' && !h.endsWith('.local') && LOCAL_HOST_RE.test(h);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Governance E3.8: whether the organisation's external-AI policy lets a call
  * go to this endpoint. With no policy hook (flag off) every call is allowed.
  */
 export async function aiCallAllowed(tenantId: string | null, baseUrl: string, providerId: string | null): Promise<boolean> {
   const policy = await governanceHooks.externalAiPolicy?.(tenantId);
-  return externalCallAllowed(policy, isLocalEndpoint(baseUrl), providerId);
+  return externalCallAllowed(policy, isPolicyLocalEndpoint(baseUrl), providerId);
+}
+
+/**
+ * The same check for every organisation whose data a call carries (the
+ * caller's own and, for a platform admin, the organisation that owns the
+ * model or project): the call goes ahead only if every one of them allows it.
+ */
+export async function aiCallAllowedFor(orgIds: Array<string | null>, baseUrl: string, providerId: string | null): Promise<boolean> {
+  for (const id of new Set(orgIds)) if (!(await aiCallAllowed(id, baseUrl, providerId))) return false;
+  return true;
 }
 
 @Injectable()
@@ -270,6 +294,18 @@ export class AiProvidersService {
     // ledger history is audit evidence that this LLM was in use.
     if (orm.linkedModelId) {
       try {
+        // Governance E3.4: with the retirement workflow on, the entry is not decommissioned here; the ledger records
+        // the removal and the entry is retired through the approved workflow like any other system.
+        const blocked = await governanceHooks.retirementCheck?.(orm.linkedModelId);
+        if (blocked) {
+          await this.ledger.save(this.ledger.create({
+            id: uuidv4(), modelId: orm.linkedModelId, eventType: 'PROVIDER_REMOVED',
+            eventData: { source: 'ai_settings_self_governance', reason: `provider '${orm.label}' removed`, next_step: blocked },
+            actor: user.email, occurredAt: new Date(),
+          }));
+          this.logger.log(`AI provider '${orm.label}' removed from org ${orm.tenantId} by ${user.email}; linked entry left for the retirement workflow`);
+          return;
+        }
         await this.models.update({ id: orm.linkedModelId }, { isActive: false, lifecycleStage: ModelLifecycleStage.DECOMMISSIONED, updatedAt: new Date() });
         await this.ledger.save(this.ledger.create({
           id: uuidv4(),
@@ -421,12 +457,13 @@ export class AiProvidersService {
   async resolveActiveForOrg(
     tenantId: string | null,
     useCase?: string,
+    dataOrgIds: Array<string | null> = [],
   ): Promise<{ adapter: string; baseUrl: string; model: string; apiKey: string | null; label: string } | null> {
     if (!tenantId) return null;
     const all = await this.configs.find({ where: { tenantId, enabled: true }, order: { createdAt: 'ASC' } });
-    // Governance E3.8: providers the organisation's external-AI policy refuses are never chosen.
-    const policy = await governanceHooks.externalAiPolicy?.(tenantId);
-    const rows = policy ? all.filter((r) => externalCallAllowed(policy, isLocalEndpoint(r.baseUrl), r.id)) : all;
+    // Governance E3.8: providers refused by the external-AI policy of any organisation whose data the call carries are never chosen.
+    const rows: AiProviderConfigEntity[] = [];
+    for (const r of all) if (await aiCallAllowedFor([tenantId, ...dataOrgIds], r.baseUrl, r.id)) rows.push(r);
     if (!rows.length) return null;
     const chosen = (useCase && rows.find((r) => r.defaultForUseCase === useCase)) || rows.find((r) => !r.defaultForUseCase) || rows[0];
     return {

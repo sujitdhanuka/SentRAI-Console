@@ -2,7 +2,7 @@
  * Small helpers shared by the Phase 2 governance services (E2.1 to E2.8):
  * input parsing, organisation scoping and the role sets that may write.
  */
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { In, Repository } from 'typeorm';
 
 import { Role } from '../common/enums';
@@ -115,4 +115,30 @@ export async function packApplies(packs: PacksService, orgId: string | null, pac
 export async function selfUserId(users: Repository<UserEntity>, user: CurrentUser): Promise<string | null> {
   const u = await users.findOne({ where: { email: user.email }, select: ['id'] });
   return u?.id ?? null;
+}
+
+/** A unique-key clash (MariaDB ER_DUP_ENTRY or SQLite UNIQUE constraint): two writers took the same version number. */
+export function isUniqueViolation(e: unknown): boolean {
+  const x = e as any;
+  return x?.code === 'ER_DUP_ENTRY' || x?.driverError?.code === 'ER_DUP_ENTRY' || /UNIQUE constraint failed/i.test(String(x?.message ?? ''));
+}
+
+/** Save, turning a version clash into a 409 the caller can retry. */
+export async function saveVersioned<T>(save: () => Promise<T>): Promise<T> {
+  try {
+    return await save();
+  } catch (e) {
+    if (isUniqueViolation(e)) throw new ConflictException('Someone saved a new version at the same moment; try again');
+    throw e;
+  }
+}
+
+/**
+ * True when `d` is in the future. A date without a time ("2026-11-19") is read
+ * as UTC midnight, so for someone ahead of UTC (up to UTC+14) "today" would
+ * look like the future: such dates get 15 hours of grace.
+ */
+export function isFuture(d: Date, raw: unknown, now = Date.now()): boolean {
+  const dateOnly = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim());
+  return d.getTime() > now + (dateOnly ? 15 * 3_600_000 : 60_000);
 }

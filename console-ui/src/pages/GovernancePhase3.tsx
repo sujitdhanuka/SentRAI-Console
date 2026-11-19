@@ -17,7 +17,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   IMPLEMENTED: 'positive', PARTIAL: 'warning', NOT_IMPLEMENTED: 'negative', NOT_ASSESSED: 'neutral', NOT_APPLICABLE: 'neutral', PLANNED: 'warning',
   DRAFT: 'warning', PUBLISHED: 'positive', SUPERSEDED: 'neutral', APPROVED: 'positive', REQUESTED: 'warning', REJECTED: 'negative', COMPLETED: 'neutral', CANCELLED: 'neutral',
   RECORDED: 'positive', MISSING: 'negative', CUSTOMER_OWNED: 'neutral', NO_OWNER: 'negative', CURRENT: 'positive', EXPIRED: 'negative', REVOKED: 'neutral',
-  NOT_NO_TRAINING: 'warning', PASS: 'positive', PARTIAL_RESULT: 'warning', FAIL: 'negative', NONE: 'negative', ok: 'positive', failed: 'negative',
+  NOT_NO_TRAINING: 'warning', PROVIDER_CHANGED: 'negative', PASS: 'positive', PARTIAL_RESULT: 'warning', FAIL: 'negative', NONE: 'negative', ok: 'positive', failed: 'negative',
 };
 const st = (s: string | null | undefined) => <Badge tone={STATUS_TONE[String(s ?? '')] ?? 'neutral'}>{String(s ?? '—').replace(/_/g, ' ').toLowerCase()}</Badge>;
 const loadingOr = (title: string, l: { data: unknown; error: boolean; reload: () => Promise<void> }) =>
@@ -98,10 +98,12 @@ export function DisclosuresTab() {
   const [narr, setNarr] = useState<Record<string, string>>({});
   const [dep, setDep] = useState({ name: '', contact: '' });
   const [publicUrl, setPublicUrl] = useState('');
+  const [summary, setSummary] = useState('');
+  const [sent, setSent] = useState({ recipient: '', channel: 'EMAIL', reference: '' });
   const wait = loadingOr('Disclosures', list);
   if (wait) return wait;
   const reload = () => { void list.reload(); void deps.reload(); };
-  const openOne = (id: string) => void call(async () => { const r = await post(`/governance/disclosures/${id}`, undefined, 'GET'); setOpen(r); setNarr(r.content?.narrative ?? {}); }, 'Loaded');
+  const openOne = (id: string) => void call(async () => { const r = await post(`/governance/disclosures/${id}`, undefined, 'GET'); setOpen(r); setNarr(r.content?.narrative ?? {}); setSummary(r.content?.summary ?? ''); }, 'Loaded');
   return (
     <div className="space-y-2">
       <Panel
@@ -135,12 +137,31 @@ export function DisclosuresTab() {
                   <textarea className={FIELD} rows={2} disabled={open.status !== 'DRAFT'} value={narr[k] ?? ''} onChange={(e) => setNarr({ ...narr, [k]: e.target.value })} />
                 </Field>
               ))}
+              {open.kind === 'CO_UPDATE_NOTICE' && (
+                <Field label="What changed, for the deployers (required before sending)">
+                  <textarea className={FIELD} rows={3} disabled={open.status !== 'DRAFT'} value={summary} onChange={(e) => setSummary(e.target.value)} />
+                </Field>
+              )}
+              {open.gaps?.length > 0 && <p className="text-text-secondary">Still missing: {open.gaps.join(', ')}{open.kind === 'CO_DEVELOPER' ? ' (fill the model\'s context profile, data register and validation, then refresh)' : ''}</p>}
               {open.status === 'DRAFT' && (
                 <div className="flex flex-wrap items-end gap-2">
+                  {open.kind === 'CO_UPDATE_NOTICE' && <Button size="xs" variant="secondary" disabled={summary.trim().length < 10} onClick={() => void call(() => post(`/governance/disclosures/${open.disclosure_id}`, { summary }, 'PATCH'), 'Saved', () => openOne(open.disclosure_id))}>Save summary</Button>}
                   {open.kind === 'TRANSPARENCY_STATEMENT' && <Button size="xs" variant="secondary" onClick={() => void call(() => post(`/governance/disclosures/${open.disclosure_id}`, { narrative: narr }, 'PATCH'), 'Saved', () => openOne(open.disclosure_id))}>Save text</Button>}
                   <Button size="xs" variant="secondary" onClick={() => void call(() => post(`/governance/disclosures/${open.disclosure_id}`, { regenerate: true }, 'PATCH'), 'Refreshed from the registers', () => openOne(open.disclosure_id))}>Refresh figures</Button>
                   <input className={`${FIELD} max-w-xs`} placeholder="Public URL (https, optional)" value={publicUrl} onChange={(e) => setPublicUrl(e.target.value)} />
                   <Button size="xs" title="Owner, CISO or Admin" onClick={() => void call(() => post(`/governance/disclosures/${open.disclosure_id}/publish`, { public_url: publicUrl || undefined }), 'Published', () => { setOpen(null); reload(); })}>Publish</Button>
+                </div>
+              )}
+              {open.status === 'PUBLISHED' && (
+                <div className="space-y-1">
+                  <span className={LABEL}>Sent to</span>
+                  <Table head={['Recipient', 'Channel', 'Reference', 'When', 'By']} empty="Not sent to anyone yet." rows={(open.notifications ?? []).map((n: any) => [n.recipient, n.channel, n.reference ?? '—', day(n.at), n.by ?? '—'])} />
+                  <div className="flex flex-wrap items-end gap-2">
+                    <input className={`${FIELD} max-w-xs`} placeholder="Recipient (deployer, regulator, website)" value={sent.recipient} onChange={(e) => setSent({ ...sent, recipient: e.target.value })} />
+                    <select aria-label="Channel" className={`${FIELD} max-w-[130px]`} value={sent.channel} onChange={(e) => setSent({ ...sent, channel: e.target.value })}>{['WEBSITE', 'EMAIL', 'PORTAL', 'REGULATOR', 'LETTER', 'OTHER'].map((c) => <option key={c}>{c}</option>)}</select>
+                    <input className={`${FIELD} max-w-[200px]`} placeholder="Reference" value={sent.reference} onChange={(e) => setSent({ ...sent, reference: e.target.value })} />
+                    <Button size="xs" variant="secondary" disabled={sent.recipient.trim().length < 2} onClick={() => void call(() => post(`/governance/disclosures/${open.disclosure_id}/notifications`, { ...sent, reference: sent.reference || undefined }), 'Logged', () => { setSent({ recipient: '', channel: 'EMAIL', reference: '' }); openOne(open.disclosure_id); })}>Log sending</Button>
+                  </div>
                 </div>
               )}
               <pre className="max-h-72 overflow-auto rounded bg-surface-hover p-2 text-[10px]">{JSON.stringify(open.content, null, 2)}</pre>
@@ -183,13 +204,15 @@ export function IncidentsExtTab() {
   const ints = useLoad<any>('/governance/integrations');
   const [act, setAct] = useState<{ id: string; kind: string; text: string } | null>(null);
   const [hook, setHook] = useState({ kind: 'WEBHOOK', label: '', url: '', secret: '' });
+  const [playbook, setPlaybook] = useState<string | null>(null);
   const wait = loadingOr('Incidents', q);
   if (wait) return wait;
   const reload = () => { void q.reload(); void ints.reload(); };
   const submit = () => {
     if (!act) return;
-    const body = act.kind === 'sign-off' ? { note: act.text } : act.kind === 'affected-notice' ? { summary: act.text, channel: 'EMAIL' } : act.kind === 'external-ticket' ? { ref: act.text } : { reference: act.text };
-    void call(() => post(`/governance/incidents/${act.id}/${act.kind}`, body), 'Recorded', () => { setAct(null); reload(); });
+    const body = act.kind === 'sign-off' ? { note: act.text } : act.kind === 'affected-notice' ? { summary: act.text, channel: 'EMAIL' } : act.kind === 'notice-not-required' ? { not_required_reason: act.text }
+      : act.kind === 'external-ticket' ? { ref: act.text } : { reference: act.text };
+    void call(() => post(`/governance/incidents/${act.id}/${act.kind === 'notice-not-required' ? 'affected-notice' : act.kind}`, body), 'Recorded', () => { setAct(null); reload(); });
   };
   return (
     <div className="space-y-2">
@@ -204,7 +227,14 @@ export function IncidentsExtTab() {
             <Writable key="w">
               <span className="flex flex-wrap gap-1">
                 {i.serious && !i.senior_sign_off && <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'sign-off', text: '' })}>Sign off</Button>}
-                {i.affected.count > 0 && !i.affected.notified_at && <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'affected-notice', text: '' })}>Notice</Button>}
+                {i.affected.count > 0 && !i.affected.notified_at && !i.affected.notice?.notRequiredReason && (
+                  <>
+                    <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'affected-notice', text: '' })}>Notice</Button>
+                    <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'notice-not-required', text: '' })}>No notice needed</Button>
+                  </>
+                )}
+                <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'dta-notification', text: '' })}>DTA notified</Button>
+                <Button size="xs" variant="ghost" onClick={() => setPlaybook(playbook === i.incident_id ? null : i.incident_id)}>Playbook</Button>
                 <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'external-ticket', text: '' })}>Ticket</Button>
                 <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/incidents/${i.incident_id}/push`, {}), 'Pushed', reload)}>Push to ITSM</Button>
               </span>
@@ -214,11 +244,29 @@ export function IncidentsExtTab() {
         {act && (
           <div className="flex flex-wrap items-end gap-2 border-t border-border p-2">
             <span className="text-[11px]">{act.kind.replace('-', ' ')}</span>
-            <input className={`${FIELD} max-w-md`} placeholder={act.kind === 'sign-off' ? 'Sign-off note (what was reviewed)' : act.kind === 'affected-notice' ? 'What the affected people were told' : 'Ticket reference'} value={act.text} onChange={(e) => setAct({ ...act, text: e.target.value })} />
+            <input className={`${FIELD} max-w-md`} placeholder={{ 'sign-off': 'Sign-off note (what was reviewed)', 'affected-notice': 'What the affected people were told', 'notice-not-required': 'Why no notice is needed', 'external-ticket': 'Ticket reference', 'dta-notification': 'DTA notification reference' }[act.kind]} value={act.text} onChange={(e) => setAct({ ...act, text: e.target.value })} />
             <Button size="xs" onClick={submit}>Save</Button>
             <Button size="xs" variant="ghost" onClick={() => setAct(null)}>Cancel</Button>
           </div>
         )}
+        {playbook && (() => {
+          const inc = q.data.incidents.find((x: any) => x.incident_id === playbook);
+          if (!inc) return null;
+          return (
+            <Writable>
+              <div className="space-y-1 border-t border-border p-2 text-[11px]">
+                <span className={LABEL}>CISA incident response playbook: {inc.model_name}</span>
+                <p className="text-text-secondary">{inc.cisa.threat_vector} · {inc.cisa.functional_impact} · {inc.cisa.information_impact}{inc.cisa.cisa_report_hours ? ` · report to CISA within ${inc.cisa.cisa_report_hours}h` : ''}{inc.dta_notification ? ` · DTA notified ${day(inc.dta_notification.notifiedAt)} (${inc.dta_notification.reference})` : ''}</p>
+                {inc.cisa.phases.map((ph: any) => (
+                  <label key={ph.phase} className="flex items-center gap-2">
+                    <input type="checkbox" checked={ph.done} onChange={(e) => void call(() => post(`/governance/incidents/${inc.incident_id}/playbook`, { phase: ph.phase, done: e.target.checked }), 'Updated', reload)} />
+                    {ph.phase.replace(/_/g, ' ').toLowerCase()} <span className="text-text-secondary">{ph.source}{ph.note ? `: ${ph.note}` : ''}</span>
+                  </label>
+                ))}
+              </div>
+            </Writable>
+          );
+        })()}
       </Panel>
       {ints.data && (
         <Panel title="Integrations (Jira, ServiceNow, SIEM, webhooks)">

@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { aiCallAllowed, AiProvidersService } from '../ai/ai-providers.service';
+import { aiCallAllowedFor, AiProvidersService } from '../ai/ai-providers.service';
 import { PromptVaultService } from '../ai/prompt-vault.service';
 import { chatComplete } from '../ai/llm-client';
 import { renderTemplate } from '../ai/template';
@@ -108,10 +108,15 @@ export class SummarizerService {
 
   // ── Provider/prompt resolution ──────────────────────────────────────────────
 
-  private async pickForOrg(tenantId: string | null): Promise<{ s: Summarizer; label: string }> {
+  /**
+   * `dataOrgIds`: organisations whose data the request carries, when that is
+   * not the caller's own (a platform admin acting on an organisation's model).
+   * Their external-AI policy (governance E3.8) applies as well as the caller's.
+   */
+  private async pickForOrg(tenantId: string | null, dataOrgIds: Array<string | null> = []): Promise<{ s: Summarizer; label: string }> {
     const template = await this.vault.resolveActiveBody(tenantId, 'model_summary');
     try {
-      const cfg = await this.providers.resolveActiveForOrg(tenantId, 'model_summary');
+      const cfg = await this.providers.resolveActiveForOrg(tenantId, 'model_summary', dataOrgIds);
       if (cfg) {
         return {
           s: new ConfiguredLlmSummarizer(cfg.adapter, cfg.baseUrl, cfg.model, cfg.apiKey, this.maxSnippetChars, template.body),
@@ -122,7 +127,7 @@ export class SummarizerService {
       this.log.warn(`Org provider resolution failed (${String(e)}); falling through.`);
     }
     // Governance E3.8: the platform-level provider is external unless it points at a local endpoint.
-    if (this.envCfg && (await aiCallAllowed(tenantId, this.envCfg.baseUrl, null))) {
+    if (this.envCfg && (await aiCallAllowedFor([tenantId, ...dataOrgIds], this.envCfg.baseUrl, null))) {
       return {
         s: new ConfiguredLlmSummarizer('anthropic', this.envCfg.baseUrl, this.envCfg.model, this.envCfg.apiKey, this.maxSnippetChars, template.body),
         label: this.envCfg.model,
@@ -132,9 +137,9 @@ export class SummarizerService {
   }
 
   /** True when a real AI provider (org or env) would serve this org right now. */
-  async aiEnabledForOrg(tenantId: string | null): Promise<boolean> {
+  async aiEnabledForOrg(tenantId: string | null, dataOrgIds: Array<string | null> = []): Promise<boolean> {
     if (this.breakerOpen(this.orgKey(tenantId))) return false;
-    return (await this.pickForOrg(tenantId)).s.source === 'ai';
+    return (await this.pickForOrg(tenantId, dataOrgIds)).s.source === 'ai';
   }
 
   // ── Generation entry points ─────────────────────────────────────────────────
@@ -143,12 +148,13 @@ export class SummarizerService {
     tenantId: string | null,
     ctx: SummarizationContext,
     actor = 'dashboard_user',
+    dataOrgIds: Array<string | null> = [],
   ): Promise<SummaryResult & { provider: string }> {
     const key = this.orgKey(tenantId);
     if (this.breakerOpen(key)) {
       return { ...(await this.heuristic.generate(ctx)), provider: 'heuristic (local — provider cooling down)' };
     }
-    const { s, label } = await this.pickForOrg(tenantId);
+    const { s, label } = await this.pickForOrg(tenantId, dataOrgIds);
     if (s.source !== 'ai') return { ...(await s.generate(ctx)), provider: label };
 
     this.checkRateLimit(key);
@@ -187,6 +193,7 @@ export class SummarizerService {
     vars: Record<string, string>,
     heuristicText: () => string,
     actor = 'dashboard_user',
+    dataOrgIds: Array<string | null> = [],
   ): Promise<{ text: string; source: 'ai' | 'heuristic'; model: string | null; provider: string }> {
     const key = this.orgKey(tenantId);
     const template = await this.vault.resolveActiveBody(tenantId, useCase);
@@ -197,11 +204,11 @@ export class SummarizerService {
     let cfg: { adapter: string; baseUrl: string; model: string; apiKey: string | null; label: string } | null = null;
     if (!this.breakerOpen(key)) {
       try {
-        cfg = await this.providers.resolveActiveForOrg(tenantId, useCase);
+        cfg = await this.providers.resolveActiveForOrg(tenantId, useCase, dataOrgIds);
       } catch (e) {
         this.log.warn(`Org provider resolution failed (${String(e)}); falling through.`);
       }
-      if (!cfg && this.envCfg && (await aiCallAllowed(tenantId, this.envCfg.baseUrl, null))) {
+      if (!cfg && this.envCfg && (await aiCallAllowedFor([tenantId, ...dataOrgIds], this.envCfg.baseUrl, null))) {
         cfg = { adapter: 'anthropic', baseUrl: this.envCfg.baseUrl, model: this.envCfg.model, apiKey: this.envCfg.apiKey, label: this.envCfg.model };
       }
     }

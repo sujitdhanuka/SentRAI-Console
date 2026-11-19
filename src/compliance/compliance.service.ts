@@ -16,6 +16,7 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { InventoryService } from '../inventory/inventory.service';
 import { SummarizerService } from '../summarizer/summarizer.service';
+import { governanceHooks } from '../governance/hooks';
 import { FRAMEWORK_NAMES, frameworkReadiness, gapStatement } from './control-plain-english';
 import { sourceLocationsOf } from '../discovery/source-locations';
 import { getFeatureFlags } from '../common/feature-flags';
@@ -378,6 +379,21 @@ export class ComplianceService {
    * asked to infer them — and persisted per project so the readiness report and
    * the console show the same text. Org-wide scope is returned but not stored.
    */
+  /**
+   * Organisations whose figures the narrative carries, for their external-AI
+   * policy (governance E3.8): the project's organisation, or for a platform
+   * admin's org-wide view every organisation with a project.
+   */
+  private async narrativeDataOrgs(user: CurrentUser, projectId?: string | null): Promise<Array<string | null>> {
+    if (!governanceHooks.externalAiPolicy) return [];
+    if (projectId) {
+      const p = await this.projects.findOne({ where: { id: projectId }, select: ['id', 'tenantId'] });
+      return p?.tenantId ? [p.tenantId] : [];
+    }
+    if (user?.tenantId) return [];
+    return [...new Set((await this.projects.find({ select: ['id', 'tenantId'] })).map((p) => p.tenantId).filter((t): t is string => Boolean(t)))];
+  }
+
   async execNarrative(user: CurrentUser, projectId?: string | null) {
     const report = await this.portfolio(user, projectId);
     const s = report.summary;
@@ -410,6 +426,7 @@ export class ComplianceService {
         `Most material gaps: ${topGaps}. Pre-deployment enforcement: ${ciMetrics}. ` +
         '(Auto-generated — review before board circulation.)',
       user?.email ?? 'dashboard_user',
+      await this.narrativeDataOrgs(user, projectId),
     );
 
     if (projectId) {

@@ -2,6 +2,7 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /** An approved, frozen version of the Statement of Applicability (governance E3.1). */
 @Entity({ name: 'soa_statements' })
+@Index('UQ_soa_statements_org_version', ['orgId', 'version'], { unique: true })
 export class SoaStatementEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id!: string;

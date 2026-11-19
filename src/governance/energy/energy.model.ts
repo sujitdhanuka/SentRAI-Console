@@ -31,7 +31,7 @@ export function parseSamples(v: unknown): PowerSample[] {
 /**
  * nvidia-smi CSV, as logged with
  *   nvidia-smi --query-gpu=timestamp,index,power.draw --format=csv -l 5
- * Readings of every GPU at the same timestamp are summed.
+ * Readings of every GPU within the same second are summed.
  */
 export function parseNvidiaSmiCsv(csv: string): PowerSample[] {
   if (typeof csv !== 'string' || csv.length > 5_000_000) throw new Error('csv must be nvidia-smi output (at most 5 MB)');
@@ -48,7 +48,9 @@ export function parseNvidiaSmiCsv(csv: string): PowerSample[] {
     const at = new Date(parts[ti]?.replace(/\//g, '-'));
     const p = parseFloat(parts[pi]);
     if (Number.isNaN(at.getTime()) || !Number.isFinite(p)) continue;
-    byTime.set(at.getTime(), (byTime.get(at.getTime()) ?? 0) + p);
+    // nvidia-smi stamps each GPU's row separately (milliseconds apart): rows in the same second are one sample.
+    const t = Math.floor(at.getTime() / 1000) * 1000;
+    byTime.set(t, (byTime.get(t) ?? 0) + p);
   }
   const out = [...byTime.entries()].sort((a, b) => a[0] - b[0]).map(([t, p]) => ({ at: new Date(t), powerW: p }));
   if (out.length < 2) throw new Error('csv needs at least two timestamped power readings');

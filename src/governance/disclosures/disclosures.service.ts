@@ -36,7 +36,7 @@ import {
 } from '../../database/entities';
 import { assertFlag, modelForUser } from '../governance-access';
 import { addModelFacts, addOrgFacts } from '../hooks';
-import { addMonths, MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgModels, reqText, requireRole, toCsv } from '../phase2-util';
+import { addMonths, MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgModels, reqText, requireRole, toCsv, saveVersioned } from '../phase2-util';
 import { RisksService } from '../risks/risks.service';
 import { buildXlsx } from './xlsx';
 import {
@@ -248,13 +248,14 @@ export class DisclosuresService implements OnModuleInit {
       if (mOrg !== orgId) throw new NotFoundException('Model not found');
       modelId = model.id;
       content = await this.developerContent(orgId, model);
-      title = `Developer disclosure: ${model.name}`;
+      title = `Developer disclosure: ${model.name}`.slice(0, 255);
     }
-    const r = await this.rows.save(this.rows.create({
-      id: uuidv4(), orgId, kind, modelId, version: await this.nextVersion(orgId, kind, modelId), title, periodStart, periodEnd,
+    const version = await this.nextVersion(orgId, kind, modelId);
+    const r = await saveVersioned(() => this.rows.save(this.rows.create({
+      id: uuidv4(), orgId, kind, modelId, version, title, periodStart, periodEnd,
       content, contentHash: contentHash(content), status: 'DRAFT', publishedBy: null, publishedAt: null, publicUrl: null, reviewDueAt: null,
       notifications: [], createdBy: user.email, createdAt: now, updatedAt: now,
-    }));
+    })));
     if (req) req.auditSummary = { disclosure_drafted: { disclosure_id: r.id, kind, model_id: modelId } };
     return this.view(r, true);
   }
@@ -329,7 +330,12 @@ export class DisclosuresService implements OnModuleInit {
     if (r.status !== 'DRAFT') throw new BadRequestException('Already published');
     const gaps = r.kind === 'TRANSPARENCY_STATEMENT' ? transparencyGaps(r.content) : [];
     if (gaps.length) throw new BadRequestException({ message: 'Write every section before publishing', missing: gaps });
+    // A developer disclosure goes to deployers: every required statement must be there (fill the context profile and refresh).
+    const devGaps = r.kind === 'CO_DEVELOPER' ? developerGaps(r.content) : [];
+    if (devGaps.length) throw new BadRequestException({ message: 'Complete the developer disclosure before publishing (context profile, data register, validation or impact assessment), then refresh it', missing: devGaps });
     if (r.kind === 'CO_UPDATE_NOTICE' && !String(r.content.summary ?? '').trim()) throw new BadRequestException('Describe the update (summary) before notifying deployers');
+    const publicUrl = optText(body.public_url, 'public_url', 500);
+    if (publicUrl && !/^https:\/\//i.test(publicUrl)) throw new BadRequestException('public_url must be an https link');
     const now = new Date();
     const previous = await this.rows.find({ where: { orgId: r.orgId, kind: r.kind, status: 'PUBLISHED', ...(r.modelId ? { modelId: r.modelId } : {}) } });
     for (const p of previous) {
@@ -340,8 +346,7 @@ export class DisclosuresService implements OnModuleInit {
     r.status = 'PUBLISHED';
     r.publishedBy = user.email;
     r.publishedAt = now;
-    r.publicUrl = optText(body.public_url, 'public_url', 500);
-    if (r.publicUrl && !/^https:\/\//i.test(r.publicUrl)) throw new BadRequestException('public_url must be an https link');
+    r.publicUrl = publicUrl;
     r.reviewDueAt = r.kind === 'TRANSPARENCY_STATEMENT' ? addMonths(now, 12) : null;
     r.contentHash = contentHash(r.content);
     if (r.kind === 'CO_UPDATE_NOTICE') {
@@ -425,7 +430,11 @@ export class DisclosuresService implements OnModuleInit {
     if (format === 'csv') return { body: toCsv(fields as any, data), type: 'text/csv; charset=utf-8', filename: `${base}.csv` };
     if (format === 'xlsx') return { body: buildXlsx(base, fields.map((f) => f.label), data.map((r) => fields.map((f) => r[f.key]))), type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename: `${base}.xlsx` };
     if (format !== 'json') throw new BadRequestException('format must be json, csv or xlsx');
-    return { body: JSON.stringify({ org_id: orgId, generated_at: new Date().toISOString(), fields, rows: data }), type: 'application/json', filename: `${base}.json` };
+    // Field completeness: every empty field of every system is listed, so a gap is never silent.
+    const incomplete = data
+      .map((r) => ({ system: r.name ?? r.use_case_name ?? r.model_id ?? r.id, missing: fields.filter((f) => r[f.key] === null || r[f.key] === undefined || r[f.key] === '').map((f) => f.key) }))
+      .filter((x) => x.missing.length);
+    return { body: JSON.stringify({ org_id: orgId, generated_at: new Date().toISOString(), fields, rows: data, completeness: { systems: data.length, complete: data.length - incomplete.length, incomplete } }), type: 'application/json', filename: `${base}.json` };
   }
 
   /* ------------------------------------------------------------ deployers */
@@ -485,7 +494,7 @@ export class DisclosuresService implements OnModuleInit {
     const orgId = deps[0].orgId;
     const content = { model: m.name, change, changes: [{ change, at: now.toISOString() }], summary: '', deployers: deps.map((d) => d.name) };
     await this.rows.save(this.rows.create({
-      id: uuidv4(), orgId, kind: 'CO_UPDATE_NOTICE', modelId, version: await this.nextVersion(orgId, 'CO_UPDATE_NOTICE', modelId), title: `Material update notice: ${m.name}`,
+      id: uuidv4(), orgId, kind: 'CO_UPDATE_NOTICE', modelId, version: await this.nextVersion(orgId, 'CO_UPDATE_NOTICE', modelId), title: `Material update notice: ${m.name}`.slice(0, 255),
       periodStart: null, periodEnd: null, content, contentHash: contentHash(content), status: 'DRAFT', publishedBy: null, publishedAt: null, publicUrl: null,
       reviewDueAt: null, notifications: [], createdBy: 'system', createdAt: now, updatedAt: now,
     }));
@@ -497,7 +506,9 @@ export class DisclosuresService implements OnModuleInit {
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async reviewReminders(now = new Date()): Promise<number> {
     if (!this.flags.isEnabled('disclosures')) return 0;
-    const due = await this.rows.find({ where: { kind: 'TRANSPARENCY_STATEMENT', status: 'PUBLISHED', reviewDueAt: LessThan(new Date(now.getTime() + 30 * 86_400_000)) } });
+    const candidates = await this.rows.find({ where: { kind: 'TRANSPARENCY_STATEMENT', status: 'PUBLISHED', reviewDueAt: LessThan(new Date(now.getTime() + 30 * 86_400_000)) } });
+    // Remind 30 and 7 days ahead, on the day, then weekly while overdue: not every day.
+    const due = candidates.filter((r) => reminderDay(r.reviewDueAt!, now));
     for (const r of due) {
       try {
         await this.notifier.notify('transparency_statement_review_due', { tenant_id: r.orgId, disclosure_id: r.id, review_due_at: r.reviewDueAt });
@@ -509,4 +520,9 @@ export class DisclosuresService implements OnModuleInit {
   }
 }
 
-
+/** Whether `now` is a reminder day for a review due on `dueAt`: 30 and 7 days before, the day itself, then every 7 days overdue. */
+export function reminderDay(dueAt: Date, now: Date): boolean {
+  const days = Math.floor((Date.UTC(dueAt.getUTCFullYear(), dueAt.getUTCMonth(), dueAt.getUTCDate()) - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())) / 86_400_000);
+  if (days >= 0) return days === 30 || days === 7 || days === 0;
+  return -days % 7 === 0;
+}

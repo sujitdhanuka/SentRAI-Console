@@ -20,8 +20,9 @@ import { CurrentUser } from '../../common/interfaces/current-user.interface';
 import { AIIncidentEntity, AIModelEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity, OrganizationEntity, ProjectEntity, UserEntity } from '../../database/entities';
 import { assertFlag } from '../governance-access';
 import { addModelFacts, governanceHooks } from '../hooks';
-import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgOfModel, reqText, requireRole, selfUserId } from '../phase2-util';
+import { MAINTAINERS, OFFICERS, oneOf, optDate, optText, orgFor, orgOfModel, reqText, requireRole, selfUserId, isFuture } from '../phase2-util';
 import { RisksService } from '../risks/risks.service';
+import { safeFetch } from './safe-fetch';
 import {
   affectedCount,
   cisaMapping,
@@ -37,6 +38,7 @@ import {
   siemEvent,
   signBody,
   ticketRef,
+  maskUrl,
   webhookUrlProblem,
 } from './incident-ext.model';
 
@@ -49,7 +51,7 @@ export type Fetcher = (url: string, init: { method: string; headers: Record<stri
 export class IncidentExtensionsService implements OnModuleInit {
   private readonly logger = new Logger(IncidentExtensionsService.name);
   /** Outbound HTTP; tests replace it. */
-  fetcher: Fetcher = (url, init) => fetch(url, init as any) as any;
+  fetcher: Fetcher = (url, init) => safeFetch(url, init, this.allowPrivate());
 
   constructor(
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
@@ -173,7 +175,7 @@ export class IncidentExtensionsService implements OnModuleInit {
       await this.save(inc, { notice: { notRequiredReason: notRequired, by: user.email, at: new Date().toISOString() } });
     } else {
       const at = optDate(body.notified_at, 'notified_at') ?? new Date();
-      if (at.getTime() > Date.now() + 60_000) throw new BadRequestException('notified_at cannot be in the future');
+      if (isFuture(at, body.notified_at)) throw new BadRequestException('notified_at cannot be in the future');
       const count = body.people_notified === undefined ? null : Number(body.people_notified);
       if (count !== null && (!Number.isInteger(count) || count < 0)) throw new BadRequestException('people_notified must be a whole number');
       inc.affectedPartiesNotifiedAt = at;
@@ -199,7 +201,7 @@ export class IncidentExtensionsService implements OnModuleInit {
     requireRole(user, OFFICERS, 'record a DTA notification');
     const { inc } = await this.load(user, id);
     const at = optDate(body.notified_at, 'notified_at') ?? new Date();
-    if (at.getTime() > Date.now() + 60_000) throw new BadRequestException('notified_at cannot be in the future');
+    if (isFuture(at, body.notified_at)) throw new BadRequestException('notified_at cannot be in the future');
     await this.save(inc, { dta: { reference: reqText(body.reference, 'reference', 3, 200), notifiedAt: at.toISOString(), by: user.email } });
     if (req) req.auditSummary = { incident_dta_notified: { incident_id: inc.id } };
     return this.view(inc);
@@ -222,7 +224,7 @@ export class IncidentExtensionsService implements OnModuleInit {
   private endpointView(e: IntegrationEndpointEntity) {
     const cfg = e.events ?? {};
     return {
-      integration_id: e.id, kind: e.kind, label: e.label, url: e.url, has_secret: Boolean(e.secretEncrypted), events: cfg.events ?? [],
+      integration_id: e.id, kind: e.kind, label: e.label, url: maskUrl(e.url), has_secret: Boolean(e.secretEncrypted), events: cfg.events ?? [],
       options: cfg.options ?? {}, enabled: e.enabled, last_delivery_at: e.lastDeliveryAt, last_status: e.lastStatus, created_by: e.createdBy, created_at: e.createdAt,
     };
   }
@@ -350,17 +352,20 @@ export class IncidentExtensionsService implements OnModuleInit {
       if (res.ok) ticket = ticketRef(e.kind as IntegrationKind, await res.json().catch(() => null));
       else error = `HTTP ${res.status}`;
     } catch (err) {
-      error = String((err as Error)?.message ?? err).slice(0, 300);
+      const msg = String((err as Error)?.message ?? err);
+      // Keep the reason short and generic: the raw network error would describe the target network.
+      error = /blocked/.test(msg) ? 'Blocked: the host resolves to a private address' : (err as Error)?.name === 'AbortError' ? 'Timed out' : 'Could not connect';
     } finally {
       clearTimeout(timer);
     }
     const d = await this.deliveries.save(this.deliveries.create({
       id: uuidv4(), orgId: e.orgId, endpointId: e.id, event, refId, status, httpStatus, error, payloadHash: createHash('sha256').update(json).digest('hex'), createdAt: new Date(),
     }));
+    // A targeted update: a whole-entity save here would undo an edit made while the request was in flight.
+    await this.endpoints.update({ id: e.id }, { lastDeliveryAt: d.createdAt, lastStatus: status });
     e.lastDeliveryAt = d.createdAt;
     e.lastStatus = status;
-    await this.endpoints.save(e);
-    return { d, ticket };
+    return { d, ticket: ticket ? ticket.slice(0, 255) : null };
   }
 
   private async active(orgId: string, event: string): Promise<IntegrationEndpointEntity[]> {
@@ -380,7 +385,7 @@ export class IncidentExtensionsService implements OnModuleInit {
       const { ticket } = await this.deliver(e, event, inc?.id ?? detail?.ref ?? null, this.payload(e, event, orgId, inc, { modelId, modelName: m?.name, ref: detail?.ref ?? null, detail: detail?.source ?? null }));
       if (inc && ticket && !inc.externalTicketRef) {
         inc.externalTicketRef = ticket;
-        await this.incidents.save(inc);
+        await this.incidents.update({ id: inc.id }, { externalTicketRef: ticket });
       }
     }
     return targets.length;
@@ -397,10 +402,12 @@ export class IncidentExtensionsService implements OnModuleInit {
     const results: Array<ReturnType<IncidentExtensionsService["deliveryView"]>> = [];
     for (const e of targets) {
       const { d, ticket } = await this.deliver(e, 'INCIDENT_PUSHED', inc.id, this.payload(e, 'INCIDENT_PUSHED', orgId, inc, { modelId: inc.modelId }));
-      if (ticket && !inc.externalTicketRef) inc.externalTicketRef = ticket;
+      if (ticket && !inc.externalTicketRef) {
+        inc.externalTicketRef = ticket;
+        await this.incidents.update({ id: inc.id }, { externalTicketRef: ticket });
+      }
       results.push(this.deliveryView(d));
     }
-    await this.incidents.save(inc);
     if (req) req.auditSummary = { incident_pushed: { incident_id: inc.id, deliveries: results.length } };
     return { ...this.view(inc), deliveries: results };
   }
