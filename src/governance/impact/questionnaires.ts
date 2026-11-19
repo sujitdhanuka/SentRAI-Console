@@ -152,3 +152,45 @@ export function deriveFlags(ids: string[], answers: Record<string, Record<string
   }
   return { inScope, highImpact, materiality };
 }
+
+/** Model facts that answer questions the model record already holds (the context profile is the source). */
+export interface PrefillFacts {
+  useCaseDescription?: string | null;
+  humanOversightRequired?: boolean | null;
+  autonomousScope?: string | null;
+  contextProfile?: { oversightPattern?: string; deploymentSettings?: string[]; namedOperator?: string; intendedUsers?: string[] } | null;
+}
+
+/**
+ * Draft answers taken from the model record, so purpose and human oversight are
+ * not typed again for each questionnaire. Only empty text answers are filled;
+ * the person reviews and edits them before finalising.
+ */
+export function prefillAnswers(ids: string[], given: Record<string, Record<string, any>>, m: PrefillFacts): { answers: Record<string, Record<string, any>>; filled: string[] } {
+  const cp = m.contextProfile ?? {};
+  const pattern = cp.oversightPattern ? cp.oversightPattern.replace(/_/g, ' ').toLowerCase() : m.humanOversightRequired ? 'human in the loop' : null;
+  const oversight = [
+    pattern ? `Oversight pattern: ${pattern}.` : null,
+    cp.namedOperator ? `Named operator: ${cp.namedOperator}.` : null,
+    m.autonomousScope ? `Autonomous scope: ${m.autonomousScope}.` : m.humanOversightRequired ? 'A human reviews outputs before they are acted on.' : null,
+  ].filter(Boolean).join(' ');
+  const facts: Record<string, string> = {};
+  if (m.useCaseDescription?.trim()) facts.purpose = m.useCaseDescription.trim();
+  if (oversight) facts.human_oversight = oversight;
+  if (cp.deploymentSettings?.length) facts.deployer_process = cp.deploymentSettings.join('; ');
+  const answers: Record<string, Record<string, any>> = { ...given };
+  const filled: string[] = [];
+  for (const id of ids) {
+    const q = questionnaireById(id);
+    if (!q) continue;
+    for (const question of q.questions) {
+      const value = facts[question.id];
+      if (!value || question.type !== 'text') continue;
+      const cur = answers[id]?.[question.id];
+      if (cur !== undefined && cur !== null && String(cur).trim() !== '') continue;
+      answers[id] = { ...(answers[id] ?? {}), [question.id]: value };
+      filled.push(`${id}.${question.id}`);
+    }
+  }
+  return { answers, filled };
+}

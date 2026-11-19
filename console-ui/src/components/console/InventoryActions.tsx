@@ -1,6 +1,7 @@
 import { FileDown, MessageSquarePlus } from 'lucide-react';
 
-import { provider } from '../../providers';
+import { isDemoMode, provider } from '../../providers';
+import { navigate } from '../../stores/route';
 import { EnvFilter, KindFilter, useConsoleUi } from '../../stores/consoleUi';
 
 const ENVS: EnvFilter[] = ['All', 'PROD', 'STAGING', 'DEV'];
@@ -8,7 +9,7 @@ const KINDS: KindFilter[] = ['All', 'LLM', 'ML', 'Agents', 'MCP'];
 
 /** Inventory-specific header controls, injected into the AppShell header. */
 export function InventoryActions() {
-  const { env, setEnv, kind, setKind, setGrievance, toast } = useConsoleUi();
+  const { env, setEnv, kind, setKind, setGrievance, toast, selectedId } = useConsoleUi();
 
   const exportAudit = async () => {
     try {
@@ -51,10 +52,14 @@ export function InventoryActions() {
           </button>
         ))}
       </div>
-      <button onClick={exportAudit} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">
-        <FileDown size={13} /> <span className="hidden lg:inline">Audit PDF</span>
-      </button>
-      <button onClick={() => setGrievance(true)} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">
+      {/* The portfolio PDF lives on Compliance Rollup (Readiness PDF); the stand-alone demo has no rollup page, so it keeps the button. */}
+      {isDemoMode && (
+        <button onClick={exportAudit} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">
+          <FileDown size={13} /> <span className="hidden lg:inline">Audit PDF</span>
+        </button>
+      )}
+      {/* One grievance form: the full one on Consumer Grievances, opened on the selected model (the demo keeps its quick popup). */}
+      <button onClick={() => (isDemoMode ? setGrievance(true) : navigate('grievances', { file: '1', ...(selectedId ? { model: selectedId } : {}) }))} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">
         <MessageSquarePlus size={13} /> <span className="hidden lg:inline">Grievance</span>
       </button>
     </>

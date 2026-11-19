@@ -194,10 +194,25 @@ export class RedTeamAuditService implements OnModuleInit {
     // For HIGH and CRITICAL systems the record clears a blocking gate, so it must point at the report.
     const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim().slice(0, 500) : null;
     if (isHigh(model.riskLevel) && (!ref || ref.length < 5)) throw new BadRequestException('A red team on a HIGH or CRITICAL system needs ref: the report, ticket or evidence reference');
-    model.lastRedTeamDate = at;
-    model.evidenceArtifacts = [...(model.evidenceArtifacts ?? []), { type: 'red_team', ref: ref ?? `sentrai:red-team:${modelId}:${at.toISOString()}`, added_at: at.toISOString(), description: summary, recorded_by: user.email } as any];
+    // Optional tool results (garak, PyRIT, promptfoo): the same form records a manual exercise or a scanner run.
+    const probes = body.total_probes === undefined || body.total_probes === null || body.total_probes === '' ? null : Math.trunc(Number(body.total_probes));
+    const failuresIn = body.failures === undefined || body.failures === null || body.failures === '' ? null : Math.trunc(Number(body.failures));
+    let data: Record<string, any> | undefined;
+    if (probes !== null || failuresIn !== null) {
+      if (probes === null || !Number.isFinite(probes) || probes <= 0) throw new BadRequestException('total_probes must be a positive number when results are given');
+      if (failuresIn === null || !Number.isFinite(failuresIn) || failuresIn < 0) throw new BadRequestException('failures must be zero or more when results are given');
+      const failures = Math.min(failuresIn, probes);
+      const suite = typeof body.suite === 'string' && body.suite.trim() ? body.suite.trim().slice(0, 100) : 'manual';
+      const categories = Array.isArray(body.categories) ? body.categories.filter((c: any) => typeof c === 'string' && c.trim()).map((c: string) => c.trim().slice(0, 60)).slice(0, 20) : [];
+      data = { suite, total_probes: probes, failures, resist_rate: Math.round(((probes - failures) / probes) * 1000) / 10, breached: failures > 0, categories };
+    }
+    if (!model.lastRedTeamDate || at.getTime() > new Date(model.lastRedTeamDate).getTime()) model.lastRedTeamDate = at;
+    model.evidenceArtifacts = [...(model.evidenceArtifacts ?? []), { type: 'red_team', ref: ref ?? `sentrai:red-team:${modelId}:${at.toISOString()}`, added_at: at.toISOString(), description: summary, recorded_by: user.email, ...(data ? { data } : {}) } as any];
     model.updatedAt = new Date();
     await this.models.save(model);
+    if (data?.breached) {
+      await this.notifier.notify('adversarial_breach', { model_id: modelId, model_name: model.name, suite: data.suite, failures: data.failures, total_probes: data.total_probes, categories: data.categories });
+    }
     if (req) req.auditSummary = { red_team_recorded: { model_id: modelId, performed_at: at, by: user.email } };
     return this.modelStatus(user, modelId);
   }

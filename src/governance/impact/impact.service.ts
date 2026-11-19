@@ -23,7 +23,7 @@ import { canonicalJson } from '../packs/pack-loader';
 import { RisksService } from '../risks/risks.service';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import { gateTierOf } from '../settings/settings.model';
-import { checkAnswers, defaultQuestionnaires, deriveFlags, QUESTIONNAIRES, questionnaireById } from './questionnaires';
+import { checkAnswers, defaultQuestionnaires, deriveFlags, prefillAnswers, QUESTIONNAIRES, questionnaireById } from './questionnaires';
 import { renderReport, REPORT_LAYOUTS } from './reports';
 
 export const IA_SIGNERS: Role[] = [Role.OWNER, Role.CISO, Role.APPROVER];
@@ -136,7 +136,7 @@ export class ImpactAssessmentService implements OnModuleInit {
     this.assert();
     const modelId = String(body.model_id ?? '');
     if (!modelId) throw new BadRequestException('model_id is required');
-    const { orgId } = await modelForUser(this.models, this.projects, user, modelId);
+    const { model, orgId } = await modelForUser(this.models, this.projects, user, modelId);
     if (!orgId) throw new BadRequestException('The model is not in an organization');
     if (await this.rows.findOne({ where: { modelId, status: 'DRAFT' } })) throw new ConflictException('This model already has a draft assessment; edit or finalise it');
     const s = (await this.settings.inForce(orgId)).settings;
@@ -144,7 +144,8 @@ export class ImpactAssessmentService implements OnModuleInit {
       ? [...new Set(['iso-42001', ...body.questionnaires.map(String)])]
       : defaultQuestionnaires(s.enabledPacks, s.primaryJurisdiction);
     for (const id of ids) if (!questionnaireById(id)) throw new BadRequestException(`Unknown questionnaire ${id}`);
-    const answers = body.answers ?? {};
+    // Purpose and oversight come from the model record (use case and context profile) unless given.
+    const { answers, filled } = body.prefill === false ? { answers: body.answers ?? {}, filled: [] as string[] } : prefillAnswers(ids, body.answers ?? {}, model as any);
     const problems = checkAnswers(ids, answers, false);
     if (problems.length) throw new BadRequestException(problems);
     const last = await this.rows.findOne({ where: { modelId }, order: { version: 'DESC' } });
@@ -155,7 +156,7 @@ export class ImpactAssessmentService implements OnModuleInit {
       ...deriveFlags(ids, answers), revalidationReason: null, contentHash: null,
       createdBy: user.email, createdAt: now, updatedAt: now,
     });
-    return this.view(row);
+    return { ...this.view(row), prefilled: filled };
   }
 
   async update(user: CurrentUser, id: string, body: Record<string, any>) {

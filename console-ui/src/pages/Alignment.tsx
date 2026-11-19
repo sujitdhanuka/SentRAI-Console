@@ -11,6 +11,7 @@ import { SkeletonRows } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
 import { useSession } from '../stores/session';
+import { ApprovalsInbox } from '../components/console/ApprovalsInbox';
 
 interface DecisionRec {
   actor: string; role: string; decision: 'APPROVE' | 'REJECT'; note: string | null; decidedAt: string;
@@ -51,7 +52,7 @@ const CAMPAIGN_ADMIN_ROLES = ['OWNER', 'APPROVER', 'CISO', 'ADMIN'];
  */
 export function Alignment() {
   const toast = useConsoleUi((s) => s.toast);
-  const [tab, setTab] = useState<'approvals' | 'attestations'>('approvals');
+  const [tab, setTab] = useState<'inbox' | 'approvals' | 'attestations'>('inbox');
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +87,7 @@ export function Alignment() {
   const overdueCampaigns = campaigns.filter((c) => c.status === 'OPEN' && c.pending > 0 && new Date(c.due_at).getTime() < Date.now()).length;
   const flaggedModels = campaigns.reduce((n, c) => n + c.flagged, 0);
 
-  const TabBtn = ({ id, label }: { id: 'approvals' | 'attestations'; label: string }) => (
+  const TabBtn = ({ id, label }: { id: 'inbox' | 'approvals' | 'attestations'; label: string }) => (
     <button
       onClick={() => setTab(id)}
       className={`rounded-md px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
@@ -100,7 +101,7 @@ export function Alignment() {
   return (
     <AppShell
       title="Alignment"
-      actions={<><TabBtn id="approvals" label="Approvals" /><TabBtn id="attestations" label="Attestations" /></>}
+      actions={<><TabBtn id="inbox" label="Inbox & due soon" /><TabBtn id="approvals" label="Deployment approvals" /><TabBtn id="attestations" label="Attestations" /></>}
     >
       <div className="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-5">
         <Kpi label="Pending approvals" value={pendingApprovals} tone={pendingApprovals ? 'warning' : 'ok'} />
@@ -115,6 +116,8 @@ export function Alignment() {
           <Panel title="Alignment" className="flex-1"><PanelError onRetry={load} /></Panel>
         ) : loading ? (
           <Panel title="Alignment" className="flex-1"><SkeletonRows rows={6} /></Panel>
+        ) : tab === 'inbox' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto"><ApprovalsInbox /></div>
         ) : tab === 'approvals' ? (
           <ApprovalsPanel approvals={approvals} reload={refresh} toast={toast} />
         ) : (

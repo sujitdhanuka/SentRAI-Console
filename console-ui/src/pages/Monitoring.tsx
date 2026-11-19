@@ -8,6 +8,7 @@ import { Badge, BadgeTone } from '../components/ui/Badge';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
+import { routeParam } from '../stores/route';
 
 interface DriftReport {
   report_id?: string;
@@ -86,7 +87,10 @@ export function Monitoring() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!modelId && models.length) setModelId(models[0].model_id);
+    if (modelId || !models.length) return;
+    // Opened from a model page (#/monitoring?model=…): start on that model.
+    const wanted = routeParam('model');
+    setModelId(wanted && models.some((m) => m.model_id === wanted) ? wanted : models[0].model_id);
   }, [models, modelId]);
 
   const load = useCallback(async () => {

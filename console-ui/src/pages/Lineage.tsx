@@ -117,7 +117,7 @@ export function Lineage() {
                         <div key={m.model_id} className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5">
                           <div className="flex items-center gap-1.5">
                             <Boxes size={12} className="shrink-0 text-text-tertiary" />
-                            <span className="truncate text-[11px] font-medium text-text" title={m.name}>{m.name}</span>
+                            <a href={`#/model?id=${encodeURIComponent(m.model_id)}`} className="truncate text-[11px] font-medium text-text hover:text-accent hover:underline" title={`Open the model page for ${m.name}`}>{m.name}</a>
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <Badge tone={RISK_TONE[m.risk_level] ?? 'neutral'}>{m.risk_level}</Badge>

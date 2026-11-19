@@ -15,6 +15,10 @@ import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form'
 import { useConsoleUi } from '../stores/consoleUi';
 import { useSession } from '../stores/session';
 import { useModels } from './GovernanceRegister';
+import { RecordRedTeam } from '../components/console/RecordRedTeam';
+import { navigate } from '../stores/route';
+import { governanceHref, governanceModelFromHash, useFixedModel, useGovernanceModel } from './governanceTabs';
+import { useGovernanceFeatures } from '../stores/governanceFeatures';
 
 /* ------------------------------------------------------------- shared */
 
@@ -66,11 +70,16 @@ export async function download(path: string, filename: string, method: 'GET' | '
 
 export function ModelSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const models = useModels();
+  // On the model page the tab is fixed to that model, so there is nothing to choose.
+  if (useFixedModel()) return null;
   return (
-    <select aria-label="Model" className={`${FIELD} max-w-xs`} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Choose a model…</option>
-      {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.name} · {m.risk_level}</option>)}
-    </select>
+    <span className="inline-flex items-center gap-1.5">
+      <select aria-label="Model" className={`${FIELD} max-w-xs`} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Choose a model…</option>
+        {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.name} · {m.risk_level}</option>)}
+      </select>
+      {value && <a className="whitespace-nowrap text-[10px] text-accent hover:underline" href={`#/model?id=${encodeURIComponent(value)}`}>Model page ↗</a>}
+    </span>
   );
 }
 
@@ -208,7 +217,7 @@ export function AuDtaTab() {
 
 export function DecisionsTab() {
   const call = useToastCall();
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const codes = useLoad<any>(modelId ? `/governance/models/${modelId}/reason-codes` : null);
   const notices = useLoad<any>('/governance/notices');
   const appeals = useLoad<any>('/governance/appeals');
@@ -313,7 +322,7 @@ export function ValidationTab() {
   const models = useModels();
   const list = useLoad<any>('/governance/validations');
   const agg = useLoad<any>('/governance/validations/aggregate');
-  const [form, setForm] = useState({ model_id: '', validator_user_id: '', scope: '' });
+  const [form, setForm] = useState({ model_id: governanceModelFromHash(), validator_user_id: '', scope: '' });
   const [users, setUsers] = useState<Array<{ id: string; email: string; full_name: string }>>([]);
   const [open, setOpen] = useState<any>(null);
   const [scopeReason, setScopeReason] = useState('');
@@ -419,7 +428,7 @@ export function ValidationTab() {
 
 export function FairLendingTab() {
   const call = useToastCall();
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const st = useLoad<any>(modelId ? `/governance/fair-lending/${modelId}` : null);
   const [features, setFeatures] = useState('');
   const [just, setJust] = useState({ feature: '', justification: '' });
@@ -469,6 +478,7 @@ export function FairLendingTab() {
 /* --------------------------------------------------- E2.5 vendors / BOM */
 
 export function VendorsTab() {
+  const fixed = useFixedModel();
   const call = useToastCall();
   const list = useLoad<any>('/governance/vendors');
   const meta = useLoad<any>('/governance/vendors/checklist');
@@ -477,8 +487,11 @@ export function VendorsTab() {
   const [criticality, setCriticality] = useState('MEDIUM');
   const [sel, setSel] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const bom = useLoad<any>(modelId ? `/governance/models/${modelId}/bom` : null);
+  // Datasets are kept in the Data register; the bill of materials shows the model's linked ones instead of taking them again.
+  const dataRegister = useGovernanceFeatures((s) => s.features?.dataRegister);
+  const linked = useLoad<any>(modelId && dataRegister ? `/governance/models/${modelId}/datasets` : null);
   const [item, setItem] = useState({ component: '', kind: 'LIBRARY', version: '', licence: '', vendor_id: '' });
   const reload = () => {
     void list.reload();
@@ -488,6 +501,8 @@ export function VendorsTab() {
   if (list.error) return <Panel title="Vendors"><PanelError onRetry={() => void list.reload()} /></Panel>;
   return (
     <div className="space-y-2">
+      {!fixed && (
+        <>
       <Panel title="Vendor register" right={summary.data && <span className="text-[10px] text-text-secondary">{summary.data.vendors} vendors · {summary.data.by_result?.UNSATISFACTORY ?? 0} unsatisfactory · {summary.data.by_result?.NOT_ASSESSED ?? 0} not assessed</span>}>
         <div className="flex flex-wrap items-end gap-2 border-b border-border p-2">
           <input className={`${FIELD} max-w-xs`} placeholder="Vendor name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -537,13 +552,15 @@ export function VendorsTab() {
           </div>
         </Panel>
       )}
+        </>
+      )}
       <Panel title="AI bill of materials" right={<ModelSelect value={modelId} onChange={setModelId} />}>
         {!modelId ? <p className="p-3 text-[11px] text-text-secondary">Choose a model to see its components.</p> : !bom.data ? <Skeleton className="h-24 w-full" /> : (
           <div className="space-y-2 p-2">
             <div className="flex flex-wrap items-end gap-2">
               <Button size="xs" variant="secondary" onClick={() => void call(() => post(`/governance/models/${modelId}/bom/sync`, {}), 'Components added from discovery', bom.reload)}><RefreshCw size={12} /> Add from discovery ({bom.data.suggested.length})</Button>
               <input className={`${FIELD} max-w-[180px]`} placeholder="Component" value={item.component} onChange={(e) => setItem({ ...item, component: e.target.value })} />
-              <select aria-label="Kind" className={`${FIELD} max-w-[110px]`} value={item.kind} onChange={(e) => setItem({ ...item, kind: e.target.value })}>{['MODEL', 'API', 'LIBRARY', 'DATASET', 'PLATFORM'].map((k) => <option key={k}>{k}</option>)}</select>
+              <select aria-label="Kind" className={`${FIELD} max-w-[110px]`} value={item.kind} onChange={(e) => setItem({ ...item, kind: e.target.value })}>{['MODEL', 'API', 'LIBRARY', ...(dataRegister ? [] : ['DATASET']), 'PLATFORM'].map((k) => <option key={k}>{k}</option>)}</select>
               <input className={`${FIELD} max-w-[100px]`} placeholder="Version" value={item.version} onChange={(e) => setItem({ ...item, version: e.target.value })} />
               <input className={`${FIELD} max-w-[120px]`} placeholder="Licence" value={item.licence} onChange={(e) => setItem({ ...item, licence: e.target.value })} />
               <select aria-label="Vendor" className={`${FIELD} max-w-[160px]`} value={item.vendor_id} onChange={(e) => setItem({ ...item, vendor_id: e.target.value })}>
@@ -565,6 +582,18 @@ export function VendorsTab() {
                 }}>New version</Button>,
               ])}
             />
+            {dataRegister && (
+              <div className="border-t border-border pt-2">
+                <p className="mb-1 text-[10.5px] text-text-secondary">
+                  Datasets (from the <a className="text-accent hover:underline" href={governanceHref('datasets', modelId)}>Data register</a>, where they are linked to models):
+                </p>
+                <Table
+                  head={['Dataset', 'Purpose', 'Personal data', 'Retain until']}
+                  empty="No datasets linked to this model in the Data register."
+                  rows={(linked.data?.datasets ?? []).map((d: any) => [d.name, String(d.purpose ?? '').toLowerCase(), d.personal_data ? 'Yes' : 'No', day(d.retention_until)])}
+                />
+              </div>
+            )}
           </div>
         )}
       </Panel>
@@ -648,7 +677,7 @@ export function DatasetsTab() {
   const list = useLoad<any>('/governance/datasets');
   const retention = useLoad<any>('/governance/datasets/retention');
   const [form, setForm] = useState({ name: '', source: '', lawful_basis: '', personal_data: false, provenance: '', retention_until: '' });
-  const [link, setLink] = useState({ model_id: '', dataset_id: '', purpose: 'TRAINING' });
+  const [link, setLink] = useState({ model_id: governanceModelFromHash(), dataset_id: '', purpose: 'TRAINING' });
   const [order, setOrder] = useState<{ dataset_id: string; kind: string; reason: string; reference: string } | null>(null);
   const [actions, setActions] = useState<Record<string, string>>({});
   const [evidence, setEvidence] = useState<Record<string, string>>({});
@@ -749,9 +778,8 @@ export function DatasetsTab() {
 /* --------------------------------------------- E2.8 red-team and audit rules */
 
 export function AssuranceTab() {
-  const call = useToastCall();
   const o = useLoad<any>('/governance/assurance');
-  const [rt, setRt] = useState<{ model_id: string; summary: string; performed_at: string; ref: string } | null>(null);
+  const [rt, setRt] = useState<{ model_id: string; risk_level: string; name: string } | null>(null);
   if (o.error) return <Panel title="Red team and audit"><PanelError onRetry={() => void o.reload()} /></Panel>;
   if (!o.data) return <Skeleton className="h-64 w-full" />;
   const fr = o.data.framework_review;
@@ -772,16 +800,16 @@ export function AssuranceTab() {
             m.red_team_due ? <Badge key="r" tone="negative">due</Badge> : <Badge key="r" tone="positive">done</Badge>,
             m.red_team_reason ?? '—', day(m.last_red_team),
             <span key="a">{day(m.audit_due)} {m.audit_overdue && <Badge tone="negative">overdue</Badge>}</span>,
-            <Button key="b" size="xs" variant="ghost" onClick={() => setRt({ model_id: m.model_id, summary: '', performed_at: new Date().toISOString().slice(0, 10), ref: '' })}>Record red team</Button>,
+            <span key="b" className="flex gap-1">
+              <Button size="xs" variant="ghost" onClick={() => setRt({ model_id: m.model_id, risk_level: m.risk_level, name: m.name })}>Record red team</Button>
+              <Button size="xs" variant="ghost" title="Formal audits are recorded on Audit Trail" onClick={() => navigate('audit', `model=${encodeURIComponent(m.model_id)}`)}>Record audit</Button>
+            </span>,
           ])}
         />
         {rt && (
-          <div className="flex flex-wrap items-end gap-2 border-t border-border p-2">
-            <input type="date" className={`${FIELD} max-w-[150px]`} value={rt.performed_at} onChange={(e) => setRt({ ...rt, performed_at: e.target.value })} />
-            <input className={`${FIELD} max-w-md`} placeholder="Summary of the exercise and findings" value={rt.summary} onChange={(e) => setRt({ ...rt, summary: e.target.value })} />
-            <input className={`${FIELD} max-w-[220px]`} placeholder="Report or evidence ref (required for HIGH)" value={rt.ref} onChange={(e) => setRt({ ...rt, ref: e.target.value })} />
-            <Button size="xs" onClick={() => void call(() => post(`/governance/models/${rt.model_id}/red-team`, { ...rt, ref: rt.ref || undefined }), 'Red team recorded', () => { setRt(null); void o.reload(); })}>Save</Button>
-            <Button size="xs" variant="ghost" onClick={() => setRt(null)}>Cancel</Button>
+          <div className="border-t border-border p-2">
+            <p className="mb-1 text-[11px] text-text">Red team for <b>{rt.name}</b></p>
+            <RecordRedTeam modelId={rt.model_id} riskLevel={rt.risk_level} onRecorded={() => { setRt(null); void o.reload(); }} onCancel={() => setRt(null)} />
           </div>
         )}
       </Panel>
@@ -808,6 +836,7 @@ export function GrievanceDecision({ grievanceId, status }: { grievanceId: string
         <input className={`${FIELD} max-w-sm`} placeholder="What the applicant asks for" value={request} onChange={(e) => setRequest(e.target.value)} />
         <Button size="xs" variant="secondary" onClick={() => void call(() => post(`/governance/grievances/${grievanceId}/reconsider`, { request, decision_ref: ref || undefined }), 'Reconsideration opened')}>Human reconsideration</Button>
         <Button size="xs" variant="secondary" disabled={status !== 'REJECTED'} title={status !== 'REJECTED' ? 'An appeal follows a rejected grievance' : ''} onClick={() => void call(() => post(`/governance/grievances/${grievanceId}/appeal`, { request, decision_ref: ref || undefined }), 'Appeal opened')}>Appeal</Button>
+        <a className="text-[10.5px] text-accent hover:underline" href={governanceHref('decisions')} title="Appeals and reconsiderations are kept with the decision">Decisions & appeals ↗</a>
         <Button size="xs" variant="ghost" onClick={() => setOpen(false)}>Close</Button>
       </div>
       {view && <pre className="max-h-48 overflow-auto text-[10px]">{JSON.stringify(view, null, 2)}</pre>}

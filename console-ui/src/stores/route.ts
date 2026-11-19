@@ -23,6 +23,7 @@ export const ROUTES = [
   'orgs',
   'docs',
   'governance',
+  'model',
 ] as const;
 
 export type Route = (typeof ROUTES)[number];
@@ -32,8 +33,16 @@ const parse = (): Route => {
   return (ROUTES as readonly string[]).includes(raw) ? (raw as Route) : 'projects';
 };
 
-export function navigate(route: Route): void {
-  window.location.hash = `#/${route}`;
+/** Go to a page, optionally with query parameters (#/audit?model=…). */
+export function navigate(route: Route, query?: string | Record<string, string>): void {
+  const q = typeof query === 'string' ? query : query ? new URLSearchParams(query).toString() : '';
+  window.location.hash = `#/${route}${q ? `?${q}` : ''}`;
+}
+
+/** A query parameter of the current hash route (#/page?name=value). */
+export function routeParam(name: string, hash: string = window.location.hash): string | null {
+  const q = hash.split('?')[1];
+  return q ? new URLSearchParams(q).get(name) : null;
 }
 
 export function useRoute(): Route {

@@ -38,6 +38,7 @@ const CONF_TONE = (c: string): 'positive' | 'warning' | 'neutral' =>
 
 import { fieldClass as FIELD } from '../ui/form';
 import { labelClass as LABEL } from '../ui/form';
+import { useApprovedPolicies } from './ModelRecordLinks';
 
 /**
  * The review step between a scan and the inventory (parity with the classic
@@ -59,6 +60,7 @@ export function ScanResultsModal({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [ownerTeam, setOwnerTeam] = useState('');
   const [boardRef, setBoardRef] = useState('');
+  const policies = useApprovedPolicies();
   const [busy, setBusy] = useState(false);
 
   const toggleExpanded = (path: string) =>
@@ -266,7 +268,7 @@ export function ScanResultsModal({
         {/* Governance defaults applied to every model imported in this batch. */}
         <div className="grid gap-3 border-t border-border px-4 py-3 sm:grid-cols-2">
           <div>
-            <label className={LABEL}>Owner team</label>
+            <label className={LABEL}>Owner team (starting value)</label>
             <input
               className={FIELD}
               value={ownerTeam}
@@ -276,15 +278,18 @@ export function ScanResultsModal({
             />
           </div>
           <div>
-            <label className={LABEL}>Board policy reference</label>
+            <label className={LABEL}>Board policy reference (starting value)</label>
             <input
               className={FIELD}
+              list="scan-policies"
               value={boardRef}
               onChange={(e) => setBoardRef(e.target.value)}
-              placeholder="e.g. BP-AI-2026-04"
+              placeholder={policies.length ? 'Choose an approved AI policy' : 'e.g. BP-AI-2026-04'}
               autoComplete="off"
             />
+            <datalist id="scan-policies">{policies.map((t) => <option key={t} value={t} />)}</datalist>
           </div>
+          <p className="text-[9.5px] text-text-tertiary sm:col-span-2">Applied to every imported model as a starting point; each model's owner and policy are kept in its governance popup afterwards.</p>
         </div>
 
         <footer className="flex items-center gap-3 border-t border-border px-4 py-3">

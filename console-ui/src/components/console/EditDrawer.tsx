@@ -8,6 +8,9 @@ import { useConsoleUi } from '../../stores/consoleUi';
 import { useSession } from '../../stores/session';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
+import { EvidenceAttach } from './EvidenceAttach';
+import { ContextProfileLink, NamedOwner, useApprovedPolicies } from './ModelRecordLinks';
+import { RecordRedTeam } from './RecordRedTeam';
 
 /** Model tool-authorization + operational-control facts (Pillar 2 — Control). */
 interface ControlInfo {
@@ -34,7 +37,6 @@ const toolLabel = (id: string) =>
   id.startsWith('tool:') ? id.slice(5) : id.replace(/^capability:/, '').replace(/[._]/g, ' ');
 
 const daysAgoToISO = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
-const isoToDaysAgo = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
 import { fieldClass as FIELD } from '../ui/form';
 import { labelClass as LABEL } from '../ui/form';
@@ -70,7 +72,7 @@ function frameworkOf(check: ComplianceCheck | null, key: string): FrameworkRepor
 const HINTS = {
   owner: "The named, accountable team that owns this model's risks. RBI FREE-AI accountability and ISO 42001 Clause 7.2 require a designated owner — 'unassigned' is a gap.",
   policy: 'The board-approved AI policy this model operates under. RBI FREE-AI Recommendation 14 mandates a board-approved AI policy reference.',
-  redteam: 'When this model was last red teamed. The interval depends on the risk tier (HIGH 90 days, MEDIUM 180, LOW 365 with per-tier intervals on); an attached red_team report counts too.',
+  redteam: 'When this model was last red teamed. Recorded only through the Red team form, so every date has a report behind it. The interval depends on the risk tier (HIGH 90 days, MEDIUM 180, LOW 365 with per-tier intervals on); an attached red_team report counts too.',
   oversight: 'Whether a human must review outputs before they are acted on. Uncheck only for genuinely autonomous systems — which then require a declared autonomous scope.',
   scope: "The boundary of what this model may do without per-action human sign-off — e.g. 'may draft tier-1 replies; escalate disputes to a human'. Empty means fully supervised. RBI FREE-AI Recommendation 16 requires clear autonomous action limits for any model without human oversight.",
   useCase: 'What this system does, in plain language. Auto-drafted from the code scan — review and confirm before governance sign-off.',
@@ -98,6 +100,18 @@ function Hint({ text }: { text: string }) {
 export function EditDrawer({ component }: { component: AIComponent | null }) {
   const open = useConsoleUi((s) => s.drawerOpen);
   const setDrawer = useConsoleUi((s) => s.setDrawer);
+  if (!open || !component) return null;
+  return <ModelWorkspace component={component} onClose={() => setDrawer(false)} />;
+}
+
+/**
+ * The model's governance workspace. In the popup (onClose given) it is a modal
+ * dialog; on the model page it renders inline as the Overview tab.
+ */
+export function ModelWorkspace({ component, onClose }: { component: AIComponent; onClose?: () => void }) {
+  const open = true;
+  const popup = !!onClose;
+  const setDrawer = (_: false) => onClose?.();
   const toast = useConsoleUi((s) => s.toast);
   const load = useGovernanceData((s) => s.load);
   const ref = useRef<HTMLDivElement>(null);
@@ -107,15 +121,15 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const [checking, setChecking] = useState(false);
   const [remediation, setRemediation] = useState('');
   const [evalForm, setEvalForm] = useState({ suite: 'promptfoo', passed: '', total: '' });
-  const [advForm, setAdvForm] = useState({ suite: 'garak', probes: '', breaches: '' });
   const [ctrl, setCtrl] = useState<ControlInfo | null>(null);
   const [permitted, setPermitted] = useState<string[]>([]);
   const [approval, setApproval] = useState<BoardApproval | null | 'none'>(null);
   const [suspendReason, setSuspendReason] = useState('');
   const role = useSession((s) => s.user?.role ?? 'VIEWER');
+  const policies = useApprovedPolicies();
   const canControl = role === 'ADMIN' || role === 'CISO';
   const [form, setForm] = useState({
-    owner: '', boardPolicyRef: '', humanOversight: true, redTeamDate: '',
+    owner: '', boardPolicyRef: '', humanOversight: true,
     autonomousScope: '', useCase: '', riskRationale: '', sutras: [] as boolean[],
   });
 
@@ -167,7 +181,6 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
         owner: component.owner,
         boardPolicyRef: component.boardPolicyRef ?? '',
         humanOversight: component.humanOversight,
-        redTeamDate: component.lastRedTeamDaysAgo < 9000 ? daysAgoToISO(component.lastRedTeamDaysAgo) : '',
         autonomousScope: component.autonomousScope ?? '',
         useCase: component.useCase ?? component.description,
         riskRationale: component.riskRationale ?? '',
@@ -178,7 +191,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       void refreshCheck(component.id);
       void fetchControl(component.id);
       void fetchApproval(component.id);
-      setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
+      if (popup) setTimeout(() => ref.current?.querySelector<HTMLElement>('input, textarea, button')?.focus(), 0);
     }
   }, [open, componentId, refreshCheck, fetchControl, fetchApproval]);
 
@@ -190,7 +203,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   }, [open, componentId, serverPlan]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !popup) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') setDrawer(false);
       if (e.key === 'Tab' && ref.current) {
@@ -204,9 +217,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, setDrawer]);
-
-  if (!open || !component) return null;
+  }, [open, popup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── AI drafting, same endpoints the detail panel and classic console use ── */
 
@@ -275,28 +286,6 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
       );
       toast(`Behavioral eval ingested — ${r.passed}/${r.total} passed (${r.pass_rate}%)`, 'positive');
       setEvalForm((f) => ({ ...f, passed: '', total: '' }));
-      await refreshCheck(component.id);
-      await load();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Ingest failed', 'negative');
-    } finally { setBusy(null); }
-  };
-
-  const ingestAdversarial = async () => {
-    const probes = Number(advForm.probes);
-    const breaches = Number(advForm.breaches);
-    if (!advForm.suite.trim() || !Number.isFinite(probes) || probes <= 0 || !Number.isFinite(breaches) || breaches < 0) {
-      toast('Enter a suite, a positive probe count, and breaches.', 'negative');
-      return;
-    }
-    setBusy('adversarial');
-    try {
-      const r = await api<{ resist_rate: number; failures: number; total_probes: number }>(
-        `/inventory/models/${component.id}/adversarial-evidence`,
-        { method: 'POST', body: JSON.stringify({ suite: advForm.suite.trim(), total_probes: probes, failures: breaches, actor: 'dashboard_user' }) },
-      );
-      toast(`Adversarial evidence ingested — ${r.failures}/${r.total_probes} breached (${r.resist_rate}% resisted); red-team date set`, r.failures > 0 ? 'negative' : 'positive');
-      setAdvForm((f) => ({ ...f, probes: '', breaches: '' }));
       await refreshCheck(component.id);
       await load();
     } catch (e) {
@@ -379,7 +368,6 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
         owner: form.owner,
         boardPolicyRef: form.boardPolicyRef || null,
         humanOversight: form.humanOversight,
-        lastRedTeamDaysAgo: form.redTeamDate ? isoToDaysAgo(form.redTeamDate) : component.lastRedTeamDaysAgo,
         autonomousScope: form.autonomousScope || null,
         useCase: form.useCase,
         riskRationale: form.riskRationale,
@@ -405,13 +393,16 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
   const suspended = (ctrl?.operational_state ?? 'ACTIVE') === 'SUSPENDED';
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 md:p-8" role="dialog" aria-modal="true" aria-label={`Edit ${component.name}`}>
-      <div className="absolute inset-0 bg-black/45" onClick={() => setDrawer(false)} />
-      <div ref={ref} className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface">
+    <div
+      className={popup ? 'fixed inset-0 z-40 flex items-center justify-center p-4 md:p-8' : 'flex min-h-0 flex-1 flex-col'}
+      {...(popup ? { role: 'dialog', 'aria-modal': true, 'aria-label': `Edit ${component.name}` } : {})}
+    >
+      {popup && <div className="absolute inset-0 bg-black/45" onClick={() => setDrawer(false)} />}
+      <div ref={ref} className={popup ? 'relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-md border border-border-strong bg-surface' : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface'}>
 
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
-            <h2 className="font-heading text-[15px] font-medium">Close Governance Gaps — {component.name}</h2>
+            <h2 className="font-heading text-[15px] font-medium">{popup ? `Close Governance Gaps — ${component.name}` : 'Governance record and open gaps'}</h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <Badge tone={component.riskTier === 'High' ? 'negative' : component.riskTier === 'Medium' ? 'warning' : 'positive'}>
                 {component.riskTier} risk
@@ -434,9 +425,16 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               </a>
             </div>
           </div>
-          <button onClick={() => setDrawer(false)} aria-label="Close" className="rounded p-1 text-text-tertiary hover:bg-surface-hover">
-            <X size={16} />
-          </button>
+          {popup ? (
+            <span className="flex items-center gap-1">
+              <a href={`#/model?id=${encodeURIComponent(component.id)}`} onClick={() => setDrawer(false)} className="rounded border border-border px-2 py-1 text-[10.5px] text-accent hover:bg-surface-hover">
+                Open model page ↗
+              </a>
+              <button onClick={() => setDrawer(false)} aria-label="Close" className="rounded p-1 text-text-tertiary hover:bg-surface-hover">
+                <X size={16} />
+              </button>
+            </span>
+          ) : null}
         </header>
 
         <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-5">
@@ -550,38 +548,28 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               </p>
             </section>
 
-            {/* Adversarial / red-team evidence (Pillar 4 — Security). */}
+            {/* Red team (Pillar 4 — Security): the one red-team form, shared with Governance › Red team & audit. */}
             <section className="rounded-md border border-border p-2.5">
               <div className="mb-1.5 flex items-center gap-1.5">
                 <ShieldAlert size={11} className="text-accent" />
-                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Adversarial / red-team evidence</span>
+                <span className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Red team</span>
+                <span className="ml-auto font-mono text-[9px] text-text-tertiary">
+                  last: {component.lastRedTeamDaysAgo >= 9000 ? 'never' : `${daysAgoToISO(component.lastRedTeamDaysAgo)} (${component.lastRedTeamDaysAgo}d ago)`}
+                </span>
               </div>
-              <div className="flex flex-wrap items-end gap-1.5">
-                <label className="flex-1">
-                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Suite</span>
-                  <input className={`${FIELD} text-[10px]`} value={advForm.suite} onChange={(e) => setAdvForm({ ...advForm, suite: e.target.value })} placeholder="garak / pyrit / promptfoo" />
-                </label>
-                <label className="w-16">
-                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Probes</span>
-                  <input inputMode="numeric" className={`${FIELD} font-mono text-[10px]`} value={advForm.probes} onChange={(e) => setAdvForm({ ...advForm, probes: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" />
-                </label>
-                <label className="w-16">
-                  <span className="mb-0.5 block text-[8.5px] uppercase tracking-wider text-text-tertiary">Breaches</span>
-                  <input inputMode="numeric" className={`${FIELD} font-mono text-[10px]`} value={advForm.breaches} onChange={(e) => setAdvForm({ ...advForm, breaches: e.target.value.replace(/[^0-9]/g, '') })} placeholder="0" />
-                </label>
-                <button
-                  type="button"
-                  onClick={ingestAdversarial}
-                  disabled={busy !== null}
-                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[10px] text-text-secondary hover:bg-surface-hover disabled:opacity-50"
-                >
-                  <Paperclip size={10} /> {busy === 'adversarial' ? 'Ingesting…' : 'Ingest'}
-                </button>
-              </div>
+              <RecordRedTeam
+                compact
+                modelId={component.id}
+                riskLevel={component.riskTier}
+                onRecorded={async () => { await refreshCheck(component.id); await load(); }}
+              />
               <p className="mt-1.5 text-[9.5px] italic text-text-tertiary">
-                Ingest a garak / PyRIT / promptfoo run (breaches = probes that succeeded). Stores a typed <code className="font-mono not-italic text-accent">red_team</code> artifact <em>and</em> stamps the last-red-team date, satisfying the red-team control.
+                Stores a typed <code className="font-mono not-italic text-accent">red_team</code> artifact and moves the last-red-team date, satisfying the red-team control. Add probe and breach counts for a garak / PyRIT / promptfoo run.
               </p>
             </section>
+
+            {/* Other evidence: bias tests, model cards, DPIAs… (red teams use the form above). */}
+            <EvidenceAttach modelId={component.id} onAttached={async () => { await refreshCheck(component.id); await load(); }} />
 
             {/* Static tool authorization (Pillar 2 — Control). */}
             <section className="rounded-md border border-border p-2.5">
@@ -684,9 +672,26 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
           <form onSubmit={submit} className="flex min-h-0 flex-col lg:col-span-3">
             <div className="min-h-0 flex-1 space-y-3 p-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <div><label className={LABEL}>Owner team<Hint text={HINTS.owner} /><input className={FIELD} value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label></div>
-                <div><label className={LABEL}>Board policy reference<Hint text={HINTS.policy} /><input className={FIELD} placeholder="e.g. AI-POL-2026-014" value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} /></label></div>
-                <div><label className={LABEL}>Last red-team date<Hint text={HINTS.redteam} /><input type="date" className={`${FIELD} font-mono`} value={form.redTeamDate} onChange={(e) => setForm({ ...form, redTeamDate: e.target.value })} /></label></div>
+                <div>
+                  <label className={LABEL}>Owner<Hint text={HINTS.owner} /><input aria-label="Owner team" className={FIELD} placeholder="Owner team" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label>
+                  <NamedOwner modelId={component.id} onChanged={() => void load()} />
+                </div>
+                <div>
+                  <label className={LABEL}>Board policy reference<Hint text={HINTS.policy} />
+                    <input className={FIELD} list={`policies-${component.id}`} placeholder={policies.length ? 'Choose an approved AI policy' : 'e.g. AI-POL-2026-014'} value={form.boardPolicyRef} onChange={(e) => setForm({ ...form, boardPolicyRef: e.target.value })} />
+                  </label>
+                  <datalist id={`policies-${component.id}`}>{policies.map((t) => <option key={t} value={t} />)}</datalist>
+                  {policies.length > 0 && form.boardPolicyRef && !policies.includes(form.boardPolicyRef) && (
+                    <p className="mt-0.5 text-[9.5px] text-warning">Not one of the approved AI policies in the AIMS workspace.</p>
+                  )}
+                </div>
+                <div>
+                  <span className={LABEL}>Last red team<Hint text={HINTS.redteam} /></span>
+                  <p className="font-mono text-[11px] text-text-secondary">
+                    {component.lastRedTeamDaysAgo >= 9000 ? 'never' : daysAgoToISO(component.lastRedTeamDaysAgo)}
+                    <span className="ml-1 font-ui text-[9.5px] text-text-tertiary">· record one under Red team</span>
+                  </p>
+                </div>
                 <label className="flex items-center gap-2 self-end pb-1.5 text-[11px] text-text">
                   <input type="checkbox" checked={form.humanOversight} onChange={(e) => setForm({ ...form, humanOversight: e.target.checked })} className="accent-accent" />
                   Human oversight required
@@ -723,6 +728,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
                 </span>
                 <input className={FIELD} placeholder={'e.g. "may draft tier-1 replies; escalate disputes to a human" — empty = fully supervised'}
                   value={form.autonomousScope} onChange={(e) => setForm({ ...form, autonomousScope: e.target.value })} />
+                <ContextProfileLink modelId={component.id} />
               </div>
 
               <div>
@@ -774,7 +780,7 @@ export function EditDrawer({ component }: { component: AIComponent | null }) {
               <span className="mr-auto text-[9.5px] text-text-tertiary">
                 Saving appends a ledger entry and re-checks the verdicts on the left.
               </span>
-              <Button variant="secondary" size="md" onClick={() => setDrawer(false)}>Close</Button>
+              {popup && <Button variant="secondary" size="md" onClick={() => setDrawer(false)}>Close</Button>}
               <Button type="submit" variant="primary" size="md" disabled={saving}>
                 {saving ? 'Saving…' : 'Save & Re-check Compliance'}
               </Button>

@@ -34,12 +34,12 @@ interface EditDraft {
 
 const ROLE_TONE: Record<string, BadgeTone> = {
   ADMIN: 'negative', OWNER: 'accent', CISO: 'warning', APPROVER: 'neutral',
-  REVIEWER: 'accent', AUDITOR: 'accent', VIEWER: 'neutral',
+  REVIEWER: 'accent', VIEWER: 'neutral',
 };
 
 /** An OWNER administers their own org but can never mint an ADMIN — the role
  *  ceiling is enforced server-side; the UI simply doesn't offer it. */
-const ALL_ROLES = ['ADMIN', 'OWNER', 'CISO', 'APPROVER', 'REVIEWER', 'AUDITOR', 'VIEWER'];
+const ALL_ROLES = ['ADMIN', 'OWNER', 'CISO', 'APPROVER', 'REVIEWER', 'VIEWER'];
 
 import { fieldClass as FIELD } from '../components/ui/form';
 import { labelClass as LABEL } from '../components/ui/form';

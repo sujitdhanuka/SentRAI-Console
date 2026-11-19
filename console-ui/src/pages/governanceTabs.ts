@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useState } from 'react';
+
 /**
  * Governance tabs, each shown only while its feature flag is on, grouped into
  * sections so the page shows a short row of sections and then the tabs of the
@@ -15,7 +17,7 @@ export const GOVERNANCE_GROUPS: GovernanceGroup[] = [
   { id: 'risk', label: 'Risk & impact', hint: 'Risks, impact assessments, validation, fairness and decisions' },
   { id: 'aims', label: 'ISO management system', hint: 'ISO/IEC 42001 AIMS, actions, controlled documents, SoA and training' },
   { id: 'data', label: 'Data & suppliers', hint: 'Datasets, vendors and the AI bill of materials, external AI' },
-  { id: 'operations', label: 'Operations & assurance', hint: 'Red team, audit, TEVV, incidents, security and energy' },
+  { id: 'operations', label: 'Operations & assurance', hint: 'Red team, audit, TEVV, security and energy' },
   { id: 'transparency', label: 'Transparency & regional', hint: 'Public disclosures, engagement records and country packs' },
 ];
 
@@ -44,7 +46,6 @@ export const GOVERNANCE_TABS: GovernanceTab[] = [
   // Operations & assurance
   { id: 'assurance', label: 'Red team & audit', flag: 'redTeamAuditRules', group: 'operations' },
   { id: 'tevv', label: 'TEVV & retirement', flag: 'tevv', group: 'operations' },
-  { id: 'incidentExt', label: 'Incident sign-off & ITSM', flag: 'incidentExtensions', group: 'operations' },
   { id: 'security', label: 'AI security', flag: 'aiSecurity', group: 'operations' },
   { id: 'energy', label: 'Energy', flag: 'energy', group: 'operations' },
   // Transparency & regional
@@ -64,10 +65,66 @@ export function governanceTabFromHash(hash: string = window.location.hash): stri
   return id && GOVERNANCE_TABS.some((t) => t.id === id) ? id : null;
 }
 
-/** Record the open tab in the URL without a navigation (no hashchange, no history entry). */
-export function setGovernanceTabInHash(id: string): void {
+/** Query parameters of the governance hash route. */
+function governanceQuery(hash: string = window.location.hash): URLSearchParams {
+  return new URLSearchParams(hash.split('?')[1] ?? '');
+}
+
+/** Rewrite the governance hash's query without a navigation (no hashchange, no history entry). */
+function replaceGovernanceQuery(edit: (q: URLSearchParams) => void): void {
   if (!window.location.hash.replace(/^#\/?/, '').startsWith('governance')) return;
-  window.history.replaceState(null, '', `#/governance?tab=${encodeURIComponent(id)}`);
+  const q = governanceQuery();
+  edit(q);
+  window.history.replaceState(null, '', `#/governance?${q.toString()}`);
+}
+
+/** Record the open tab in the URL. The chosen model stays, so it carries across tabs. */
+export function setGovernanceTabInHash(id: string): void {
+  replaceGovernanceQuery((q) => {
+    q.set('tab', id);
+    q.delete('risk');
+  });
+}
+
+/** The model chosen on the Governance page (#/governance?tab=…&model=…), if any. */
+export function governanceModelFromHash(hash: string = window.location.hash): string {
+  return governanceQuery(hash).get('model') ?? fixedModelFromHash(hash) ?? '';
+}
+
+/** On the model page (#/model?id=…) the Governance tabs shown there work on that one model. */
+export function fixedModelFromHash(hash: string = window.location.hash): string | null {
+  return /^#\/?model(\?|$)/.test(hash) ? new URLSearchParams(hash.split('?')[1] ?? '').get('id') : null;
+}
+
+/** The model a tab is fixed to (on the model page), or null on the Governance page; pickers hide when fixed. */
+export function useFixedModel(): string | null {
+  return fixedModelFromHash();
+}
+
+/**
+ * The model the Governance tabs work on. Every per-model tab reads and writes
+ * the same value in the URL, so choosing a model once carries across tabs and
+ * a link (from the model popup or elsewhere) opens a tab on that model.
+ */
+export function useGovernanceModel(): [string, (id: string) => void] {
+  const [id, setId] = useState(() => governanceModelFromHash());
+  useEffect(() => {
+    const onHash = () => setId(governanceModelFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const set = useCallback((next: string) => {
+    if (fixedModelFromHash()) return; // the model page shows one model
+    setId(next);
+    replaceGovernanceQuery((q) => (next ? q.set('model', next) : q.delete('model')));
+  }, []);
+  return [id, set];
+}
+
+/** Link to a Governance tab, optionally on one model: #/governance?tab=risks&model=… */
+export function governanceHref(tab: string, modelId?: string | null, extra?: Record<string, string>): string {
+  const q = new URLSearchParams({ tab, ...(modelId ? { model: modelId } : {}), ...(extra ?? {}) });
+  return `#/governance?${q.toString()}`;
 }
 
 /** Label of the open Governance tab, for the help panel. */

@@ -13,6 +13,7 @@ import { Incidents } from './pages/Incidents';
 import { InventoryDashboard } from './pages/InventoryDashboard';
 import { Lineage } from './pages/Lineage';
 import { Login } from './pages/Login';
+import { ModelPage } from './pages/ModelPage';
 import { Monitoring } from './pages/Monitoring';
 import { Organizations } from './pages/Organizations';
 import { Projects } from './pages/Projects';
@@ -42,6 +43,7 @@ const PAGES: Record<Route, () => JSX.Element> = {
   orgs: Organizations,
   docs: Docs,
   governance: Governance,
+  model: ModelPage,
 };
 
 export default function App() {

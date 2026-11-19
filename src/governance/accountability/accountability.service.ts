@@ -155,12 +155,18 @@ export class AccountabilityService {
   async setModelOwner(user: CurrentUser, modelId: string, ownerUserId: string | null, reason?: string) {
     assertFlag(this.flags, 'accountability');
     const { model, orgId } = await modelForUser(this.models, this.projects, user, modelId);
+    let named: { fullName: string; email: string } | null = null;
     if (ownerUserId) {
       const u = await this.users.findOne({ where: { id: ownerUserId } });
       if (!u || !u.isActive || (orgId && u.tenantId !== orgId)) throw new BadRequestException('The owner must be an active user of the model’s organization');
+      named = u;
     }
     const prev = model.ownerUserId;
     model.ownerUserId = ownerUserId || null;
+    // One owner: naming a person also fills an empty or "unassigned" owner team, so the
+    // owner checks (which read the team) and the owner register agree.
+    const team = (model.ownerTeam ?? '').trim();
+    if (named && (!team || /unassigned/i.test(team))) model.ownerTeam = (named.fullName || named.email).slice(0, 255);
     model.updatedAt = new Date();
     await this.models.save(model);
     await this.ledger.save({

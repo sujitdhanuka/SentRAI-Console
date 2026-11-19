@@ -8,6 +8,8 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { governanceHref } from './governanceTabs';
+import { useGovernanceFeatures } from '../stores/governanceFeatures';
 
 const useToastCall = () => {
   const toast = useConsoleUi((s) => s.toast);
@@ -47,6 +49,7 @@ const TEMPLATES: Record<string, Record<string, any>> = {
 };
 
 export function AimsTab() {
+  const features = useGovernanceFeatures((s) => s.features);
   const call = useToastCall();
   const [types, setTypes] = useState<AimsType[]>([]);
   const [records, setRecords] = useState<AimsRecord[]>([]);
@@ -119,6 +122,11 @@ export function AimsTab() {
       </Panel>
       <Panel title={t?.label ?? type} right={<span className="font-mono text-[9px] text-text-tertiary">ISO {t?.isoClauses.join(', ')}</span>}>
         <div className="space-y-2 p-3">
+          {(type === 'COMPETENCE' || type === 'AWARENESS') && features?.training && (
+            <p className="rounded border border-border bg-bg-elevated px-2 py-1 text-[10.5px] text-text-secondary">
+              Course completions and policy acknowledgements are kept in <a className="text-accent hover:underline" href={governanceHref('training')}>Training</a>. Record here only evidence Training does not hold (for example an external certification).
+            </p>
+          )}
           {ofType.map((r) => (
             <div key={r.record_id} className="rounded border border-border p-2">
               <div className="flex items-center gap-2 text-[11px]">
@@ -177,11 +185,11 @@ export function AimsTab() {
 
 /* ------------------------------------------------- corrective actions */
 
-interface CA { action_id: string; source: string; source_id: string | null; model_id: string | null; nonconformity: string; root_cause: string | null; action: string; due_at: string | null; status: string; overdue: boolean; effectiveness_review: string | null; effective: boolean | null }
+interface CA { read_only?: boolean; treatment?: string; action_id: string; source: string; source_id: string | null; model_id: string | null; nonconformity: string; root_cause: string | null; action: string; due_at: string | null; status: string; overdue: boolean; effectiveness_review: string | null; effective: boolean | null }
 
 export function ActionsTab() {
   const call = useToastCall();
-  const [list, setList] = useState<{ actions: CA[]; summary: { open: number; overdue: number } } | null>(null);
+  const [list, setList] = useState<{ actions: CA[]; summary: { open: number; overdue: number; risk_treatments_open?: number; risk_treatments_overdue?: number } } | null>(null);
   const [filter, setFilter] = useState('open');
   const [form, setForm] = useState({ nonconformity: '', action: '', due_at: '' });
   const [closing, setClosing] = useState<{ id: string; root_cause: string; effectiveness_review: string; effective: boolean } | null>(null);
@@ -199,17 +207,24 @@ export function ActionsTab() {
         </select>
         <Badge tone="neutral">{list.summary.open} open</Badge>
         <Badge tone={list.summary.overdue ? 'negative' : 'positive'}>{list.summary.overdue} overdue</Badge>
+        {list.summary.risk_treatments_open !== undefined && (
+          <Badge tone={list.summary.risk_treatments_overdue ? 'negative' : 'neutral'} title="Treatment actions from the risk register, listed here so every action owed is in one queue">
+            {list.summary.risk_treatments_open} risk treatments open{list.summary.risk_treatments_overdue ? `, ${list.summary.risk_treatments_overdue} overdue` : ''}
+          </Badge>
+        )}
       </div>
-      <Panel title="Nonconformities and corrective actions (ISO 10.2)" right={<Wrench size={13} className="text-text-tertiary" />}>
+      <Panel title="Actions: corrective (ISO 10.2) and risk treatments" right={<Wrench size={13} className="text-text-tertiary" />}>
         <ul className="divide-y divide-border">
           {list.actions.map((a) => (
             <li key={a.action_id} className={`px-3 py-2 ${a.overdue ? 'bg-negative-soft' : ''}`}>
               <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                <Badge tone="neutral">{a.source.replace('_', ' ')}</Badge>
+                <Badge tone="neutral">{a.source === 'RISK' ? `risk · ${(a.treatment ?? '').toLowerCase()}` : a.source.replace('_', ' ')}</Badge>
                 <Badge tone={a.status === 'CLOSED' ? 'positive' : a.overdue ? 'negative' : 'warning'}>{a.overdue ? 'overdue' : a.status.replace(/_/g, ' ')}</Badge>
                 <span className="text-text">{a.action}</span>
                 {a.due_at && <span className="text-[10px] text-text-tertiary">due {new Date(a.due_at).toLocaleDateString()}</span>}
-                {!['CLOSED', 'CANCELLED'].includes(a.status) && (
+                {a.read_only ? (
+                  <a className="ml-auto text-[10.5px] text-accent hover:underline" href={governanceHref('risks', a.model_id, a.source_id ? { risk: a.source_id } : undefined)}>Open in risk register</a>
+                ) : !['CLOSED', 'CANCELLED'].includes(a.status) && (
                   <Button className="ml-auto" size="xs" variant="secondary" onClick={() => setClosing({ id: a.action_id, root_cause: a.root_cause ?? '', effectiveness_review: '', effective: true })}>Close…</Button>
                 )}
               </div>

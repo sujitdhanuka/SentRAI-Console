@@ -1,6 +1,7 @@
-import { FileCode2, PencilLine } from 'lucide-react';
+import { FileCode2, LayoutPanelTop, PencilLine } from 'lucide-react';
 
-import { AIComponent } from '../../providers';
+import { AIComponent, isDemoMode } from '../../providers';
+import { navigate } from '../../stores/route';
 import { useConsoleUi } from '../../stores/consoleUi';
 import { AiGenerations } from './AiGenerations';
 import { Button } from '../ui/Button';
@@ -105,10 +106,22 @@ export function ComponentDetail({
             <AiGenerations component={component} onChanged={onRetry} />
           </div>
         </div>
-        <div className="shrink-0 border-t border-border p-2.5">
-          <Button variant="primary" size="md" onClick={() => setDrawer(true)} className="w-full" icon={<PencilLine size={12} />}>
-            Edit Entry
-          </Button>
+        <div className="flex shrink-0 gap-1.5 border-t border-border p-2.5">
+          {isDemoMode ? (
+            <Button variant="primary" size="md" onClick={() => setDrawer(true)} className="w-full" icon={<PencilLine size={12} />}>
+              Edit Entry
+            </Button>
+          ) : (
+            <>
+              {/* The model page holds everything about the model; the popup stays for a quick fix from the inventory. */}
+              <Button variant="primary" size="md" onClick={() => navigate('model', { id: component.id })} className="flex-1" icon={<LayoutPanelTop size={12} />}>
+                Open model page
+              </Button>
+              <Button variant="secondary" size="md" onClick={() => setDrawer(true)} icon={<PencilLine size={12} />}>
+                Quick edit
+              </Button>
+            </>
+          )}
         </div>
       </div>
     );

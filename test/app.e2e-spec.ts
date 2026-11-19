@@ -3299,7 +3299,7 @@ describe('SentrAI Console (e2e)', () => {
 
       const list = (await request(http).get(`${C}?overdue=true`).set(auth(a.viewer)).expect(200)).body;
       expect(list.actions.map((x: any) => x.action_id)).toEqual([fromInc.action_id]);
-      expect(list.summary).toEqual({ open: 2, overdue: 1 });
+      expect(list.summary).toEqual({ open: 2, overdue: 1, risk_treatments_open: 0, risk_treatments_overdue: 0 });
       expect((await request(http).get(C).set(auth(b.owner)).expect(200)).body.actions).toEqual([]);
 
       // Close needs root cause + effectiveness review; an ineffective action stays open.
@@ -4159,6 +4159,58 @@ describe('SentrAI Console (e2e)', () => {
       expect(manifest.secrets_removed).toBe(true);
       const audit = (await request(http).get('/api/v1/audit/events?limit=20').set(auth(a.admin)).expect(200)).body;
       expect(JSON.stringify(audit)).toContain('org_data_exported');
+    });
+  });
+  it('CONSOLE DEDUPE: one red-team record with tool results, risk treatments in the action queue, impact answers from the model record, one owner, officers read the gate ledger', async () => {
+    const a = await govOrg('DedupOrgA');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      // D1: the governance red-team record also takes a tool run's counts; partial counts are refused.
+      const RT = `/api/v1/governance/models/${a.modelId}/red-team`;
+      await request(http).post(RT).set(auth(a.owner)).send({ summary: 'garak run against the scorecard prompts', ref: 'RT-GARAK-01', total_probes: 200 }).expect(400);
+      await request(http).post(RT).set(auth(a.owner)).send({ summary: 'garak run against the scorecard prompts', ref: 'RT-GARAK-01', total_probes: 200, failures: 3, suite: 'garak' }).expect(200);
+      const ev = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).expect(200)).body.evidence;
+      const rt = ev.find((x: any) => x.type === 'red_team' && x.ref === 'RT-GARAK-01');
+      expect(rt.data).toMatchObject({ suite: 'garak', total_probes: 200, failures: 3, breached: true, resist_rate: 98.5 });
+      // An older exercise recorded later does not move the last red-team date backwards.
+      const before = (await request(http).get(`/api/v1/inventory/models/${a.modelId}`).set(auth(a.owner)).expect(200)).body.last_red_team_date;
+      await request(http).post(RT).set(auth(a.owner)).send({ summary: 'Manual exercise from last quarter', ref: 'RT-OLD-01', performed_at: '2026-01-15' }).expect(200);
+      expect((await request(http).get(`/api/v1/inventory/models/${a.modelId}`).set(auth(a.owner)).expect(200)).body.last_red_team_date).toBe(before);
+
+      // D5: an overdue risk-treatment action is listed in the one action queue, read only, and counted apart from ISO 10.2.
+      const risk = (await request(http).post('/api/v1/governance/risks').set(auth(a.owner)).send({ scope_type: 'MODEL', scope_id: a.modelId, category: 'FAIRNESS', title: 'Thin-file applicants scored low' }).expect(201)).body;
+      await request(http).post(`/api/v1/governance/risks/${risk.risk_id}/actions`).set(auth(a.owner))
+        .send({ treatment: 'MITIGATE', action: 'Add bureau-alternative features', due_at: new Date(Date.now() - 86_400_000).toISOString() }).expect(201);
+      const q = (await request(http).get('/api/v1/governance/actions?overdue=true').set(auth(a.viewer)).expect(200)).body;
+      const t = q.actions.find((x: any) => x.source === 'RISK');
+      expect(t).toMatchObject({ source_id: risk.risk_id, model_id: a.modelId, read_only: true, overdue: true, status: 'OPEN', treatment: 'MITIGATE' });
+      expect(q.summary).toMatchObject({ open: 0, overdue: 0, risk_treatments_open: 1, risk_treatments_overdue: 1 });
+      expect((await request(http).get('/api/v1/governance/actions?source=INCIDENT').set(auth(a.viewer)).expect(200)).body.actions).toEqual([]);
+
+      // D3: a new impact assessment starts with purpose from the model's use case, unless the person gave one.
+      const ia = (await request(http).post('/api/v1/governance/impact-assessments').set(auth(a.owner)).send({ model_id: a.modelId }).expect(201)).body;
+      expect(ia.answers['iso-42001'].purpose).toBe('Scores SME credit applications for the underwriting team');
+      expect(ia.prefilled).toContain('iso-42001.purpose');
+
+      // D4: naming an owner fills an unassigned owner team, so the owner checks and the register agree.
+      const m = (await request(http).post('/api/v1/inventory/models').set(auth(a.owner)).send({
+        name: 'Dedup Collections Bot', model_type: 'MACHINE_LEARNING', functional_area: 'collections', use_case_description: 'Prioritises collection calls.',
+        human_oversight_required: true, board_policy_ref: 'BP-1', project_id: a.projectId,
+      }).expect(201)).body;
+      expect(m.owner_team).toMatch(/unassigned/i);
+      const users = (await request(http).get('/api/v1/users').set(auth(a.admin)).expect(200)).body;
+      const list = Array.isArray(users) ? users : users.users ?? users.items;
+      const ciso = list.find((x: any) => x.email === 'ciso@deduporga.test');
+      await request(http).patch(`/api/v1/inventory/models/${m.model_id}/owner`).set(auth(a.owner)).send({ owner_user_id: ciso.user_id ?? ciso.id }).expect(200);
+      expect((await request(http).get(`/api/v1/inventory/models/${m.model_id}`).set(auth(a.owner)).expect(200)).body.owner_team).toBe('DedupOrgA CISO');
+      // A team already named is kept.
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/governance`).set(auth(a.owner)).send({ owner_team: 'Credit Risk' }).expect(200);
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/owner`).set(auth(a.owner)).send({ owner_user_id: ciso.user_id ?? ciso.id }).expect(200);
+      expect((await request(http).get(`/api/v1/inventory/models/${a.modelId}`).set(auth(a.owner)).expect(200)).body.owner_team).toBe('Credit Risk');
+
+      // The CI Gate Ledger is shown to organisation owners, so they can read it.
+      await request(http).get('/api/v1/ci/events').set(auth(a.owner)).expect(200);
+      await request(http).get('/api/v1/ci/events').set(auth(a.viewer)).expect(403);
     });
   });
 });

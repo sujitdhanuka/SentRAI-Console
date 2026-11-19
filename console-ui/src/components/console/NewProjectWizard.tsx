@@ -1,11 +1,11 @@
-import { Check, FileArchive, FolderUp, Github, KeyRound, Loader2, X } from 'lucide-react';
+import { Check, FileArchive, FolderUp, Github, Loader2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api, apiUpload } from '../../api/client';
 import { OrgSelect, useAssignableOrgs } from '../../api/organizations';
 import { useSession } from '../../stores/session';
 import { useConsoleUi } from '../../stores/consoleUi';
-import { parseGithubRepo } from './GithubImportModal';
+import { GithubRepoFields, parseGithubRepo } from './GithubImportModal';
 
 import { Button } from '../ui/Button';
 import { fieldClass as FIELD } from '../ui/form';
@@ -239,36 +239,7 @@ export function NewProjectWizard({
 
               {source === 'github' && (
                 <div className="space-y-3">
-                  <div>
-                    <label className={LABEL}>Repository URL</label>
-                    <input
-                      className={`${FIELD} font-mono`}
-                      name="wiz-github-url"
-                      autoComplete="off"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://github.com/owner/repo · owner/repo"
-                    />
-                    {url.trim() && (parsed ? (
-                      <p className="mt-1 font-mono text-[10px] text-positive">✓ {parsed.owner} / {parsed.repo}{parsed.branch ? ` · branch ${parsed.branch}` : ''}</p>
-                    ) : (
-                      <p className="mt-1 text-[10px] text-warning">Not a recognisable GitHub repository.</p>
-                    ))}
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={LABEL}>Branch</label>
-                      <input className={`${FIELD} font-mono`} name="wiz-branch" autoComplete="off" data-1p-ignore data-lpignore="true" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main (default)" />
-                    </div>
-                    <div>
-                      <label className={LABEL}>Access token <span className="normal-case text-text-tertiary">(private)</span></label>
-                      <span className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-2 focus-within:border-accent">
-                        <KeyRound size={11} className="shrink-0 text-text-tertiary" />
-                        <input type="password" name="wiz-token" autoComplete="new-password" data-1p-ignore data-lpignore="true" className="w-full bg-transparent py-1.5 font-mono text-[11px] text-text placeholder:text-text-tertiary focus:outline-none" value={token} onChange={(e) => setToken(e.target.value)} placeholder="ghp_… / PAT" />
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-[9.5px] leading-snug text-text-tertiary">The token is used once to download the archive and never stored. Public repos need no token.</p>
+                  <GithubRepoFields url={url} setUrl={setUrl} branch={branch} setBranch={setBranch} token={token} setToken={setToken} parsed={parsed} namePrefix="wiz" />
                 </div>
               )}
 

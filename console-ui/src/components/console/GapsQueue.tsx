@@ -41,14 +41,15 @@ export function GapsQueue({
     select(componentId);
     setDrawer(true);
   };
-  // Governance E1.7: overdue corrective actions surface here while the register is on.
+  // Governance E1.7: overdue actions (corrective and risk treatment) surface here while the register is on.
   const features = useGovernanceFeatures((s) => s.features);
   const [overdueActions, setOverdueActions] = useState<GovernanceGap[]>([]);
   useEffect(() => {
     if (!features?.correctiveActions) { setOverdueActions([]); return; }
-    api<{ actions: Array<{ action_id: string; model_id: string | null; nonconformity: string; action: string }> }>('/governance/actions?overdue=true')
+    // One queue: ISO 10.2 corrective actions and risk-register treatment actions alike.
+    api<{ actions: Array<{ action_id: string; model_id: string | null; nonconformity: string; action: string; source: string }> }>('/governance/actions?overdue=true')
       .then((r) => setOverdueActions(r.actions.filter((x) => x.model_id && (!scopeId || x.model_id === scopeId)).map((x) => ({
-        id: `ca-${x.action_id}`, severity: 'HIGH', componentId: x.model_id!, framework: 'Corrective action (ISO 10.2)',
+        id: `ca-${x.action_id}`, severity: 'HIGH', componentId: x.model_id!, framework: x.source === 'RISK' ? 'Risk treatment' : 'Corrective action (ISO 10.2)',
         description: `${x.action} — ${x.nonconformity}`, due: 'OVERDUE',
       }))))
       .catch(() => setOverdueActions([]));

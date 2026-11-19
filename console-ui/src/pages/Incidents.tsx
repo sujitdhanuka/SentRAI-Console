@@ -11,6 +11,8 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
 import { useSession } from '../stores/session';
+import { useGovernanceFeatures } from '../stores/governanceFeatures';
+import { IncidentGovernance } from './GovernancePhase3';
 
 interface Incident {
   incident_id: string;
@@ -67,6 +69,19 @@ export function Incidents() {
   const { models } = useModels();
   const [rows, setRows] = useState<Incident[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
+  // Incident governance (sign-off, notices, tickets) lives on each incident while the extensions are on.
+  const ext = useGovernanceFeatures((s) => s.features?.incidentExtensions);
+  const [blockers, setBlockers] = useState<Record<string, { close_blocker: string | null; needs_sign_off: boolean }>>({});
+  const [openGov, setOpenGov] = useState<string | null>(null);
+  const loadBlockers = useCallback(async () => {
+    if (!ext) { setBlockers({}); return; }
+    try {
+      const r = await api<{ incidents: Array<{ incident_id: string; close_blocker: string | null; serious: boolean; senior_sign_off: unknown }> }>('/governance/incidents');
+      setBlockers(Object.fromEntries(r.incidents.map((x) => [x.incident_id, { close_blocker: x.close_blocker, needs_sign_off: x.serious && !x.senior_sign_off }])));
+    } catch {
+      setBlockers({});
+    }
+  }, [ext]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -89,12 +104,13 @@ export function Incidents() {
       const qs = params.toString();
       const res = await api<Incident[]>(`/compliance/incident${qs ? `?${qs}` : ''}`);
       setRows(Array.isArray(res) ? res : []);
+      void loadBlockers();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load incidents');
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, activeProjectId]);
+  }, [statusFilter, activeProjectId, loadBlockers]);
 
   useEffect(() => {
     void load();
@@ -151,6 +167,8 @@ export function Incidents() {
       await load();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Update failed', 'negative');
+      // A close blocked by a governance rule: open the incident's governance actions so the fix is right there.
+      if (ext) setOpenGov(inc.incident_id);
     }
   };
 
@@ -162,7 +180,7 @@ export function Incidents() {
 
   // The submit button is gated on the regulatory minimums; when it is disabled
   // the reason must be spelled out next to it, not implied by counter colors.
-  const blockers = [
+  const formBlockers = [
     descShort && `${descNeed} more character${descNeed === 1 ? '' : 's'} in the description`,
     actionShort && `${actionNeed} more in the immediate action`,
   ].filter(Boolean).join(' and ');
@@ -266,9 +284,9 @@ export function Incidents() {
               ))}
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-              {blockers && (
+              {formBlockers && (
                 <p className="mr-auto max-w-[60ch] text-[10.5px] text-warning">
-                  Regulators require a substantive account — add {blockers} to submit.
+                  Regulators require a substantive account — add {formBlockers} to submit.
                 </p>
               )}
               <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
@@ -277,7 +295,7 @@ export function Incidents() {
                 variant="primary"
                 size="sm"
                 disabled={busy || descShort || actionShort}
-                title={blockers ? `Add ${blockers} to submit` : undefined}
+                title={formBlockers ? `Add ${formBlockers} to submit` : undefined}
               >
                 {busy ? 'Reporting…' : 'Report incident'}
               </Button>
@@ -328,7 +346,22 @@ export function Incidents() {
                     deadline {new Date(i.reporting_deadline).toLocaleString()}
                     {i.regulator_notified ? ' · regulator notified' : ' · regulator not yet notified'}
                   </p>
-                  <RaiseAction source="INCIDENT" sourceId={i.incident_id} defaultNonconformity={`Incident: ${i.description}`} />
+                  {ext && blockers[i.incident_id]?.close_blocker && (
+                    <p className="mt-1 flex items-center gap-1 text-[10px] text-warning">
+                      <AlertTriangle size={10} /> Can't be resolved or closed yet: {blockers[i.incident_id].close_blocker}
+                    </p>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    {ext && (
+                      <Button size="xs" variant={openGov === i.incident_id ? 'secondary' : 'ghost'} onClick={() => setOpenGov(openGov === i.incident_id ? null : i.incident_id)}>
+                        Sign-off, notices & tickets{blockers[i.incident_id]?.needs_sign_off ? ' · sign-off needed' : ''}
+                      </Button>
+                    )}
+                    <RaiseAction source="INCIDENT" sourceId={i.incident_id} defaultNonconformity={`Incident: ${i.description}`} />
+                  </div>
+                  {ext && openGov === i.incident_id && (
+                    <div className="mt-1.5"><IncidentGovernance incidentId={i.incident_id} onChanged={() => { void load(); }} /></div>
+                  )}
                 </li>
               ))}
             </ul>

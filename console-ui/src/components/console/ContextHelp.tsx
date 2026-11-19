@@ -29,6 +29,7 @@ const HELP_SECTIONS: Record<Route, string> = {
   orgs: 'Organizations',
   docs: 'Docs',
   governance: 'Governance',
+  model: 'Model page',
 };
 
 let docsCache: string | null = null;

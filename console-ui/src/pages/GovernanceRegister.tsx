@@ -8,6 +8,7 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { useConsoleUi } from '../stores/consoleUi';
+import { governanceHref, useFixedModel, useGovernanceModel } from './governanceTabs';
 
 /* ------------------------------------------------------------- shared */
 
@@ -24,11 +25,16 @@ export function useModels() {
 }
 
 function ModelPicker({ models, value, onChange, allowAll }: { models: ModelRow[]; value: string; onChange: (v: string) => void; allowAll?: boolean }) {
+  // On the model page the tab is fixed to that model, so there is nothing to choose.
+  if (useFixedModel()) return null;
   return (
-    <select aria-label="Model" className={`${FIELD} max-w-xs`} value={value} onChange={(e) => onChange(e.target.value)}>
-      {allowAll ? <option value="">All models and organisation risks</option> : <option value="">Choose a model…</option>}
-      {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.name} · {m.risk_level}</option>)}
-    </select>
+    <span className="inline-flex items-center gap-1.5">
+      <select aria-label="Model" className={`${FIELD} max-w-xs`} value={value} onChange={(e) => onChange(e.target.value)}>
+        {allowAll ? <option value="">All models and organisation risks</option> : <option value="">Choose a model…</option>}
+        {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.name} · {m.risk_level}</option>)}
+      </select>
+      {value && <a className="whitespace-nowrap text-[10px] text-accent hover:underline" href={`#/model?id=${encodeURIComponent(value)}`}>Model page ↗</a>}
+    </span>
   );
 }
 
@@ -158,13 +164,14 @@ function RiskDetail({ risk, matrix, onChanged }: { risk: Risk; matrix: '5x5' | '
 export function RiskRegisterTab() {
   const toast = useConsoleUi((s) => s.toast);
   const models = useModels();
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const [list, setList] = useState<RiskList | null>(null);
   const [heat, setHeat] = useState<Heatmap | null>(null);
   const [gate, setGate] = useState<Gate | null>(null);
   const [selected, setSelectedState] = useState<Risk | null>(null);
   // The open risk is re-read after every change, so keep its id outside the load closure.
-  const selectedId = useRef<string | null>(null);
+  // A link from the action queue opens a risk directly (#/governance?tab=risks&risk=…).
+  const selectedId = useRef<string | null>(new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('risk'));
   const setSelected = (r: Risk | null) => {
     selectedId.current = r?.risk_id ?? null;
     setSelectedState(r);
@@ -283,7 +290,7 @@ interface IA {
 export function ImpactTab() {
   const toast = useConsoleUi((s) => s.toast);
   const models = useModels();
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const [tpl, setTpl] = useState<Templates | null>(null);
   const [rows, setRows] = useState<IA[]>([]);
   const [current, setCurrent] = useState<IA | null>(null);
@@ -314,7 +321,7 @@ export function ImpactTab() {
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
         <ModelPicker models={models} value={modelId} onChange={setModelId} />
         {modelId && !rows.some((r) => r.status === 'DRAFT') && (
-          <Button size="sm" variant="secondary" onClick={() => run(() => (current ? api(`/governance/impact-assessments/${current.assessment_id}/new-version`, { method: 'POST' }) : api('/governance/impact-assessments', { method: 'POST', body: JSON.stringify({ model_id: modelId }) })), 'Draft started')}>
+          <Button size="sm" variant="secondary" onClick={() => run(() => (current ? api(`/governance/impact-assessments/${current.assessment_id}/new-version`, { method: 'POST' }) : api('/governance/impact-assessments', { method: 'POST', body: JSON.stringify({ model_id: modelId }) })), current ? 'Draft started' : 'Draft started: purpose and oversight filled in from the model record')}>
             <ClipboardCheck size={12} /> {current ? 'Start new version' : 'Start assessment'}
           </Button>
         )}
@@ -326,6 +333,11 @@ export function ImpactTab() {
         <div className="grid gap-2 lg:grid-cols-[1fr_360px]">
           <Panel title={`Assessment v${current.version}`} right={<Badge tone={current.status === 'FINAL' ? 'positive' : 'warning'}>{current.status}</Badge>}>
             <div className="space-y-3 p-3">
+              {draft && (
+                <p className="text-[10.5px] text-text-tertiary">
+                  Purpose and human oversight start from the model's use case and <a className="text-accent hover:underline" href={governanceHref('context', modelId)}>context profile</a>; keep those current so every assessment starts from the same facts.
+                </p>
+              )}
               {current.revalidation_reason && current.status === 'REVALIDATION_REQUIRED' && <p className="text-[11px] text-negative">Revalidation required: {current.revalidation_reason}</p>}
               {current.questionnaires.map((qid) => {
                 const q = tpl.questionnaires.find((x) => x.id === qid);
@@ -412,7 +424,7 @@ const TEXTS = [['benefits', 'Benefits'], ['cost_of_errors', 'Cost of errors'], [
 export function ContextTab() {
   const toast = useConsoleUi((s) => s.toast);
   const models = useModels();
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const [view, setView] = useState<ContextView | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
   useEffect(() => {

@@ -12,6 +12,7 @@ import { Panel, PanelError } from '../components/ui/Panel';
 import { Skeleton } from '../components/ui/Skeleton';
 import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form';
 import { day, download, Field, ModelSelect, post, Table, useLoad, useToastCall, Writable } from './GovernancePhase2';
+import { governanceHref, governanceModelFromHash, useFixedModel, useGovernanceModel } from './governanceTabs';
 
 const STATUS_TONE: Record<string, BadgeTone> = {
   IMPLEMENTED: 'positive', PARTIAL: 'warning', NOT_IMPLEMENTED: 'negative', NOT_ASSESSED: 'neutral', NOT_APPLICABLE: 'neutral', PLANNED: 'warning',
@@ -92,7 +93,7 @@ export function SoaTab() {
 export function DisclosuresTab() {
   const call = useToastCall();
   const list = useLoad<any>('/governance/disclosures');
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const deps = useLoad<any>(modelId ? `/governance/models/${modelId}/deployers` : null);
   const [open, setOpen] = useState<any>(null);
   const [narr, setNarr] = useState<Record<string, string>>({});
@@ -198,106 +199,119 @@ export function DisclosuresTab() {
 
 /* --------------------------------------------- E3.3 Incident extensions */
 
-export function IncidentsExtTab() {
+/**
+ * Governance actions for one incident: senior sign-off, notice to affected
+ * people, DTA notification, CISA playbook, external ticket and ITSM push.
+ * Shown inside the incident on the Incidents page, so the whole incident
+ * lifecycle lives in one place (it used to be a separate Governance tab).
+ */
+export function IncidentGovernance({ incidentId, onChanged }: { incidentId: string; onChanged?: () => void }) {
   const call = useToastCall();
-  const q = useLoad<any>('/governance/incidents');
-  const ints = useLoad<any>('/governance/integrations');
-  const [act, setAct] = useState<{ id: string; kind: string; text: string } | null>(null);
-  const [hook, setHook] = useState({ kind: 'WEBHOOK', label: '', url: '', secret: '' });
-  const [playbook, setPlaybook] = useState<string | null>(null);
-  const wait = loadingOr('Incidents', q);
-  if (wait) return wait;
-  const reload = () => { void q.reload(); void ints.reload(); };
+  const q = useLoad<any>(`/governance/incidents/${incidentId}/extensions`);
+  const [act, setAct] = useState<{ kind: string; text: string } | null>(null);
+  const [showPlaybook, setShowPlaybook] = useState(false);
+  if (q.error) return <p className="text-[10.5px] text-negative">Could not load the incident's governance record. <button className="underline" onClick={() => void q.reload()}>Retry</button></p>;
+  if (!q.data) return <Skeleton className="h-16 w-full" />;
+  const i = q.data;
+  const reload = () => { void q.reload(); onChanged?.(); };
   const submit = () => {
     if (!act) return;
     const body = act.kind === 'sign-off' ? { note: act.text } : act.kind === 'affected-notice' ? { summary: act.text, channel: 'EMAIL' } : act.kind === 'notice-not-required' ? { not_required_reason: act.text }
       : act.kind === 'external-ticket' ? { ref: act.text } : { reference: act.text };
-    void call(() => post(`/governance/incidents/${act.id}/${act.kind === 'notice-not-required' ? 'affected-notice' : act.kind}`, body), 'Recorded', () => { setAct(null); reload(); });
+    void call(() => post(`/governance/incidents/${incidentId}/${act.kind === 'notice-not-required' ? 'affected-notice' : act.kind}`, body), 'Recorded', () => { setAct(null); reload(); });
   };
   return (
-    <div className="space-y-2">
-      <Panel title="Incident sign-off, notices and tickets">
-        <Table
-          head={['Model', 'Severity', 'Status', 'Senior sign-off', 'Affected', 'Ticket', 'Blocks closing', '']}
-          empty="No incidents."
-          rows={q.data.incidents.map((i: any) => [
-            i.model_name, i.severity, i.status, i.senior_sign_off ? `${i.senior_sign_off.by} ${day(i.senior_sign_off.at)}` : i.serious ? <Badge key="s" tone="negative">needed</Badge> : '—',
-            i.affected.count ? `${i.affected.count}${i.affected.notified_at ? `, told ${day(i.affected.notified_at)}` : i.affected.notice?.notRequiredReason ? ', notice not required' : ''}` : '—',
-            i.external_ticket_ref ?? '—', i.close_blocker ?? '—',
-            <Writable key="w">
-              <span className="flex flex-wrap gap-1">
-                {i.serious && !i.senior_sign_off && <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'sign-off', text: '' })}>Sign off</Button>}
-                {i.affected.count > 0 && !i.affected.notified_at && !i.affected.notice?.notRequiredReason && (
-                  <>
-                    <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'affected-notice', text: '' })}>Notice</Button>
-                    <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'notice-not-required', text: '' })}>No notice needed</Button>
-                  </>
-                )}
-                <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'dta-notification', text: '' })}>DTA notified</Button>
-                <Button size="xs" variant="ghost" onClick={() => setPlaybook(playbook === i.incident_id ? null : i.incident_id)}>Playbook</Button>
-                <Button size="xs" variant="ghost" onClick={() => setAct({ id: i.incident_id, kind: 'external-ticket', text: '' })}>Ticket</Button>
-                <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/incidents/${i.incident_id}/push`, {}), 'Pushed', reload)}>Push to ITSM</Button>
-              </span>
-            </Writable>,
-          ])}
-        />
-        {act && (
-          <div className="flex flex-wrap items-end gap-2 border-t border-border p-2">
-            <span className="text-[11px]">{act.kind.replace('-', ' ')}</span>
-            <input className={`${FIELD} max-w-md`} placeholder={{ 'sign-off': 'Sign-off note (what was reviewed)', 'affected-notice': 'What the affected people were told', 'notice-not-required': 'Why no notice is needed', 'external-ticket': 'Ticket reference', 'dta-notification': 'DTA notification reference' }[act.kind]} value={act.text} onChange={(e) => setAct({ ...act, text: e.target.value })} />
-            <Button size="xs" onClick={submit}>Save</Button>
-            <Button size="xs" variant="ghost" onClick={() => setAct(null)}>Cancel</Button>
+    <div className="space-y-1.5 rounded-md border border-border bg-bg-elevated p-2 text-[10.5px]">
+      {i.close_blocker && <p className="rounded border border-warning bg-warning-soft px-2 py-1 text-warning">Can't be resolved or closed yet: {i.close_blocker}</p>}
+      <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
+        <span><span className="text-text-tertiary">Senior sign-off: </span>{i.senior_sign_off ? `${i.senior_sign_off.by}, ${day(i.senior_sign_off.at)}` : i.serious ? <Badge tone="negative">needed</Badge> : 'not needed'}</span>
+        <span><span className="text-text-tertiary">Affected people: </span>{i.affected.count ? `${i.affected.count}${i.affected.notified_at ? `, told ${day(i.affected.notified_at)}` : i.affected.notice?.notRequiredReason ? ', notice not required' : ', not yet told'}` : 'none recorded'}</span>
+        <span><span className="text-text-tertiary">Ticket: </span>{i.external_ticket_ref ?? '—'}</span>
+        <span><span className="text-text-tertiary">DTA: </span>{i.dta_notification ? `notified ${day(i.dta_notification.notifiedAt)} (${i.dta_notification.reference})` : '—'}</span>
+      </div>
+      <Writable>
+        <span className="flex flex-wrap gap-1">
+          {i.serious && !i.senior_sign_off && <Button size="xs" variant="secondary" onClick={() => setAct({ kind: 'sign-off', text: '' })}>Sign off</Button>}
+          {i.affected.count > 0 && !i.affected.notified_at && !i.affected.notice?.notRequiredReason && (
+            <>
+              <Button size="xs" variant="ghost" onClick={() => setAct({ kind: 'affected-notice', text: '' })}>Notice to affected</Button>
+              <Button size="xs" variant="ghost" onClick={() => setAct({ kind: 'notice-not-required', text: '' })}>No notice needed</Button>
+            </>
+          )}
+          <Button size="xs" variant="ghost" onClick={() => setAct({ kind: 'dta-notification', text: '' })}>DTA notified</Button>
+          <Button size="xs" variant="ghost" onClick={() => setShowPlaybook(!showPlaybook)}>Playbook</Button>
+          <Button size="xs" variant="ghost" onClick={() => setAct({ kind: 'external-ticket', text: '' })}>Ticket</Button>
+          <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/incidents/${incidentId}/push`, {}), 'Pushed', reload)}>Push to ITSM</Button>
+        </span>
+      </Writable>
+      {act && (
+        <div className="flex flex-wrap items-end gap-2">
+          <span>{act.kind.replace(/-/g, ' ')}</span>
+          <input className={`${FIELD} max-w-md`} placeholder={({ 'sign-off': 'Sign-off note (what was reviewed)', 'affected-notice': 'What the affected people were told', 'notice-not-required': 'Why no notice is needed', 'external-ticket': 'Ticket reference', 'dta-notification': 'DTA notification reference' } as Record<string, string>)[act.kind]} value={act.text} onChange={(e) => setAct({ ...act, text: e.target.value })} />
+          <Button size="xs" onClick={submit}>Save</Button>
+          <Button size="xs" variant="ghost" onClick={() => setAct(null)}>Cancel</Button>
+        </div>
+      )}
+      {showPlaybook && (
+        <Writable>
+          <div className="space-y-1">
+            <span className={LABEL}>CISA incident response playbook</span>
+            <p className="text-text-secondary">{i.cisa.threat_vector} · {i.cisa.functional_impact} · {i.cisa.information_impact}{i.cisa.cisa_report_hours ? ` · report to CISA within ${i.cisa.cisa_report_hours}h` : ''}</p>
+            {i.cisa.phases.map((ph: any) => (
+              <label key={ph.phase} className="flex items-center gap-2">
+                <input type="checkbox" checked={ph.done} onChange={(e) => void call(() => post(`/governance/incidents/${incidentId}/playbook`, { phase: ph.phase, done: e.target.checked }), 'Updated', reload)} />
+                {ph.phase.replace(/_/g, ' ').toLowerCase()} <span className="text-text-secondary">{ph.source}{ph.note ? `: ${ph.note}` : ''}</span>
+              </label>
+            ))}
           </div>
-        )}
-        {playbook && (() => {
-          const inc = q.data.incidents.find((x: any) => x.incident_id === playbook);
-          if (!inc) return null;
-          return (
-            <Writable>
-              <div className="space-y-1 border-t border-border p-2 text-[11px]">
-                <span className={LABEL}>CISA incident response playbook: {inc.model_name}</span>
-                <p className="text-text-secondary">{inc.cisa.threat_vector} · {inc.cisa.functional_impact} · {inc.cisa.information_impact}{inc.cisa.cisa_report_hours ? ` · report to CISA within ${inc.cisa.cisa_report_hours}h` : ''}{inc.dta_notification ? ` · DTA notified ${day(inc.dta_notification.notifiedAt)} (${inc.dta_notification.reference})` : ''}</p>
-                {inc.cisa.phases.map((ph: any) => (
-                  <label key={ph.phase} className="flex items-center gap-2">
-                    <input type="checkbox" checked={ph.done} onChange={(e) => void call(() => post(`/governance/incidents/${inc.incident_id}/playbook`, { phase: ph.phase, done: e.target.checked }), 'Updated', reload)} />
-                    {ph.phase.replace(/_/g, ' ').toLowerCase()} <span className="text-text-secondary">{ph.source}{ph.note ? `: ${ph.note}` : ''}</span>
-                  </label>
-                ))}
-              </div>
-            </Writable>
-          );
-        })()}
-      </Panel>
-      {ints.data && (
-        <Panel title="Integrations (Jira, ServiceNow, SIEM, webhooks)">
-          <Table
-            head={['Kind', 'Label', 'URL', 'Events', 'Signed', 'Last delivery', '']}
-            empty="No integrations."
-            rows={ints.data.integrations.map((x: any) => [x.kind, x.label, x.url, x.events.join(', '), x.has_secret ? 'Yes' : 'No', x.last_status ? `${x.last_status} ${day(x.last_delivery_at)}` : '—',
-              <span key="b" className="flex gap-1">
-                <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/integrations/${x.integration_id}/test`, {}), 'Test sent', reload)}>Test</Button>
-                <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/integrations/${x.integration_id}`, { enabled: !x.enabled }, 'PATCH'), 'Updated', reload)}>{x.enabled ? 'Disable' : 'Enable'}</Button>
-              </span>])}
-          />
-          <div className="flex flex-wrap items-end gap-2 border-t border-border p-2">
-            <select aria-label="Kind" className={`${FIELD} max-w-[130px]`} value={hook.kind} onChange={(e) => setHook({ ...hook, kind: e.target.value })}>{ints.data.kinds.map((k: string) => <option key={k}>{k}</option>)}</select>
-            <input className={`${FIELD} max-w-[160px]`} placeholder="Label" value={hook.label} onChange={(e) => setHook({ ...hook, label: e.target.value })} />
-            <input className={`${FIELD} max-w-sm`} placeholder="https://…" value={hook.url} onChange={(e) => setHook({ ...hook, url: e.target.value })} />
-            <input type="password" className={`${FIELD} max-w-[200px]`} placeholder="Secret or token" value={hook.secret} onChange={(e) => setHook({ ...hook, secret: e.target.value })} />
-            <Button size="xs" onClick={() => void call(() => post('/governance/integrations', { ...hook, label: hook.label || undefined, secret: hook.secret || undefined }), 'Integration added', () => { setHook({ kind: 'WEBHOOK', label: '', url: '', secret: '' }); reload(); })}>Add</Button>
-          </div>
-        </Panel>
+        </Writable>
+      )}
+      {i.deliveries?.length > 0 && (
+        <p className="text-text-tertiary">Deliveries: {i.deliveries.slice(0, 5).map((d: any) => `${d.event} ${d.status}${d.http_status ? ` (${d.http_status})` : ''} ${day(d.created_at)}`).join(' · ')}</p>
       )}
     </div>
+  );
+}
+
+/** ITSM and SIEM integrations (Jira, ServiceNow, SIEM, webhooks). Organisation setup, so it lives on Settings. */
+export function IntegrationsPanel() {
+  const call = useToastCall();
+  const ints = useLoad<any>('/governance/integrations');
+  const [hook, setHook] = useState({ kind: 'WEBHOOK', label: '', url: '', secret: '' });
+  if (ints.error) return <Panel title="Integrations (Jira, ServiceNow, SIEM, webhooks)"><PanelError onRetry={() => void ints.reload()} /></Panel>;
+  if (!ints.data) return null;
+  const reload = () => void ints.reload();
+  return (
+    <Panel title="Integrations (Jira, ServiceNow, SIEM, webhooks)">
+      <Table
+        head={['Kind', 'Label', 'URL', 'Events', 'Signed', 'Last delivery', '']}
+        empty="No integrations."
+        rows={ints.data.integrations.map((x: any) => [x.kind, x.label, x.url, x.events.join(', '), x.has_secret ? 'Yes' : 'No', x.last_status ? `${x.last_status} ${day(x.last_delivery_at)}` : '—',
+          <span key="b" className="flex gap-1">
+            <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/integrations/${x.integration_id}/test`, {}), 'Test sent', reload)}>Test</Button>
+            <Button size="xs" variant="ghost" onClick={() => void call(() => post(`/governance/integrations/${x.integration_id}`, { enabled: !x.enabled }, 'PATCH'), 'Updated', reload)}>{x.enabled ? 'Disable' : 'Enable'}</Button>
+          </span>])}
+      />
+      <Writable>
+        <div className="flex flex-wrap items-end gap-2 border-t border-border p-2">
+          <select aria-label="Kind" className={`${FIELD} max-w-[130px]`} value={hook.kind} onChange={(e) => setHook({ ...hook, kind: e.target.value })}>{ints.data.kinds.map((k: string) => <option key={k}>{k}</option>)}</select>
+          <input className={`${FIELD} max-w-[160px]`} placeholder="Label" value={hook.label} onChange={(e) => setHook({ ...hook, label: e.target.value })} />
+          <input className={`${FIELD} max-w-sm`} placeholder="https://…" value={hook.url} onChange={(e) => setHook({ ...hook, url: e.target.value })} />
+          <input type="password" className={`${FIELD} max-w-[200px]`} placeholder="Secret or token" value={hook.secret} onChange={(e) => setHook({ ...hook, secret: e.target.value })} />
+          <Button size="xs" onClick={() => void call(() => post('/governance/integrations', { ...hook, label: hook.label || undefined, secret: hook.secret || undefined }), 'Integration added', () => { setHook({ kind: 'WEBHOOK', label: '', url: '', secret: '' }); reload(); })}>Add</Button>
+        </div>
+      </Writable>
+    </Panel>
   );
 }
 
 /* ---------------------------------------------------- E3.4 TEVV and retirement */
 
 export function TevvTab() {
+  const fixed = useFixedModel();
   const call = useToastCall();
   const ov = useLoad<any>('/governance/tevv');
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const sets = useLoad<any>(modelId ? `/governance/models/${modelId}/test-sets` : null);
   const ret = useLoad<any>(modelId ? `/governance/models/${modelId}/retirement` : null);
   const [ns, setNs] = useState({ name: '', criteria: '[{"metric":"auc","operator":">=","threshold":0.8}]' });
@@ -311,6 +325,7 @@ export function TevvTab() {
   const open = ret.data?.retirements.find((r: any) => ['REQUESTED', 'APPROVED'].includes(r.status));
   return (
     <div className="space-y-2">
+      {!fixed && (
       <Panel title="Test, evaluation, verification and validation">
         <Table
           head={['Model', 'Risk', 'Test sets', 'Never run', 'Latest failing', 'Review overdue']}
@@ -318,7 +333,8 @@ export function TevvTab() {
           rows={ov.data.models.map((m: any) => [m.name, m.risk_level, m.testSets ?? 0, m.neverRun ?? 0, m.latestFailing ? <Badge key="f" tone="negative">{m.latestFailing}</Badge> : 0, m.reviewOverdue ?? 0])}
         />
       </Panel>
-      <Panel title="Test sets and retirement for one model">
+      )}
+      <Panel title={fixed ? 'Test sets and retirement' : 'Test sets and retirement for one model'}>
         <div className="p-2"><ModelSelect value={modelId} onChange={setModelId} /></div>
         {modelId && sets.data && (
           <Writable>
@@ -397,7 +413,7 @@ export function TevvTab() {
 export function EnergyTab() {
   const call = useToastCall();
   const ov = useLoad<any>('/governance/energy');
-  const [m, setM] = useState({ model_id: '', kwh: '', period_start: '', period_end: '', csv: '' });
+  const [m, setM] = useState({ model_id: governanceModelFromHash(), kwh: '', period_start: '', period_end: '', csv: '' });
   const wait = loadingOr('Energy', ov);
   if (wait) return wait;
   const d = ov.data;
@@ -431,9 +447,10 @@ export function EnergyTab() {
 /* ------------------------------------------------------- E3.6 AI security */
 
 export function SecurityTab() {
+  const fixed = useFixedModel();
   const call = useToastCall();
   const ov = useLoad<any>('/governance/security');
-  const [modelId, setModelId] = useState('');
+  const [modelId, setModelId] = useGovernanceModel();
   const one = useLoad<any>(modelId ? `/governance/models/${modelId}/security` : null);
   const [edits, setEdits] = useState<Record<string, any>>({});
   const [evalRef, setEvalRef] = useState('');
@@ -446,6 +463,7 @@ export function SecurityTab() {
   const set = (cat: string, k: string, v: any) => setEdits({ ...edits, [cat]: { ...(edits[cat] ?? {}), [k]: v } });
   return (
     <div className="space-y-2">
+      {!fixed && (
       <Panel title="AI threat models and security evaluations">
         <Table
           head={['Model', 'Type', 'Threat model', 'Applicable', 'Untested', 'Failing, unmitigated']}
@@ -453,7 +471,8 @@ export function SecurityTab() {
           rows={ov.data.models.map((m: any) => [m.name, m.model_type, st(m.threatModel), m.applicable, m.untested.length ? m.untested.join(', ') : '—', m.failingUnmitigated.length ? m.failingUnmitigated.join(', ') : '—'])}
         />
       </Panel>
-      <Panel title="Threat model for one model">
+      )}
+      <Panel title={fixed ? 'Threat model' : 'Threat model for one model'}>
         <div className="flex flex-wrap items-end gap-2 p-2">
           <ModelSelect value={modelId} onChange={(v) => { setModelId(v); setEdits({}); }} />
           {modelId && one.data && (!tm || tm.status !== 'DRAFT') && <Writable><Button size="xs" onClick={() => void call(() => post(`/governance/models/${modelId}/threat-model`, {}), 'Draft created', reload)}>{tm ? 'New version' : 'Start from the template'}</Button></Writable>}
@@ -525,13 +544,13 @@ export function EngagementTab() {
   const d = list.data;
   return (
     <div className="space-y-2">
-      <Panel title="People-side items">
+      <Panel title="Records held per people-side item">
         <Table
           head={['Item', 'Mode', 'Owner', 'Records (24 months)', 'Last', 'Status']}
           empty=""
           rows={Object.entries<any>(d.items).map(([k, v]) => [k.replace(/_/g, ' '), v.mode === 'CUSTOMER' ? 'Customer responsibility' : 'Light record here', v.owner ?? '—', v.records, day(v.last), st(v.status)])}
         />
-        <p className="px-2 pb-2 text-[10.5px] text-text-secondary">Change the mode or owner in Settings &amp; risk appetite (people-side items).</p>
+        <p className="px-2 pb-2 text-[10.5px] text-text-secondary">Who keeps each item is set once, in <a className="text-accent hover:underline" href={governanceHref('settings')}>Settings &amp; risk appetite</a>. Competence and awareness are recorded in <a className="text-accent hover:underline" href={governanceHref('training')}>Training</a>.</p>
       </Panel>
       <Panel title="Records">
         <Table

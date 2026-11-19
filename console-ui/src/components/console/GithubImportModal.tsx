@@ -38,6 +38,90 @@ function parseStoredSource(source?: string | null): { owner: string; repo: strin
   return m ? { owner: m[1], repo: m[2], branch: m[3] } : null;
 }
 
+/**
+ * Repository, branch and token fields with live parsing of the URL. One
+ * component for both GitHub entry points (the new-project wizard and the
+ * project's Import from GitHub popup).
+ */
+export function GithubRepoFields({
+  url, setUrl, branch, setBranch, token, setToken, parsed, namePrefix = 'github',
+}: {
+  url: string; setUrl: (v: string) => void;
+  branch: string; setBranch: (v: string) => void;
+  token: string; setToken: (v: string) => void;
+  parsed: ReturnType<typeof parseGithubRepo>;
+  /** Distinct input names per form, so password managers don't fill one from the other. */
+  namePrefix?: string;
+}) {
+  return (
+    <>
+      {/* autoComplete choices matter: browsers heuristically treat a text
+          input next to a password input as a username field and fill the
+          saved email + password into it (branch showed the user's email).
+          new-password on the token plus off + non-credential names stops it. */}
+      <div>
+        <label className={LABEL}>Repository URL</label>
+        <input
+          className={`${FIELD} font-mono`}
+          name={`${namePrefix}-repo-url`}
+          autoComplete="off"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://github.com/owner/repo · git@github.com:owner/repo.git · owner/repo"
+        />
+        {url.trim() && (
+          parsed ? (
+            <p className="mt-1 font-mono text-[10px] text-positive">
+              ✓ {parsed.owner} / {parsed.repo}{parsed.branch ? ` · branch ${parsed.branch}` : ''}
+            </p>
+          ) : (
+            <p className="mt-1 text-[10px] text-warning">
+              Not a recognisable GitHub repository — expected https://github.com/owner/repo, an SSH URL, or owner/repo.
+            </p>
+          )
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className={LABEL}>Branch</label>
+          <input
+            className={`${FIELD} font-mono`}
+            name={`${namePrefix}-branch`}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder="main (default)"
+          />
+        </div>
+        <div>
+          <label className={LABEL}>Access token <span className="normal-case text-text-tertiary">(private repos)</span></label>
+          <span className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-2 focus-within:border-accent">
+            <KeyRound size={11} className="shrink-0 text-text-tertiary" />
+            <input
+              type="password"
+              className="w-full bg-transparent py-1.5 font-mono text-[11px] text-text placeholder:text-text-tertiary focus:outline-none"
+              name={`${namePrefix}-access-token`}
+              autoComplete="new-password"
+              data-1p-ignore
+              data-lpignore="true"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="ghp_… / fine-grained PAT"
+            />
+          </span>
+        </div>
+      </div>
+      <p className="text-[9.5px] leading-snug text-text-tertiary">
+        The token needs read-only contents access and is used once to download the archive — it is never stored,
+        so every import asks for it again. Public repositories need no token.
+      </p>
+    </>
+  );
+}
+
 export function GithubImportModal({
   project,
   onClose,
@@ -127,70 +211,8 @@ export function GithubImportModal({
           </button>
         </header>
 
-        {/* autoComplete choices matter: browsers heuristically treat a text
-            input next to a password input as a username field and fill the
-            saved email + password into it (branch showed the user's email).
-            new-password on the token plus off + non-credential names stops it. */}
         <form onSubmit={submit} autoComplete="off" className="space-y-3 p-4">
-          <div>
-            <label className={LABEL}>Repository URL</label>
-            <input
-              className={`${FIELD} font-mono`}
-              name="github-repo-url"
-              autoComplete="off"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo · git@github.com:owner/repo.git · owner/repo"
-            />
-            {url.trim() && (
-              parsed ? (
-                <p className="mt-1 font-mono text-[10px] text-positive">
-                  ✓ {parsed.owner} / {parsed.repo}{parsed.branch ? ` · branch ${parsed.branch}` : ''}
-                </p>
-              ) : (
-                <p className="mt-1 text-[10px] text-warning">
-                  Not a recognisable GitHub repository — expected https://github.com/owner/repo, an SSH URL, or owner/repo.
-                </p>
-              )
-            )}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={LABEL}>Branch</label>
-              <input
-                className={`${FIELD} font-mono`}
-                name="github-branch"
-                autoComplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                placeholder="main (default)"
-              />
-            </div>
-            <div>
-              <label className={LABEL}>Access token <span className="normal-case text-text-tertiary">(private repos)</span></label>
-              <span className="flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-2 focus-within:border-accent">
-                <KeyRound size={11} className="shrink-0 text-text-tertiary" />
-                <input
-                  type="password"
-                  className="w-full bg-transparent py-1.5 font-mono text-[11px] text-text placeholder:text-text-tertiary focus:outline-none"
-                  name="github-access-token"
-                  autoComplete="new-password"
-                  data-1p-ignore
-                  data-lpignore="true"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="ghp_… / fine-grained PAT"
-                />
-              </span>
-            </div>
-          </div>
-          <p className="text-[9.5px] leading-snug text-text-tertiary">
-            The token needs read-only contents access and is used once to download the archive — it is never stored,
-            so every import asks for it again. Public repositories need no token.
-          </p>
+          <GithubRepoFields url={url} setUrl={setUrl} branch={branch} setBranch={setBranch} token={token} setToken={setToken} parsed={parsed} />
 
           {error && (
             <p className="rounded-md border border-negative bg-negative-soft px-2.5 py-1.5 text-[10.5px] text-negative">

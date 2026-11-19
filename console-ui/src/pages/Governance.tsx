@@ -14,7 +14,7 @@ import { useSession } from '../stores/session';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
 import { AssuranceTab, AuDtaTab, DatasetsTab, DecisionsTab, FairLendingTab, TrainingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
-import { DisclosuresTab, EnergyTab, EngagementTab, FederalTab, IncidentsExtTab, SecurityTab, SoaTab, TevvTab } from './GovernancePhase3';
+import { DisclosuresTab, EnergyTab, EngagementTab, FederalTab, IntegrationsPanel, SecurityTab, SoaTab, TevvTab } from './GovernancePhase3';
 import {
   DEFAULT_GOVERNANCE_TAB,
   GOVERNANCE_GROUPS as GROUPS,
@@ -111,6 +111,7 @@ function ChangeList({ changes }: { changes: Change[] }) {
 
 function SettingsTab() {
   const toast = useConsoleUi((s) => s.toast);
+  const features = useGovernanceFeatures((s) => s.features);
   const [view, setView] = useState<SettingsView | null>(null);
   const [draft, setDraft] = useState<SettingsDoc | null>(null);
   const [reason, setReason] = useState('');
@@ -456,6 +457,8 @@ function SettingsTab() {
           )}
         </div>
       )}
+      {/* Organisation integrations (moved here from the incident tab): ITSM tickets and SIEM events for every model. */}
+      {features?.incidentExtensions && <IntegrationsPanel />}
     </div>
   );
 }
@@ -654,6 +657,15 @@ export function Governance() {
   useEffect(() => {
     void load();
   }, [load]);
+  // A link to another tab (#/governance?tab=…&model=…) while this page is open switches to it.
+  useEffect(() => {
+    const onHash = () => {
+      const t = governanceTabFromHash();
+      if (t) setTabState(t);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // A global OWNER/ADMIN (no organization of their own) works in the
   // organization of the selected project scope.
@@ -799,8 +811,6 @@ export function Governance() {
           <SoaTab />
         ) : active === 'disclosures' ? (
           <DisclosuresTab />
-        ) : active === 'incidentExt' ? (
-          <IncidentsExtTab />
         ) : active === 'tevv' ? (
           <TevvTab />
         ) : active === 'energy' ? (

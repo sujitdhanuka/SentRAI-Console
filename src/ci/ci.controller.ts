@@ -58,7 +58,7 @@ export class CiController {
    * `?verdict=fail` and `?limit=` filters.
    */
   @ApiBearerAuth()
-  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER, Role.APPROVER)
+  @Roles(Role.ADMIN, Role.OWNER, Role.CISO, Role.REVIEWER, Role.APPROVER)
   @Get('events')
   events(
     @CurrentUser() user: CurrentUserType,
@@ -75,7 +75,7 @@ export class CiController {
 
   /** The SARIF artifact for a recorded gate event, rebuilt from the ledger. */
   @ApiBearerAuth()
-  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER, Role.APPROVER)
+  @Roles(Role.ADMIN, Role.OWNER, Role.CISO, Role.REVIEWER, Role.APPROVER)
   @Get('events/:id/sarif')
   eventSarif(@CurrentUser() user: CurrentUserType, @Param('id') id: string) {
     return this.ci.eventSarif(user, id);
@@ -101,7 +101,7 @@ export class CiController {
 
   /** Auditor view of the immutable pre-deployment gate trail for a project. */
   @ApiBearerAuth()
-  @Roles(Role.ADMIN, Role.CISO, Role.REVIEWER, Role.APPROVER)
+  @Roles(Role.ADMIN, Role.OWNER, Role.CISO, Role.REVIEWER, Role.APPROVER)
   @Get('projects/:projectId/gate-history')
   history(
     @CurrentUser() user: CurrentUserType,

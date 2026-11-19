@@ -83,7 +83,7 @@ The **executive, portfolio-wide** readiness view — the board-level answer. It 
 - **⬇ Board Report** — the full board pack: cover, executive summary with the AI-drafted narrative, regulatory framework readiness, **Controls In Force** (shift-left CI gate, runtime tool-authorization enforcement, and audit-ledger integrity), **Incidents & Consumer Redress**, and priority remediation. Every figure is assembled live from the rollup plus the incident, grievance, gate, runtime-telemetry and hash-chained-audit records — a single document a risk committee reads in one sitting.
 
 ### 4. CI Gate Ledger
-*Visible to: ADMIN, CISO, REVIEWER, APPROVER.*
+*Visible to: ADMIN, CISO, OWNER, REVIEWER, APPROVER.*
 
 The immutable, append-only record of **every CI/CD pre-deployment gate decision** — the defensible trail of what your pipeline let through or blocked before it reached production.
 
@@ -109,7 +109,7 @@ The register of AI/ML/LLM models in the active project — the "AI inventory" re
 
 **+ Register Model** captures: Model Name; **Model Type** (Machine Learning, Deep Learning, NLP, Generative AI, Rules-Based, Hybrid); Functional Area (e.g. `credit_underwriting`, `fraud_detection`); Owner Team; Use Case Description; Developed By; Board Policy Reference; Target Customer Segments; Human Oversight Required; Autonomous Scope; and **Sutras Declared** (the seven principle checkboxes).
 
-Each model shows its type, **risk level**, **lifecycle stage**, and a **compliance check** across the frameworks. Close gaps by editing the model's governance fields; lifecycle promotion is **gated on governance completeness** (a model can't advance until its required controls are satisfied). The *Close Governance Gaps* drawer also shows the model's **board-approval status inline** — the latest review-board decision, its target stage, who requested it and who decided it — so the sign-off lives with the model, not only on the Alignment page.
+Each model shows its type, **risk level**, **lifecycle stage**, and a **compliance check** across the frameworks. Select a model and press **Open model page** to work on everything about it in one place (see *Model page* below), or **Quick edit** for the governance fields in a popup. Close gaps by editing those fields; lifecycle promotion is **gated on governance completeness** (a model can't advance until its required controls are satisfied). The model's governance record (on the model page and in the Quick edit popup) also shows the model's **board-approval status inline** — the latest review-board decision, its target stage, who requested it and who decided it — so the sign-off lives with the model, not only on the Alignment page.
 
 **Gaps queue.** With the corrective-action register on (Governance), overdue corrective actions for a model appear in the gaps queue next to its control gaps.
 
@@ -119,7 +119,9 @@ Each model shows its type, **risk level**, **lifecycle stage**, and a **complian
 
 **Operational kill switch (Control).** ADMIN/CISO can **Suspend** a model from *Close Governance Gaps → Operational Control* — a deliberate stop, separate from the drift-driven fallback. A deployed agent polls `GET /api/v1/control/models/:id/poll` each loop and halts when it sees the kill switch, so a misbehaving system can be stopped in seconds without a redeploy. Every suspend/resume is on the model ledger and pushed to the governance webhook.
 
-**Adversarial evidence & secret hygiene (Security).** In *Close Governance Gaps → Adversarial / red-team evidence*, ingest a garak / PyRIT / promptfoo run (probes and breaches); it stores a typed `red_team` artifact **and** stamps the model's last-red-team date, satisfying that control in one step. Separately, one unified secret-pattern library backs both the codebase scanner's hardcoded-secret findings and the redactor that masks credentials before any snippet reaches an LLM — AWS/GitHub/Google/Slack/Stripe/provider keys, JWTs and PEM private keys included.
+**Red-team record & secret hygiene (Security).** There is one way to record a red-team exercise: **Record red team** on the model's governance record (also offered on Governance → Red team & audit). Enter the date, the reviewer and the report link, and optionally the tool results (garak / PyRIT / promptfoo suite, probes and breaches). It stores one `red_team` artifact and sets the model's last-red-team date, so the date field itself is read-only. A breach notifies the governance contacts.
+
+**Evidence, owner and policy.** **Attach evidence** on the governance record adds a typed artifact (bias test, model card, DPIA, explainability, validation report, data sheet) with an optional link to a controlled document. Under **Owner**, the team name sits next to the **named owner** (a person, set by an Owner or CISO); naming a person fills an unassigned team. **Board policy reference** suggests your approved AI policies from the AIMS workspace and warns when the reference is not one of them. Intended users, limits and the oversight pattern are kept on the model's context profile, linked from the record. Separately, one unified secret-pattern library backs both the codebase scanner's hardcoded-secret findings and the redactor that masks credentials before any snippet reaches an LLM — AWS/GitHub/Google/Slack/Stripe/provider keys, JWTs and PEM private keys included.
 
 ### 6. Drift Monitoring
 *Visible to: everyone, once a project is active.*
@@ -152,7 +154,7 @@ Report and track AI incidents, with sectoral risk intelligence.
 - The **sectoral risk** dashboard aggregates by category and severity, and flags overdue reports and active circuit breakers.
 - With a project in scope the list shows only that project's incidents.
 - **Raise action** *(when the corrective-action register is on)* opens a corrective action from the incident in the shared register (see Governance → Corrective actions).
-- **Sign-off and notices** *(when incident extensions are on)* — a P1 or P2 incident cannot be resolved or closed until an officer or the accountable official signs it off and a notice to affected people is recorded (or a reason none is needed). Ticketing and SIEM integrations live in Governance → Incident sign-off & ITSM.
+- **Sign-off and notices** *(when incident extensions are on)* — a P1 or P2 incident cannot be resolved or closed until an officer or the accountable official signs it off and a notice to affected people is recorded (or a reason none is needed). Each incident shows what still blocks closing it, and **Sign-off, notices** opens the panel to sign off, record the notice, map the CISA playbook and record a DTA notification, on this screen. Ticketing and SIEM integrations are set up in Governance → Settings.
 - Reporting an incident and resolving it are both written to the affected model's **immutable ledger** (`INCIDENT_REPORTED` / `INCIDENT_RESOLVED`), so an incident and its resolution appear in the model's **cross-ledger timeline** alongside its approval, CI gates, deployment and runtime — the full lifecycle in one column.
 
 ### 9. Lineage Graph
@@ -210,11 +212,13 @@ Scans generate summaries, risk rationales and remediation plans automatically, s
 ### 15. Alignment
 *Board sign-off and periodic re-certification — the workflows that keep every AI system doing what the institution sanctioned.*
 
-Two governance workflows, switchable with the **Approvals / Attestations** toggle at the top.
+Three views, switchable at the top: **Inbox & due soon** (the default), **Deployment approvals** and **Attestations**.
+
+- **Inbox & due soon** — everything waiting for a decision in one list (deployment approvals, risk acceptances, impact assessments, validations, retirements, threat models, documents, the Statement of Applicability), next to everything due in the next 30 days or overdue (risk treatments, corrective actions, reviews, red teams, audits). Each item links to the screen where you act on it.
 
 - **Review-board approvals** — a **MEDIUM/HIGH-risk model cannot be promoted to a live stage (DEPLOYED / MONITORING) until it has a recorded board sign-off**. An owner clicks **Request** (choosing the target stage and how many approvals are needed), then one or more independent approvers (APPROVER / CISO / ADMIN) **Approve** or **Reject**. The **requester can never decide their own request** (separation of duties), and no approver votes twice. Once the approval quorum is met, a **Promote** button takes the model live. Every request, vote, and promotion is written to the model ledger. LOW-risk models keep the lighter self-service path.
 - **Attestation campaigns** — periodic re-certification of the active inventory. Open a campaign (title, cadence in days, optional risk-tier scope) and it **snapshots every in-scope active model into a checklist**. Owners **Attest** (still within sanctioned scope) or **Flag** (needs review) each one; a flag escalates immediately. Items left pending past the due date are escalated automatically by the daily job. Progress and flagged counts show on each campaign.
-- **Behavioral eval evidence** — on a model's *Close Governance Gaps* screen, the **Behavioral eval evidence** box ingests eval-harness output (promptfoo / garak / PyRIT: suite name + passed/total) as a typed `behavioral_eval` evidence artifact with its parsed pass-rate, so a reviewer sees test *results*, not just a link.
+- **Behavioral eval evidence** — on a model's governance record, the **Behavioral eval evidence** box ingests eval-harness output (promptfoo / garak / PyRIT: suite name + passed/total) as a typed `behavioral_eval` evidence artifact with its parsed pass-rate, so a reviewer sees test *results*, not just a link.
 
 *Visible to: everyone can view; deciding approvals is limited to APPROVER / CISO / ADMIN, and opening campaigns to OWNER / APPROVER / CISO / ADMIN.*
 
@@ -253,7 +257,9 @@ The tabs are grouped into **sections**. The top row picks a section, and the row
 - **Risk & impact**: Risk register, Impact assessments, Model validation, Fair lending, Decisions & appeals.
 - **ISO management system**: AIMS workspace, Corrective actions, Documents, Statement of Applicability, Training.
 - **Data & suppliers**: Data register, Vendors & AI BOM, External AI & export.
-- **Operations & assurance**: Red team & audit, TEVV & retirement, Incident sign-off & ITSM, AI security, Energy.
+- **Operations & assurance**: Red team & audit, TEVV & retirement, AI security, Energy.
+
+With a model chosen, the per-model tabs (context, risks, impact, validation, fair lending, TEVV, security, vendors and BOM) are also on that model's **model page**, fixed to the model so you don't pick it again.
 - **Transparency & regional**: Disclosures, Engagement records, Australia (DTA).
 
 #### Settings & risk appetite
@@ -294,7 +300,7 @@ The US kit: a **reason-code map** per model (Reg B principal reasons, with the s
 One workspace per organisation for the ISO/IEC 42001 management-system records: context and interested parties, AIMS scope, AI policy, objectives, competence and awareness, the internal audit programme and management reviews. The **Organisation controls** panel shows the organisation-level ISO and RBI checks these records satisfy. SentRAI records these processes; your organisation still runs them.
 
 #### Corrective actions
-One nonconformity and corrective-action register (ISO 10.2), fed by failed controls, audit findings, incidents, validation findings, management reviews and resolved grievances. **Raise action** buttons on the Incidents and Consumer Grievances screens open one directly; other actions are raised here. An action closes only with a **root cause** and an **effectiveness review**; overdue actions show in the gaps queue on Model Inventory.
+One action queue: the nonconformity and corrective-action register (ISO 10.2), plus the open **risk treatments** from the risk register (shown read-only with a link to the risk, because they are closed there). Corrective actions are fed by failed controls, audit findings, incidents, validation findings, management reviews and resolved grievances. **Raise action** buttons on the Incidents and Consumer Grievances screens open one directly; other actions are raised here. An action closes only with a **root cause** and an **effectiveness review**; overdue actions show in the gaps queue on Model Inventory.
 
 #### Documents
 Document control (ISO 7.5) for policies and evidence: versions, approver and approval date, review and retention dates, and a SHA-256 hash of the content. Superseded versions are kept. If stored content no longer matches its hash the document is flagged. Evidence counts only from approved versions, and the author of a policy cannot approve it. Review-due reminders run daily.
@@ -315,13 +321,13 @@ The **vendor register** with scored due-diligence assessments (versioned) and co
 For federal and other restricted customers: the **external AI policy** (ALLOWED, ATTESTED_ONLY or BLOCKED) applies to every AI path, for both your organisation and the organisation that owns the data; **no-training attestations** bind a provider host and model; and the **full organisation export** (officers only, recorded in the audit ledger) is a zip of every organisation table with a SHA-256 manifest, with password hashes, keys, webhook secrets and URL credentials removed.
 
 #### Red team & audit
-The rules that decide when testing is due: a red team after a CI risk escalation, a pre-deploy red team for HIGH-risk models, the audit interval and the third-party audit rule from your risk appetite, and the periodic **framework review** cycle (RBI Rec 24).
+**Record red team** here or on the model's record (one record, see Model Inventory). The rules that decide when testing is due: a red team after a CI risk escalation, a pre-deploy red team for HIGH-risk models, the audit interval and the third-party audit rule from your risk appetite, and the periodic **framework review** cycle (RBI Rec 24).
 
 #### TEVV & retirement
 Per model: **test sets** with acceptance criteria and segment results, validation-report evidence and scheduled **metric-effectiveness reviews**. SentRAI checks the results you record; it does not run the tests. **Retirement** replaces the direct move to DECOMMISSIONED: an officer other than the requester approves, all six checklist items must be done, and a MODEL_RETIRED ledger event records the checklist hash.
 
-#### Incident sign-off & ITSM
-While this tab is on, a P1 or P2 incident cannot be resolved or closed without **senior sign-off** (an officer or the accountable official) and a **notice to affected people**, or a recorded reason none is needed. Connect **Jira, ServiceNow, a SIEM or a webhook** (https only, no credentials in the URL, private hosts refused; secrets are encrypted and never shown again; bodies are HMAC-signed). Each incident maps to the CISA playbook, and a DTA notification can be recorded.
+#### Incident sign-off & integrations
+There is no separate tab any more. While incident extensions are on, a P1 or P2 incident cannot be resolved or closed without **senior sign-off** (an officer or the accountable official) and a **notice to affected people**, or a recorded reason none is needed; you do this on the **Incidents** screen. Connect **Jira, ServiceNow, a SIEM or a webhook** under **Settings** (https only, no credentials in the URL, private hosts refused; secrets are encrypted and never shown again; bodies are HMAC-signed). Each incident maps to the CISA playbook, and a DTA notification can be recorded.
 
 #### AI security
 A **threat model** per model from a 12-category template mapped to MITRE ATLAS, OWASP LLM Top 10 (2025) and NIST AI 100-2, with applicability by model type. Approval by an officer other than the author raises each applicable threat as a SECURITY risk in the register. Record **security evaluations** per attack category; they become evidence for the AI security check. SentRAI does not run the attacks itself.
@@ -333,10 +339,25 @@ Energy use (kWh) and emissions (kg CO2e) per model, shown on the transparency ca
 The annual **transparency statement** built from the inventory, grievances and incidents: you write the narrative sections, publishing sets a 12-month review date with reminders, and each notification is logged. Also the **RBI inspection** and **OMB inventory** exports (JSON with field completeness, CSV, XLSX), and the **Colorado developer disclosure** with the deployer register. A material change, context change or vendor change opens a draft update notice when a model has active deployers.
 
 #### Engagement records
-Light organisational records: consultations, expert input, team composition, human-subject studies (a consent reference is required) and non-AI alternatives considered (linked to a model). Participants are stored as roles or groups, not names. Items your settings mark as customer-owned refuse records and report the owner instead.
+Light organisational records: consultations, expert input, team composition, human-subject studies (a consent reference is required) and non-AI alternatives considered (linked to a model). Participants are stored as roles or groups, not names. Training and policy acknowledgements are on the Training tab, and competence and awareness on the AIMS workspace. Items your settings mark as customer-owned refuse records and report the owner instead.
 
 #### Australia (DTA)
 For organisations that switch on the Australia pack (DTA policy v2.1): the **AI use case register** in the DTA layout with CSV / XLSX export, a record of each share with the DTA and a 6-monthly reminder, the **in-scope tracker** (Appendix C test) with bulk draft assessments, the high-risk report signed by the accountable official, and submissions to the DTA.
+
+### 19. Model page
+*Visible to: everyone, once a project is active. Open it from Model Inventory → Open model page, or from a model name on Lineage.*
+
+One page per model, so you work on the model without choosing it again on each Governance tab. The tabs are:
+
+- **Overview & gaps** — the open gaps by framework, the remediation plan and the governance record (owner, policy, red team, evidence, approval status, tools, kill switch).
+- **Context, risk & impact** — context profile, risk register, impact assessments (new assessments start with answers filled from the model record), model validation and fair lending.
+- **Testing & security** — TEVV test sets and the threat model and security evaluations.
+- **Approvals & lifecycle** — deployment approvals and lifecycle promotion.
+- **Operations** — the model's incidents and grievances, a link to drift monitoring, and energy readings.
+- **Data & suppliers** — the model's AI bill of materials and linked datasets.
+- **History** — the model's cross-ledger timeline.
+
+Organisation-wide registers (all risks, all vendors, settings) stay on the Governance page. A tab is shown only while its feature is on.
 
 ---
 
@@ -345,7 +366,7 @@ For organisations that switch on the Australia pack (DTA policy v2.1): the **AI 
 | Role | Typical use | Scope of authority |
 |---|---|---|
 | **VIEWER** | Read-only stakeholder | View the dashboards and data they're scoped to. |
-| **OWNER** | Organization / model owner | Administer their own org's **users** (up to CISO), projects, and models. |
+| **OWNER** | Organization / model owner | Administer their own org's **users** (up to CISO), projects, and models; read the CI Gate Ledger. |
 | **REVIEWER** | Auditor | Review the CI Gate Ledger and audits. |
 | **APPROVER** | Sign-off authority | As reviewer, **plus** grant gate sign-off overrides. |
 | **CISO** | Compliance leadership | Broad governance authority within the organization. |

@@ -13,6 +13,7 @@ import { fieldClass as FIELD, labelClass as LABEL } from '../components/ui/form'
 import { useConsoleUi } from '../stores/consoleUi';
 import { useGovernanceFeatures } from '../stores/governanceFeatures';
 import { GrievanceDecision } from './GovernancePhase2';
+import { routeParam } from '../stores/route';
 
 interface Grievance {
   grievance_id: string; model_id: string; subject: string; description: string;
@@ -52,9 +53,10 @@ export function Grievances() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  // Opened from Model Inventory's "Grievance" button: start with the form open on that model.
+  const [open, setOpen] = useState(() => routeParam('file') === '1');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ model_id: '', subject: '', description: '', category: 'unfair_outcome', severity: 'MEDIUM' });
+  const [form, setForm] = useState({ model_id: routeParam('model') ?? '', subject: '', description: '', category: 'unfair_outcome', severity: 'MEDIUM' });
 
   const load = useCallback(async (silent?: boolean) => {
     if (!silent) setLoading(true);
@@ -75,7 +77,9 @@ export function Grievances() {
   }, [statusFilter]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (!form.model_id && models.length) setForm((f) => ({ ...f, model_id: models[0].model_id })); }, [models, form.model_id]);
+  useEffect(() => {
+    if (models.length && (!form.model_id || !models.some((m) => m.model_id === form.model_id))) setForm((f) => ({ ...f, model_id: models[0].model_id }));
+  }, [models, form.model_id]);
 
   const file = async (e: FormEvent) => {
     e.preventDefault();

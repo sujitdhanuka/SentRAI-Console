@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
+import { routeParam } from '../stores/route';
 
 /* ── Shared bits ──────────────────────────────────────────────────────────── */
 
@@ -105,7 +106,10 @@ function ModelAudits() {
   const [finding, setFinding] = useState({ category: 'data', severity: 'minor', description: '' });
 
   useEffect(() => {
-    if (!modelId && models.length) setModelId(models[0].model_id);
+    if (modelId || !models.length) return;
+    // Opened from Red team & audit ("Record audit") or a model page: start on that model.
+    const wanted = routeParam('model');
+    setModelId(wanted && models.some((m) => m.model_id === wanted) ? wanted : models[0].model_id);
   }, [models, modelId]);
 
   const load = useCallback(async () => {

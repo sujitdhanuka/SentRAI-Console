@@ -20,6 +20,8 @@ import {
   CorrectiveActionEntity,
   GrievanceEntity,
   ProjectEntity,
+  RiskActionEntity,
+  RiskEntity,
 } from '../../database/entities';
 import { assertFlag, modelForUser } from '../governance-access';
 
@@ -42,6 +44,8 @@ export class CorrectiveActionsService {
     @InjectRepository(AIIncidentEntity) private readonly incidents: Repository<AIIncidentEntity>,
     @InjectRepository(GrievanceEntity) private readonly grievances: Repository<GrievanceEntity>,
     @InjectRepository(AIAuditTrailEntity) private readonly audits: Repository<AIAuditTrailEntity>,
+    @InjectRepository(RiskEntity) private readonly risks: Repository<RiskEntity>,
+    @InjectRepository(RiskActionEntity) private readonly riskActions: Repository<RiskActionEntity>,
     private readonly flags: FeatureFlagsService,
   ) {}
 
@@ -125,13 +129,55 @@ export class CorrectiveActionsService {
     if (q.model_id) where.modelId = q.model_id;
     if (q.source_id) where.sourceId = q.source_id;
     if (q.overdue === 'true') Object.assign(where, { status: In(OPEN), dueAt: LessThan(new Date()) });
-    const rows = await this.rows.find({ where, order: { createdAt: 'DESC' } });
+    const rows = q.source === 'RISK' ? [] : await this.rows.find({ where, order: { createdAt: 'DESC' } });
     const all = await this.rows.find({ where: { orgId, status: In(OPEN) } });
+    const treatments = await this.riskTreatments(orgId, q);
     return {
       org_id: orgId,
-      actions: rows.map((r) => this.view(r)),
-      summary: { open: all.length, overdue: all.filter((r) => r.dueAt && r.dueAt.getTime() < Date.now()).length },
+      actions: [...rows.map((r) => this.view(r)), ...treatments],
+      // The ISO 10.2 counts (read by the corrective-action control) stay as they were; risk treatments are counted separately.
+      summary: {
+        open: all.length,
+        overdue: all.filter((r) => r.dueAt && r.dueAt.getTime() < Date.now()).length,
+        risk_treatments_open: treatments.filter((t) => t.status === 'OPEN').length,
+        risk_treatments_overdue: treatments.filter((t) => t.overdue).length,
+      },
     };
+  }
+
+  /**
+   * Risk-treatment actions from the risk register, listed in the same queue so
+   * there is one place to see everything owed. They stay owned by their risk
+   * (read only here, completed in the register) and are not ISO 10.2
+   * nonconformities, so they are marked source RISK and read_only.
+   */
+  private async riskTreatments(orgId: string, q: { status?: string; source?: string; model_id?: string; overdue?: string; source_id?: string }) {
+    if (!this.flags.isEnabled('riskRegister')) return [];
+    if (q.source && q.source !== 'RISK') return [];
+    const statusMap: Record<string, string> = { OPEN: 'OPEN', DONE: 'CLOSED', CANCELLED: 'CANCELLED' };
+    const wanted = q.status ? q.status.split(',') : null;
+    const riskWhere: Record<string, any> = { orgId };
+    if (q.source_id) riskWhere.id = q.source_id;
+    const risks = await this.risks.find({ where: riskWhere });
+    if (!risks.length) return [];
+    const byId = new Map(risks.map((r) => [r.id, r]));
+    const acts = await this.riskActions.find({ where: { riskId: In([...byId.keys()]) }, order: { createdAt: 'DESC' } });
+    const now = Date.now();
+    return acts
+      .map((a) => {
+        const r = byId.get(a.riskId)!;
+        const modelId = r.scopeType === 'MODEL' ? r.scopeId : null;
+        const status = statusMap[a.status] ?? a.status;
+        return {
+          action_id: a.id, org_id: orgId, source: 'RISK', source_id: r.id, model_id: modelId,
+          nonconformity: `Risk: ${r.title}`, root_cause: null, action: `${a.treatment.toLowerCase()}: ${a.action}`,
+          owner_user_id: a.ownerUserId, due_at: a.dueAt, status,
+          overdue: a.status === 'OPEN' && !!a.dueAt && a.dueAt.getTime() < now,
+          effectiveness_review: null, closed_by: null, closed_at: a.completedAt, created_by: a.createdBy, created_at: a.createdAt,
+          read_only: true, treatment: a.treatment,
+        };
+      })
+      .filter((t) => (!q.model_id || t.model_id === q.model_id) && (!wanted || wanted.includes(t.status)) && (q.overdue !== 'true' || t.overdue));
   }
 
   async get(user: CurrentUser, id: string) {
