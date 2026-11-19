@@ -52,6 +52,7 @@ export const GOVERNANCE_TABS: GovernanceTab[] = [
   { id: 'disclosures', label: 'Disclosures', flag: 'disclosures', group: 'transparency' },
   { id: 'engagement', label: 'Engagement records', flag: 'orgRecords', group: 'transparency' },
   { id: 'au', label: 'Australia (DTA)', flag: 'auPack', group: 'transparency' },
+  { id: 'eu', label: 'EU AI Act', flag: 'euAiAct', group: 'transparency' },
 ];
 
 /** The tab opened when the URL names none: the risk register, the most used. */

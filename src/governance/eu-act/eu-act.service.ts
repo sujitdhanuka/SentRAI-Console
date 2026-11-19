@@ -45,7 +45,16 @@ import { DAY_MS, MAINTAINERS, OFFICERS, addMonths, isFuture, oneOf, optDate, opt
 import { GateFinding, RisksService } from '../risks/risks.service';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import {
+  ANNEX_III,
   ANNEX_VI_ITEMS,
+  ART5_PRACTICES,
+  CE_FORMS,
+  DEROGATION_CONDITIONS,
+  EU_ROLES,
+  MARKET_STATUSES,
+  MARKING_METHODS,
+  PROFILE_FIELDS,
+  SCOPE_EXCLUSIONS,
   annexIV,
   annexIVMarkdown,
   annexVIII,
@@ -511,7 +520,11 @@ export class EuActService implements OnModuleInit {
       annex_iv: ax,
       records: ws.records.map((r) => this.recordView(r)),
       incidents: incs.map((i) => ({ incident_id: i.id, severity: i.severity, status: i.status, detected_at: i.detectedAt, description: i.description.slice(0, 200), eu: i.governanceExt?.euAct ?? null, eu_status: euIncidentStatus(i.governanceExt?.euAct, i, new Date(), facts.roles) })),
-      reference: { serious_classes: SERIOUS_INCIDENT_CLASSES, annex_vi: ANNEX_VI_ITEMS, nonconformity_actions: NONCONFORMITY_ACTIONS, importer_checks: IMPORTER_CHECKS },
+      reference: {
+        serious_classes: SERIOUS_INCIDENT_CLASSES, annex_vi: ANNEX_VI_ITEMS, nonconformity_actions: NONCONFORMITY_ACTIONS, importer_checks: IMPORTER_CHECKS,
+        roles: EU_ROLES, scope_exclusions: SCOPE_EXCLUSIONS, art5_practices: ART5_PRACTICES, annex_iii: ANNEX_III, derogation_conditions: DEROGATION_CONDITIONS,
+        ce_forms: CE_FORMS, marking_methods: MARKING_METHODS, market_statuses: MARKET_STATUSES, application_dates: APPLICATION_DATES, profile_fields: PROFILE_FIELDS,
+      },
     };
   }
 

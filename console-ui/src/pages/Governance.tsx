@@ -14,6 +14,7 @@ import { useSession } from '../stores/session';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
 import { AssuranceTab, AuDtaTab, DatasetsTab, DecisionsTab, FairLendingTab, TrainingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
+import { EuActTab } from './GovernanceEuAct';
 import { DisclosuresTab, EnergyTab, EngagementTab, FederalTab, IntegrationsPanel, SecurityTab, SoaTab, TevvTab } from './GovernancePhase3';
 import {
   DEFAULT_GOVERNANCE_TAB,
@@ -793,6 +794,8 @@ export function Governance() {
           <AccountabilityTab orgId={orgId} />
         ) : active === 'au' ? (
           <AuDtaTab />
+        ) : active === 'eu' ? (
+          <EuActTab />
         ) : active === 'decisions' ? (
           <DecisionsTab />
         ) : active === 'validation' ? (

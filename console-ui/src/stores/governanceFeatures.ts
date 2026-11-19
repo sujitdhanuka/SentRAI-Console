@@ -35,6 +35,7 @@ export interface GovernanceFeatures {
   orgRecords?: boolean;
   federalVendor?: boolean;
   modelCards?: boolean;
+  euAiAct?: boolean;
   [k: string]: boolean | undefined;
 }
 
