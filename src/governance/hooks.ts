@@ -24,6 +24,22 @@ export interface GovernanceHooks {
   extraOrgFacts?: (orgId: string) => Promise<Record<string, any>>;
   /** Resolve a controlled document an evidence artifact points to (E1.8); undefined while the flag is off. */
   evidenceDocument?: (modelId: string, documentId: string) => Promise<{ document_id: string; version: number; hash: string } | undefined>;
+  /** E3.3: a reason the incident cannot be resolved or closed yet (senior sign-off), or null. Undefined while the flag is off. */
+  incidentCloseCheck?: (incidentId: string, toStatus: string) => Promise<string | null>;
+  /**
+   * E3.8: the organisation's policy for sending data to external AI providers.
+   * Undefined (or no hook) means calls are allowed, as before.
+   */
+  externalAiPolicy?: (tenantId: string | null) => Promise<ExternalAiPolicy | undefined>;
+  /** E3.4: a reason a model cannot be moved to DECOMMISSIONED directly (retirement workflow), or null. */
+  retirementCheck?: (modelId: string) => Promise<string | null>;
+}
+
+export interface ExternalAiPolicy {
+  /** ALLOWED: as before. ATTESTED_ONLY: only providers with a current no-training attestation. BLOCKED: local endpoints only. */
+  mode: 'ALLOWED' | 'ATTESTED_ONLY' | 'BLOCKED';
+  /** Provider configuration ids with a current no-training attestation. */
+  attestedProviderIds: string[];
 }
 
 export const governanceHooks: GovernanceHooks = {};
@@ -52,4 +68,20 @@ export function addModelFacts(fn: (modelId: string, orgId: string | null) => Pro
 export function addOrgFacts(fn: (orgId: string) => Promise<Record<string, any> | undefined>): void {
   const prev = governanceHooks.extraOrgFacts;
   governanceHooks.extraOrgFacts = async (orgId) => ({ ...((await prev?.(orgId)) ?? {}), ...((await fn(orgId)) ?? {}) });
+}
+
+/** Chain a transparency-card contributor onto the hook (E1.3/E1.5 residual risks, E3.5 energy). */
+export function addCardFields(fn: (modelId: string) => Promise<Record<string, any> | undefined>): void {
+  const prev = governanceHooks.cardGovernance;
+  governanceHooks.cardGovernance = async (modelId) => {
+    const merged = { ...((await prev?.(modelId)) ?? {}), ...((await fn(modelId)) ?? {}) };
+    return Object.keys(merged).length ? merged : undefined;
+  };
+}
+
+/** Whether an external call to `endpoint` (provider config id `providerId`, null for the platform default) is allowed. */
+export function externalCallAllowed(policy: ExternalAiPolicy | undefined, isLocal: boolean, providerId: string | null): boolean {
+  if (!policy || policy.mode === 'ALLOWED' || isLocal) return true;
+  if (policy.mode === 'BLOCKED') return false;
+  return providerId !== null && policy.attestedProviderIds.includes(providerId);
 }

@@ -54,12 +54,31 @@ export const EPIC_FLAGS = {
   dataRegister: 'GOV_E2_7_DATASETS',
   /** E2.8: pre-deploy red-team gate, red-team-required flag, audit interval, biennial framework review. */
   redTeamAuditRules: 'GOV_E2_8_REDTEAM_AUDIT',
+  /** E3.1: ISO 42001 Statement of Applicability (Annex A), approval and PDF / XLSX export. */
+  soa: 'GOV_E3_1_SOA',
+  /** E3.2: transparency statement, RBI inspection, OMB inventory and Colorado developer disclosures. */
+  disclosures: 'GOV_E3_2_DISCLOSURES',
+  /** E3.3: incident sign-off, affected-party notice, ITSM / SIEM webhooks, CISA playbook, DTA notification. */
+  incidentExtensions: 'GOV_E3_3_INCIDENTS',
+  /** E3.4: test-set register with acceptance criteria, metric reviews, retirement workflow. */
+  tevv: 'GOV_E3_4_TEVV',
+  /** E3.5: energy (kWh) and CO2e per model from GPU power samples. */
+  energy: 'GOV_E3_5_ENERGY',
+  /** E3.6: AI threat models and attack-category security evaluations. */
+  aiSecurity: 'GOV_E3_6_AI_SECURITY',
+  /** E3.7: light organisational records (consultation, expert input, team composition, consent, alternatives). */
+  orgRecords: 'GOV_E3_7_ORG_RECORDS',
+  /** E3.8: federal-vendor readiness: external-AI policy, provider no-training attestations, full data export. */
+  federalVendor: 'GOV_E3_8_FEDERAL_VENDOR',
 } as const;
 
 export type EpicFlag = keyof typeof EPIC_FLAGS;
 
 /** The Phase 2 epics (E2.1 to E2.8). */
 export const PHASE2_FLAGS: readonly EpicFlag[] = ['auPack', 'usKit', 'modelValidation', 'fairLending', 'vendors', 'training', 'dataRegister', 'redTeamAuditRules'];
+
+/** The Phase 3 epics (E3.1 to E3.8). */
+export const PHASE3_FLAGS: readonly EpicFlag[] = ['soa', 'disclosures', 'incidentExtensions', 'tevv', 'energy', 'aiSecurity', 'orgRecords', 'federalVendor'];
 
 export interface FeatureFlags {
   governanceV2: boolean;
@@ -83,6 +102,14 @@ export interface FeatureFlags {
   training: boolean;
   dataRegister: boolean;
   redTeamAuditRules: boolean;
+  soa: boolean;
+  disclosures: boolean;
+  incidentExtensions: boolean;
+  tevv: boolean;
+  energy: boolean;
+  aiSecurity: boolean;
+  orgRecords: boolean;
+  federalVendor: boolean;
 }
 
 function parseBool(v: string | undefined): boolean | undefined {
@@ -115,6 +142,14 @@ export function getFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFl
     training: epic(EPIC_FLAGS.training),
     dataRegister: epic(EPIC_FLAGS.dataRegister),
     redTeamAuditRules: epic(EPIC_FLAGS.redTeamAuditRules),
+    soa: epic(EPIC_FLAGS.soa),
+    disclosures: epic(EPIC_FLAGS.disclosures),
+    incidentExtensions: epic(EPIC_FLAGS.incidentExtensions),
+    tevv: epic(EPIC_FLAGS.tevv),
+    energy: epic(EPIC_FLAGS.energy),
+    aiSecurity: epic(EPIC_FLAGS.aiSecurity),
+    orgRecords: epic(EPIC_FLAGS.orgRecords),
+    federalVendor: epic(EPIC_FLAGS.federalVendor),
   };
 }
 

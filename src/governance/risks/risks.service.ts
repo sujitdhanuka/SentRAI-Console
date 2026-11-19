@@ -35,7 +35,7 @@ import {
 } from '../../database/entities';
 import { AccountabilityService } from '../accountability/accountability.service';
 import { assertFlag, modelForUser } from '../governance-access';
-import { governanceHooks } from '../hooks';
+import { addCardFields, governanceHooks } from '../hooks';
 import { GovernanceSettingsService } from '../settings/settings.service';
 import { gateTierOf, GovernanceSettingsDoc, RISK_CATEGORIES } from '../settings/settings.model';
 import {
@@ -99,7 +99,7 @@ export class RisksService implements OnModuleInit {
       for (const l of this.listeners) await l(modelId, event, detail);
     };
     governanceHooks.gateCheck = async (modelId) => this.gateCheck(modelId);
-    governanceHooks.cardGovernance = async (modelId) => {
+    addCardFields(async (modelId) => {
       const out: Record<string, any> = {};
       if (this.flags.isEnabled('contextProfile')) {
         const m = await this.models.findOne({ where: { id: modelId } });
@@ -111,7 +111,7 @@ export class RisksService implements OnModuleInit {
       }
       if (this.flags.isEnabled('riskRegister')) out.residual_risks = await this.cardRisks(modelId);
       return Object.keys(out).length ? out : undefined;
-    };
+    });
     const prevFacts = governanceHooks.modelGovernanceFacts;
     governanceHooks.modelGovernanceFacts = async (modelId, orgId) => {
       const base = (await prevFacts?.(modelId, orgId)) ?? {};

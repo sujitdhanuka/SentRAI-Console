@@ -1,5 +1,5 @@
-import { emitModelEvent } from '../governance/hooks';
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { emitModelEvent, governanceHooks } from '../governance/hooks';
+import { Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -241,6 +241,11 @@ export class IncidentsService {
 
   async updateStatus(user: CurrentUser, incidentId: string, dto: IncidentStatusUpdateDto) {
     const inc = await this.getOrThrow(user, incidentId);
+    // Governance E3.3: a serious incident needs a senior executive's sign-off before it is resolved or closed.
+    if (dto.status !== inc.status && (dto.status === IncidentStatus.RESOLVED || dto.status === IncidentStatus.CLOSED)) {
+      const blocked = await governanceHooks.incidentCloseCheck?.(inc.id, dto.status);
+      if (blocked) throw new UnprocessableEntityException({ message: blocked, code: 'senior_sign_off_required' });
+    }
 
     inc.status = dto.status;
     inc.updatedAt = new Date();

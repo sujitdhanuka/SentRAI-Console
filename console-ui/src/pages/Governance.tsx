@@ -14,6 +14,7 @@ import { useSession } from '../stores/session';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 import { ActionsTab, AimsTab, DocumentsTab } from './GovernanceAims';
 import { AssuranceTab, AuDtaTab, DatasetsTab, DecisionsTab, FairLendingTab, TrainingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
+import { DisclosuresTab, EnergyTab, EngagementTab, FederalTab, IncidentsExtTab, SecurityTab, SoaTab, TevvTab } from './GovernancePhase3';
 
 /* ------------------------------------------------------------------ types */
 
@@ -646,6 +647,14 @@ const TABS: Tab[] = [
   { id: 'training', label: 'Training', flag: 'training' },
   { id: 'datasets', label: 'Data register', flag: 'dataRegister' },
   { id: 'assurance', label: 'Red team & audit', flag: 'redTeamAuditRules' },
+  { id: 'soa', label: 'Statement of Applicability', flag: 'soa' },
+  { id: 'disclosures', label: 'Disclosures', flag: 'disclosures' },
+  { id: 'incidentExt', label: 'Incident sign-off & ITSM', flag: 'incidentExtensions' },
+  { id: 'tevv', label: 'TEVV & retirement', flag: 'tevv' },
+  { id: 'energy', label: 'Energy', flag: 'energy' },
+  { id: 'security', label: 'AI security', flag: 'aiSecurity' },
+  { id: 'engagement', label: 'Engagement records', flag: 'orgRecords' },
+  { id: 'federal', label: 'External AI & export', flag: 'federalVendor' },
 ];
 
 export function Governance() {
@@ -696,14 +705,14 @@ export function Governance() {
           Working in {scopeOrgName ?? 'the scoped organization'}'s governance, from the selected project scope.
         </div>
       )}
-      <div className="flex shrink-0 gap-1 border-b border-border px-2 pt-1" role="tablist">
+      <div className="flex min-w-0 shrink-0 flex-wrap gap-x-1 border-b border-border px-2 pt-1" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
             role="tab"
             aria-selected={active === t.id}
             onClick={() => setTab(t.id)}
-            className={`rounded-t px-3 py-1.5 text-[11px] ${active === t.id ? 'border border-b-0 border-border bg-surface text-text' : 'text-text-secondary hover:text-text'}`}
+            className={`whitespace-nowrap rounded-t px-3 py-1.5 text-[11px] ${active === t.id ? 'border border-b-0 border-border bg-surface text-text' : 'text-text-secondary hover:text-text'}`}
           >
             {t.label}
           </button>
@@ -765,6 +774,22 @@ export function Governance() {
           <DatasetsTab />
         ) : active === 'assurance' ? (
           <AssuranceTab />
+        ) : active === 'soa' ? (
+          <SoaTab />
+        ) : active === 'disclosures' ? (
+          <DisclosuresTab />
+        ) : active === 'incidentExt' ? (
+          <IncidentsExtTab />
+        ) : active === 'tevv' ? (
+          <TevvTab />
+        ) : active === 'energy' ? (
+          <EnergyTab />
+        ) : active === 'security' ? (
+          <SecurityTab />
+        ) : active === 'engagement' ? (
+          <EngagementTab />
+        ) : active === 'federal' ? (
+          <FederalTab />
         ) : (
           <HistoryTab />
         )}

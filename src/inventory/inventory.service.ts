@@ -688,6 +688,11 @@ export class InventoryService implements OnModuleInit {
         });
       }
     }
+    // Governance E3.4: decommissioning goes through the approved retirement workflow while it is on.
+    if (dto.stage === ModelLifecycleStage.DECOMMISSIONED && orm.lifecycleStage !== ModelLifecycleStage.DECOMMISSIONED) {
+      const blocked = await governanceHooks.retirementCheck?.(modelId);
+      if (blocked) throw new UnprocessableEntityException({ message: blocked, missing_fields: ['retirement — complete the approved retirement workflow'] });
+    }
     const prev = orm.lifecycleStage;
     orm.lifecycleStage = dto.stage;
     orm.updatedAt = new Date();

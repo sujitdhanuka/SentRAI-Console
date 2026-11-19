@@ -2557,10 +2557,16 @@ describe('SentrAI Console (e2e)', () => {
     return { admin, owner, ciso, viewer, orgAdmin, orgId: org.body.organization_id, projectId: project.body.project_id, modelId: model.body.model_id, auth };
   };
 
-  /** Phase 2 epics pinned off, for Phase 1 tests that compare against exact Phase 1 output. */
+  /** Phase 3 epics pinned off, for Phase 1 and Phase 2 tests that compare against exact earlier output. */
+  const PHASE3_OFF = {
+    GOV_E3_1_SOA: 'false', GOV_E3_2_DISCLOSURES: 'false', GOV_E3_3_INCIDENTS: 'false', GOV_E3_4_TEVV: 'false',
+    GOV_E3_5_ENERGY: 'false', GOV_E3_6_AI_SECURITY: 'false', GOV_E3_7_ORG_RECORDS: 'false', GOV_E3_8_FEDERAL_VENDOR: 'false',
+  };
+  /** Phase 2 (and later) epics pinned off, for Phase 1 tests that compare against exact Phase 1 output. */
   const PHASE2_OFF = {
     GOV_E2_1_AU_PACK: 'false', GOV_E2_2_US_KIT: 'false', GOV_E2_3_VALIDATION: 'false', GOV_E2_4_FAIR_LENDING: 'false',
     GOV_E2_5_VENDORS: 'false', GOV_E2_6_TRAINING: 'false', GOV_E2_7_DATASETS: 'false', GOV_E2_8_REDTEAM_AUDIT: 'false',
+    ...PHASE3_OFF,
   };
 
   /** Run `fn` with the given governance env vars, restoring them afterwards. */
@@ -3352,7 +3358,7 @@ describe('SentrAI Console (e2e)', () => {
     const a = await govOrg('AuOrgA');
     const b = await govOrg('AuOrgB');
     const { auth } = a;
-    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+    await withEnv({ GOVERNANCE_V2: 'true', ...PHASE3_OFF }, async () => {
       // Not in force until the organisation opts in.
       const catalogue = (await request(http).get('/api/v1/governance/packs').set(auth(a.owner)).expect(200)).body;
       expect(catalogue.packs.find((p: any) => p.pack_id === 'au-dta')).toMatchObject({ opt_in: true, status: 'ACTIVE' });
@@ -3700,6 +3706,349 @@ describe('SentrAI Console (e2e)', () => {
     });
     await withEnv({ GOVERNANCE_V2: 'true', GOV_E2_8_REDTEAM_AUDIT: 'false' }, async () => {
       await request(http).get(`/api/v1/governance/models/${a.modelId}/assurance`).set(auth(a.viewer)).expect(404);
+    });
+  });
+
+  /* ------------------------------------------------------------------ Phase 3 */
+
+  it('PHASE 3 FLAGS: every Phase 3 route is a 404 while off; the features list keeps its earlier shape; one epic can be switched off', async () => {
+    const a = await govOrg('P3Off');
+    const { auth } = a;
+    const routes = [
+      '/api/v1/governance/soa', '/api/v1/governance/disclosures', '/api/v1/governance/exports/rbi-inspection', `/api/v1/governance/models/${a.modelId}/deployers`,
+      '/api/v1/governance/incidents', '/api/v1/governance/integrations', '/api/v1/governance/tevv', `/api/v1/governance/models/${a.modelId}/test-sets`,
+      `/api/v1/governance/models/${a.modelId}/retirement`, '/api/v1/governance/energy', `/api/v1/governance/models/${a.modelId}/energy`,
+      '/api/v1/governance/security', `/api/v1/governance/models/${a.modelId}/security`, '/api/v1/governance/engagement', '/api/v1/governance/engagement/report',
+      '/api/v1/governance/external-ai', '/api/v1/governance/ai-attestations',
+    ];
+    for (const r of routes) await request(http).get(r).set(auth(a.owner)).expect(404);
+    await request(http).post('/api/v1/governance/org-export').set(auth(a.owner)).send({}).expect(404);
+    await request(http).post(`/api/v1/governance/models/${a.modelId}/threat-model`).set(auth(a.owner)).send({}).expect(404);
+    const f = (await request(http).get('/api/v1/governance/features').set(auth(a.viewer)).expect(200)).body;
+    for (const k of ['soa', 'disclosures', 'incidentExtensions', 'tevv', 'energy', 'aiSecurity', 'orgRecords', 'federalVendor']) expect(k in f).toBe(false);
+    // Settings keys of a switched-off epic are refused, so nothing is stored for it.
+    await withEnv({ GOVERNANCE_V2: 'true', GOV_E3_8_FEDERAL_VENDOR: 'false', GOV_E3_5_ENERGY: 'false' }, async () => {
+      await request(http).get('/api/v1/governance/external-ai').set(auth(a.owner)).expect(404);
+      await request(http).get('/api/v1/governance/soa').set(auth(a.owner)).expect(200);
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { externalAi: { mode: 'BLOCKED' } }, reason: 'Federal contract terms' }).expect(400);
+      const g = (await request(http).get('/api/v1/governance/features').set(auth(a.viewer)).expect(200)).body;
+      expect(g).toMatchObject({ soa: true, federalVendor: false, energy: false });
+    });
+    // A serious incident still closes as before while E3.3 is off.
+    const inc = (await request(http).post('/api/v1/compliance/incident/report').set(auth(a.owner)).send({
+      model_id: a.modelId, model_name: 'P3Off Credit', re_name: 'RE', functional_area: 'credit_underwriting', incident_category: 'BIAS_DISCRIMINATION',
+      severity: 'P1_CRITICAL', description: 'Biased denials for a protected segment observed in the weekly review', observed_at: '2026-07-11T06:00:00Z',
+      detected_at: '2026-07-11T06:30:00Z', model_risk_level: 'HIGH', immediate_action_taken: 'Suspended the model pending review',
+    }).expect(201)).body;
+    await request(http).patch(`/api/v1/compliance/incident/${inc.incident_id}/status`).set(auth(a.owner)).send({ status: 'CLOSED' }).expect(200);
+  });
+
+  it('E3.1 SOA: all 38 Annex A controls, officer-only edits with exclusion justification, approval versions, PDF and XLSX export, tenant isolation', async () => {
+    const a = await govOrg('SoaOrgA');
+    const b = await govOrg('SoaOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const S = '/api/v1/governance/soa';
+      const soa = (await request(http).get(S).set(auth(a.viewer)).expect(200)).body;
+      expect(soa.rows).toHaveLength(38);
+      expect(soa.summary.controls).toBe(38);
+      expect(soa.approved).toBeNull();
+      await request(http).put(`${S}/A.10.4`).set(auth(a.viewer)).send({ included: false, justification: 'No customers receive AI systems from us' }).expect(403);
+      await request(http).put(`${S}/A.10.4`).set(auth(a.owner)).send({ included: false, justification: 'short' }).expect(400);
+      await request(http).put(`${S}/A.99`).set(auth(a.owner)).send({ included: true }).expect(404);
+      const r = (await request(http).put(`${S}/A.10.4`).set(auth(a.owner)).send({ included: false, justification: 'No customers receive AI systems from us' }).expect(200)).body;
+      expect(r).toMatchObject({ ref: 'A.10.4', included: false, status: 'NOT_APPLICABLE' });
+      // A manual status fills a gap only.
+      await request(http).put(`${S}/A.3.3`).set(auth(a.owner)).send({ manual_status: 'IMPLEMENTED', manual_note: 'Whistle-blower line' }).expect(200);
+      const ap = (await request(http).post(`${S}/approve`).set(auth(a.ciso)).send({ note: 'Annual approval' }).expect(201)).body;
+      expect(ap.version).toBe(1);
+      const v = (await request(http).get(`${S}/versions`).set(auth(a.viewer)).expect(200)).body;
+      expect(v.versions).toHaveLength(1);
+      expect((await request(http).get(S).set(auth(a.viewer)).expect(200)).body.approved.changed_since).toBe(false);
+      const pdf = await request(http).get(`${S}/export?format=pdf`).set(auth(a.viewer)).buffer(true).parse((res, cb) => { const c: Buffer[] = []; res.on('data', (x: Buffer) => c.push(x)); res.on('end', () => cb(null, Buffer.concat(c))); }).expect(200);
+      expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+      const xlsx = await request(http).get(`${S}/export?format=xlsx&version=1`).set(auth(a.viewer)).buffer(true).parse((res, cb) => { const c: Buffer[] = []; res.on('data', (x: Buffer) => c.push(x)); res.on('end', () => cb(null, Buffer.concat(c))); }).expect(200);
+      expect((xlsx.body as Buffer).subarray(0, 2).toString()).toBe('PK');
+      // Org B sees its own, untouched SoA and cannot read A's versions.
+      const sb = (await request(http).get(S).set(auth(b.owner)).expect(200)).body;
+      expect(sb.rows.find((x: any) => x.ref === 'A.10.4').included).toBe(true);
+      expect(sb.approved).toBeNull();
+      await request(http).get(`${S}/versions/1`).set(auth(b.owner)).expect(404);
+    });
+  });
+
+  it('E3.2 DISCLOSURES: transparency statement gaps and publication, developer disclosure with deployers, update notices on material change, regulator exports, isolation', async () => {
+    const a = await govOrg('DiscOrgA');
+    const b = await govOrg('DiscOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const D = '/api/v1/governance/disclosures';
+      await request(http).post(D).set(auth(a.viewer)).send({ kind: 'TRANSPARENCY_STATEMENT' }).expect(403);
+      const ts = (await request(http).post(D).set(auth(a.owner)).send({ kind: 'TRANSPARENCY_STATEMENT' }).expect(201)).body;
+      expect(ts.status).toBe('DRAFT');
+      expect(ts.gaps).toEqual(expect.arrayContaining(['intentions', 'contact']));
+      await request(http).post(`${D}/${ts.disclosure_id}/publish`).set(auth(a.ciso)).send({}).expect(400);
+      const narrative = { intentions: 'We use AI to speed up credit decisions.', monitoring: 'Monthly drift and fairness review.', compliance: 'RBI FREE-AI and ISO 42001.', contact: 'ai-governance@example.com' };
+      await request(http).patch(`${D}/${ts.disclosure_id}`).set(auth(a.owner)).send({ narrative }).expect(200);
+      await request(http).post(`${D}/${ts.disclosure_id}/publish`).set(auth(a.owner)).send({ public_url: 'http://insecure' }).expect(400);
+      const pub = (await request(http).post(`${D}/${ts.disclosure_id}/publish`).set(auth(a.owner)).send({ public_url: 'https://example.com/ai' }).expect(200)).body;
+      expect(pub.status).toBe('PUBLISHED');
+      expect(pub.review_due_at).toBeTruthy();
+      await request(http).patch(`${D}/${ts.disclosure_id}`).set(auth(a.owner)).send({ narrative }).expect(400);
+      await request(http).get(`${D}/${ts.disclosure_id}`).set(auth(b.owner)).expect(404);
+
+      // Developer disclosure: deployers are notified of material updates.
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/deployers`).set(auth(b.owner)).send({ name: 'Bank B' }).expect(404);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/deployers`).set(auth(a.owner)).send({ name: 'Partner Bank', contact: 'risk@partner.example' }).expect(201);
+      const dev = (await request(http).post(D).set(auth(a.owner)).send({ kind: 'CO_DEVELOPER', model_id: a.modelId }).expect(201)).body;
+      expect(dev.content.deployers).toEqual(['Partner Bank']);
+      expect(dev.gaps).toEqual(expect.arrayContaining(['known limitations']));
+      await request(http).post(D).set(auth(b.owner)).send({ kind: 'CO_DEVELOPER', model_id: a.modelId }).expect(404);
+      const exp = await request(http).get(`${D}/${dev.disclosure_id}/export?format=json`).set(auth(a.viewer)).expect(200);
+      expect(JSON.parse(exp.text).content.system.id).toBe(a.modelId);
+
+      // Regulator exports.
+      const rbi = (await request(http).get('/api/v1/governance/exports/rbi-inspection').set(auth(a.viewer)).expect(200)).body;
+      expect(rbi.rows.map((r: any) => r.model_id ?? r.id)).toContain(a.modelId);
+      const csv = await request(http).get('/api/v1/governance/exports/omb-inventory?format=csv').set(auth(a.viewer)).expect(200);
+      expect(csv.text).toContain('DiscOrgA Credit');
+      expect(csv.text).not.toContain('DiscOrgB Credit');
+    });
+  });
+
+  it('E3.3 INCIDENTS: P1 close needs senior sign-off and notice, ticket link, playbook, integrations with https-only URLs and encrypted secrets, isolation', async () => {
+    const a = await govOrg('IncOrgA');
+    const b = await govOrg('IncOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const inc = (await request(http).post('/api/v1/compliance/incident/report').set(auth(a.owner)).send({
+        model_id: a.modelId, model_name: 'IncOrgA Credit', re_name: 'RE', functional_area: 'credit_underwriting', incident_category: 'BIAS_DISCRIMINATION',
+        severity: 'P1_CRITICAL', description: 'Biased denials for a protected segment observed in the weekly review', observed_at: '2026-07-11T06:00:00Z',
+        detected_at: '2026-07-11T06:30:00Z', model_risk_level: 'HIGH', immediate_action_taken: 'Suspended the model pending review',
+        affected_consumers: { count: 40, harm_type: 'credit denial' },
+      }).expect(201)).body;
+      const id = inc.incident_id;
+      const I = `/api/v1/governance/incidents/${id}`;
+      const blocked = await request(http).patch(`/api/v1/compliance/incident/${id}/status`).set(auth(a.owner)).send({ status: 'RESOLVED' }).expect(422);
+      expect(blocked.body.code).toBe('senior_sign_off_required');
+      await request(http).post(`${I}/sign-off`).set(auth(a.viewer)).send({ note: 'Reviewed the remediation plan' }).expect(403);
+      await request(http).post(`${I}/sign-off`).set(auth(b.owner)).send({ note: 'Reviewed the remediation plan' }).expect(404);
+      await request(http).post(`${I}/sign-off`).set(auth(a.ciso)).send({ note: 'short' }).expect(400);
+      const so = (await request(http).post(`${I}/sign-off`).set(auth(a.ciso)).send({ note: 'Reviewed the remediation plan' }).expect(200)).body;
+      expect(so.senior_sign_off.by).toMatch(/ciso@/);
+      // Still blocked until the affected people are told.
+      expect((await request(http).patch(`/api/v1/compliance/incident/${id}/status`).set(auth(a.owner)).send({ status: 'RESOLVED' }).expect(422)).body.message).toMatch(/notice/);
+      await request(http).post(`${I}/affected-notice`).set(auth(a.owner)).send({ channel: 'EMAIL', people_notified: 40, summary: 'Letters sent with the re-decision offer' }).expect(200);
+      await request(http).post(`${I}/external-ticket`).set(auth(a.owner)).send({ ref: 'INC0012345' }).expect(200);
+      await request(http).post(`${I}/playbook`).set(auth(a.owner)).send({ phase: 'CONTAINMENT', done: true, note: 'Model suspended' }).expect(200);
+      await request(http).patch(`/api/v1/compliance/incident/${id}/status`).set(auth(a.owner)).send({ status: 'RESOLVED' }).expect(200);
+      const ext = (await request(http).get(`${I}/extensions`).set(auth(a.viewer)).expect(200)).body;
+      expect(ext).toMatchObject({ external_ticket_ref: 'INC0012345', close_blocker: null });
+      expect(ext.cisa.phases.find((p: any) => p.phase === 'CONTAINMENT').done).toBe(true);
+      // A low-severity incident is unaffected.
+      const low = (await request(http).post('/api/v1/compliance/incident/report').set(auth(a.owner)).send({
+        model_id: a.modelId, model_name: 'IncOrgA Credit', re_name: 'RE', functional_area: 'credit_underwriting', incident_category: 'MODEL_DRIFT',
+        severity: 'P4_LOW', description: 'Mild population-stability shift flagged in the routine drift review', observed_at: '2026-07-11T06:00:00Z',
+        detected_at: '2026-07-11T06:30:00Z', model_risk_level: 'LOW', immediate_action_taken: 'Retrained on the extended window',
+      }).expect(201)).body;
+      await request(http).patch(`/api/v1/compliance/incident/${low.incident_id}/status`).set(auth(a.owner)).send({ status: 'CLOSED' }).expect(200);
+
+      // Integrations: officers only, https only, no private hosts, secrets never returned.
+      const G = '/api/v1/governance/integrations';
+      await request(http).get(G).set(auth(a.viewer)).expect(403);
+      await request(http).post(G).set(auth(a.owner)).send({ kind: 'WEBHOOK', url: 'http://hooks.example.com/x', events: ['DRIFT_ALERT'] }).expect(400);
+      await request(http).post(G).set(auth(a.owner)).send({ kind: 'WEBHOOK', url: 'https://169.254.169.254/latest', events: ['DRIFT_ALERT'] }).expect(400);
+      const hook = (await request(http).post(G).set(auth(a.owner)).send({ kind: 'SIEM', label: 'SOC', url: 'https://soc.example.com/ingest', secret: 'top-secret-hmac', events: ['DRIFT_ALERT'] }).expect(201)).body;
+      expect(JSON.stringify(hook)).not.toContain('top-secret-hmac');
+      expect((await request(http).get(G).set(auth(b.owner)).expect(200)).body.integrations).toHaveLength(0);
+      await request(http).patch(`${G}/${hook.integration_id}`).set(auth(b.owner)).send({ enabled: false }).expect(404);
+    });
+  });
+
+  it('E3.4 TEVV: test sets with acceptance criteria, failing runs, metric review, retirement approved by someone else with a checklist and ledger record', async () => {
+    const a = await govOrg('TevvOrgA');
+    const b = await govOrg('TevvOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const T = `/api/v1/governance/models/${a.modelId}/test-sets`;
+      await request(http).post(T).set(auth(a.viewer)).send({ name: 'Holdout 2026', criteria: [{ metric: 'auc', operator: '>=', threshold: 0.8 }] }).expect(403);
+      await request(http).post(T).set(auth(b.owner)).send({ name: 'Holdout 2026', criteria: [{ metric: 'auc', operator: '>=', threshold: 0.8 }] }).expect(404);
+      await request(http).post(T).set(auth(a.owner)).send({ name: 'Holdout 2026', criteria: [{ metric: 'auc', operator: '>', threshold: 0.8 }] }).expect(400);
+      const set = (await request(http).post(T).set(auth(a.owner)).send({ name: 'Holdout 2026', purpose: 'ACCEPTANCE', criteria: [{ metric: 'auc', operator: '>=', threshold: 0.8 }, { metric: 'fpr', operator: '<=', threshold: 0.1, segment: '*' }] }).expect(201)).body;
+      const run = (await request(http).post(`/api/v1/governance/test-sets/${set.test_set_id}/runs`).set(auth(a.owner))
+        .send({ results: [{ metric: 'auc', value: 0.84 }, { metric: 'fpr', value: 0.2, segment: 'rural' }], report_ref: 'VAL-2026-04' }).expect(201)).body;
+      expect(run.passed).toBe(false);
+      expect(run.failures).toEqual([expect.objectContaining({ metric: 'fpr', segment: 'rural', reason: 'above' })]);
+      const ev = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).expect(200)).body;
+      expect(JSON.stringify(ev)).toContain('VAL-2026-04');
+      // Changing acceptance criteria needs a reason.
+      await request(http).patch(`/api/v1/governance/test-sets/${set.test_set_id}`).set(auth(a.owner)).send({ criteria: [{ metric: 'auc', operator: '>=', threshold: 0.7 }] }).expect(400);
+      await request(http).post(`/api/v1/governance/test-sets/${set.test_set_id}/review`).set(auth(a.owner)).send({ effective: true, note: 'AUC and FPR still the right gates' }).expect(200);
+      const ctl = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.viewer)).expect(200)).body;
+      expect(ctl.controls.find((c: any) => c.control_id === 'CTL-TEVV-01').status).toBe('FAIL');
+
+      // Retirement: a direct DECOMMISSIONED move is refused while the workflow is on.
+      await request(http).patch(`/api/v1/inventory/models/${a.modelId}/lifecycle`).set(auth(a.owner)).send({ stage: 'DECOMMISSIONED', actor: 'e2e' }).expect(422);
+      const R = `/api/v1/governance/models/${a.modelId}/retirement`;
+      const ret = (await request(http).post(R).set(auth(a.owner)).send({ reason: 'Replaced by the 2027 scorecard' }).expect(201)).body;
+      await request(http).post(`/api/v1/governance/retirements/${ret.retirement_id}/decide`).set(auth(a.owner)).send({ decision: 'APPROVED', note: 'Approved' }).expect(403);
+      await request(http).post(`/api/v1/governance/retirements/${ret.retirement_id}/decide`).set(auth(b.ciso)).send({ decision: 'APPROVED', note: 'Approved' }).expect(404);
+      await request(http).post(`/api/v1/governance/retirements/${ret.retirement_id}/decide`).set(auth(a.ciso)).send({ decision: 'APPROVED', note: 'Approved by CISO' }).expect(200);
+      await request(http).post(`/api/v1/governance/retirements/${ret.retirement_id}/complete`).set(auth(a.ciso)).expect(400);
+      for (const key of ['DATA_RETENTION', 'DEPENDANTS', 'USER_NOTICE', 'REPLACEMENT', 'ACCESS_REVOKED', 'RECORDS_ARCHIVED']) {
+        await request(http).post(`/api/v1/governance/retirements/${ret.retirement_id}/checklist`).set(auth(a.owner)).send({ key, done: true, note: `${key} handled` }).expect(200);
+      }
+      const done = (await request(http).post(`/api/v1/governance/retirements/${ret.retirement_id}/complete`).set(auth(a.ciso)).expect(200)).body;
+      expect(done.status).toBe('COMPLETED');
+      const m = (await request(http).get(`/api/v1/inventory/models/${a.modelId}`).set(auth(a.owner)).expect(200)).body;
+      expect(m.lifecycle_stage).toBe('DECOMMISSIONED');
+    });
+  });
+
+  it('E3.5 ENERGY: GPU samples to kWh and CO2e with the jurisdiction factor, overlap refused, model totals and card, isolation', async () => {
+    const a = await govOrg('EnOrgA');
+    const b = await govOrg('EnOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const E = `/api/v1/governance/models/${a.modelId}/energy`;
+      const t0 = Date.parse('2026-10-01T00:00:00Z');
+      const samples = Array.from({ length: 61 }, (_, m) => ({ at: new Date(t0 + m * 60_000).toISOString(), power_w: 1000 }));
+      await request(http).post(E).set(auth(a.viewer)).send({ source: 'SAMPLES', samples }).expect(403);
+      await request(http).post(E).set(auth(b.owner)).send({ source: 'SAMPLES', samples }).expect(404);
+      const r = (await request(http).post(E).set(auth(a.owner)).send({ source: 'SAMPLES', samples }).expect(201)).body;
+      expect(r.kwh).toBeCloseTo(1, 6);
+      expect(r.co2e_kg).toBeCloseTo(r.grid_factor, 6);
+      await request(http).post(E).set(auth(a.owner)).send({ source: 'SAMPLES', samples }).expect(400);
+      await request(http).post(E).set(auth(a.owner)).send({ source: 'METERED', kwh: 5, period_start: '2026-10-02T00:00:00Z', period_end: '2026-10-03T00:00:00Z', grid_factor: 0.5 }).expect(201);
+      const m = (await request(http).get(E).set(auth(a.viewer)).expect(200)).body;
+      expect(m.kwh).toBeCloseTo(6, 6);
+      expect(m.readings).toHaveLength(2);
+      const ov = (await request(http).get('/api/v1/governance/energy').set(auth(b.owner)).expect(200)).body;
+      expect(ov.totals.kwh).toBe(0);
+    });
+  });
+
+  it('E3.6 AI SECURITY: threat model from the template, approval by another officer raises SECURITY risks, evaluations as evidence, control, isolation', async () => {
+    const a = await govOrg('SecOrgA');
+    const b = await govOrg('SecOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const tpl = (await request(http).get('/api/v1/governance/security/template').set(auth(a.viewer)).expect(200)).body;
+      expect(tpl.categories.length).toBeGreaterThanOrEqual(10);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/threat-model`).set(auth(a.viewer)).expect(403);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/threat-model`).set(auth(b.owner)).expect(404);
+      const tm = (await request(http).post(`/api/v1/governance/models/${a.modelId}/threat-model`).set(auth(a.owner)).expect(201)).body;
+      expect(tm).toMatchObject({ version: 1, status: 'DRAFT' });
+      expect(tm.threats.find((t: any) => t.category === 'PROMPT_INJECTION').applicable).toBe(false);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/threat-model`).set(auth(a.owner)).expect(400);
+      await request(http).post(`/api/v1/governance/threat-models/${tm.threat_model_id}/approve`).set(auth(a.ciso)).expect(400);
+      const edits = tm.threats.map((t: any) => (t.applicable ? { category: t.category, likelihood: 2, impact: 4, mitigations: 'Input validation, rate limits, monitoring' } : { category: t.category, rationale: 'Not a generative system' }));
+      await request(http).put(`/api/v1/governance/threat-models/${tm.threat_model_id}`).set(auth(b.owner)).send({ threats: edits }).expect(404);
+      await request(http).put(`/api/v1/governance/threat-models/${tm.threat_model_id}`).set(auth(a.owner)).send({ threats: edits }).expect(200);
+      // The author cannot approve their own threat model.
+      await request(http).post(`/api/v1/governance/threat-models/${tm.threat_model_id}/approve`).set(auth(a.owner)).expect(403);
+      const ap = (await request(http).post(`/api/v1/governance/threat-models/${tm.threat_model_id}/approve`).set(auth(a.ciso)).expect(200)).body;
+      expect(ap.status).toBe('APPROVED');
+      const applicable = ap.threats.filter((t: any) => t.applicable);
+      expect(ap.risks_raised).toBe(applicable.length);
+      expect(applicable.every((t: any) => t.risk_id)).toBe(true);
+      const risks = (await request(http).get('/api/v1/governance/risks').set(auth(a.viewer)).expect(200)).body;
+      expect(JSON.stringify(risks)).toContain('AI threat:');
+      let ctl = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.viewer)).expect(200)).body;
+      expect(ctl.controls.find((c: any) => c.control_id === 'CTL-SEC-AI-01').status).toBe('FAIL');
+      // Evaluate every applicable category.
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/security-evals`).set(auth(a.owner)).send({ ref: 'PENTEST-1', categories: [{ category: 'EVASION', result: 'FAIL' }] }).expect(400);
+      await request(http).post(`/api/v1/governance/models/${a.modelId}/security-evals`).set(auth(a.owner))
+        .send({ ref: 'PENTEST-2026-11', evaluator: 'External lab', categories: applicable.map((t: any) => ({ category: t.category, result: 'PASS' })) }).expect(201);
+      ctl = (await request(http).get(`/api/v1/governance/models/${a.modelId}/controls`).set(auth(a.viewer)).expect(200)).body;
+      expect(ctl.controls.find((c: any) => c.control_id === 'CTL-SEC-AI-01').status).toBe('PASS');
+      const ev = (await request(http).get(`/api/v1/inventory/models/${a.modelId}/evidence`).set(auth(a.owner)).expect(200)).body;
+      expect(JSON.stringify(ev)).toContain('PENTEST-2026-11');
+      await request(http).get(`/api/v1/governance/models/${a.modelId}/security`).set(auth(b.owner)).expect(404);
+    });
+  });
+
+  it('E3.7 ENGAGEMENT: records per people-side item, customer-owned items refused and reported, human-subject consent, report in both modes, isolation', async () => {
+    const a = await govOrg('EngOrgA');
+    const b = await govOrg('EngOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const E = '/api/v1/governance/engagement';
+      const base = { title: 'Branch customer panel', participants: ['Branch customers, Pune', { role: 'Credit SME', count: 2 }], summary: 'Discussed the reasons shown on credit decisions.' };
+      // stakeholder_panels defaults to customer responsibility.
+      await request(http).post(E).set(auth(a.owner)).send({ type: 'CONSULTATION', ...base }).expect(409);
+      let rep = (await request(http).get(`${E}/report`).set(auth(a.viewer)).expect(200)).body;
+      expect(rep.items.stakeholder_panels).toMatchObject({ mode: 'CUSTOMER', status: 'NO_OWNER' });
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({
+        settings: { peopleItems: { stakeholder_panels: { mode: 'LIGHT_RECORD' }, team_diversity: { mode: 'CUSTOMER', owner: 'Customer HR' } } }, reason: 'Keep panel records in SentrAI',
+      }).expect(200);
+      await request(http).post(E).set(auth(a.viewer)).send({ type: 'CONSULTATION', ...base }).expect(403);
+      await request(http).post(E).set(auth(a.owner)).send({ type: 'HUMAN_SUBJECT', ...base }).expect(400);
+      await request(http).post(E).set(auth(a.owner)).send({ type: 'NON_AI_ALTERNATIVE', ...base }).expect(400);
+      await request(http).post(E).set(auth(a.owner)).send({ type: 'NON_AI_ALTERNATIVE', model_id: a.modelId, ...base }).expect(201);
+      await request(http).post(E).set(auth(b.owner)).send({ type: 'NON_AI_ALTERNATIVE', model_id: a.modelId, ...base }).expect(404);
+      const rec = (await request(http).post(E).set(auth(a.owner)).send({ type: 'CONSULTATION', ...base }).expect(201)).body;
+      await request(http).post(E).set(auth(a.owner)).send({ type: 'HUMAN_SUBJECT', consent_ref: 'ETHICS-2026-3', ...base }).expect(201);
+      rep = (await request(http).get(`${E}/report`).set(auth(a.viewer)).expect(200)).body;
+      expect(rep.items.stakeholder_panels).toMatchObject({ mode: 'LIGHT_RECORD', status: 'RECORDED', records: 1 });
+      expect(rep.items.team_diversity).toMatchObject({ mode: 'CUSTOMER', status: 'CUSTOMER_OWNED', owner: 'Customer HR' });
+      expect(rep.records_by_type).toMatchObject({ CONSULTATION: 1, HUMAN_SUBJECT: 1, NON_AI_ALTERNATIVE: 1 });
+      await request(http).get(`${E}/${rec.record_id}`).set(auth(b.owner)).expect(404);
+      expect((await request(http).get(E).set(auth(b.owner)).expect(200)).body.records).toHaveLength(0);
+    });
+  });
+
+  it('E3.8 FEDERAL VENDOR: external-AI policy refuses unattested providers, attestations by officers, full org export without secrets, isolation', async () => {
+    const a = await govOrg('FedOrgA');
+    const b = await govOrg('FedOrgB');
+    const { auth } = a;
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const ext = (await request(http).post('/api/v1/ai/providers').set(auth(a.owner))
+        .send({ label: 'Hosted LLM', adapter: 'openai-compat', base_url: 'https://llm.example.com/v1', model: 'm-1', api_key: 'sk-federal-secret-123' }).expect(201)).body;
+      const local = (await request(http).post('/api/v1/ai/providers').set(auth(a.owner))
+        .send({ label: 'On-box', adapter: 'openai-compat', base_url: 'http://127.0.0.1:9/v1', model: 'm-2' }).expect(201)).body;
+      let pol = (await request(http).get('/api/v1/governance/external-ai').set(auth(a.viewer)).expect(200)).body;
+      expect(pol.mode).toBe('ALLOWED');
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { externalAi: { mode: 'NOPE' } }, reason: 'Federal contract terms' }).expect(422);
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { externalAi: { mode: 'ATTESTED_ONLY' } }, reason: 'Federal contract terms' }).expect(200);
+      pol = (await request(http).get('/api/v1/governance/external-ai').set(auth(a.viewer)).expect(200)).body;
+      expect(pol.providers.find((p: any) => p.provider_id === ext.provider_id)).toMatchObject({ local: false, attested: false, allowed: false });
+      expect(pol.providers.find((p: any) => p.provider_id === local.provider_id)).toMatchObject({ local: true, allowed: true });
+      // The connection test is refused before any data leaves.
+      await request(http).post(`/api/v1/ai/providers/${ext.provider_id}/test`).set(auth(a.owner)).expect(403);
+      // Attestations: officers only, own providers only.
+      await request(http).post('/api/v1/governance/ai-attestations').set(auth(a.viewer)).send({ provider_id: ext.provider_id, no_training: true, reference: 'Contract clause 12.3' }).expect(403);
+      await request(http).post('/api/v1/governance/ai-attestations').set(auth(b.owner)).send({ provider_id: ext.provider_id, no_training: true, reference: 'Contract clause 12.3' }).expect(400);
+      const att = (await request(http).post('/api/v1/governance/ai-attestations').set(auth(a.owner)).send({ provider_id: ext.provider_id, no_training: true, retention_days: 0, reference: 'Contract clause 12.3' }).expect(201)).body;
+      expect(att.status).toBe('CURRENT');
+      pol = (await request(http).get('/api/v1/governance/external-ai').set(auth(a.viewer)).expect(200)).body;
+      expect(pol.providers.find((p: any) => p.provider_id === ext.provider_id)).toMatchObject({ attested: true, allowed: true });
+      await request(http).post(`/api/v1/governance/ai-attestations/${att.attestation_id}/revoke`).set(auth(b.owner)).expect(404);
+      await request(http).post(`/api/v1/governance/ai-attestations/${att.attestation_id}/revoke`).set(auth(a.ciso)).expect(200);
+      await request(http).put('/api/v1/governance/settings').set(auth(a.owner)).send({ settings: { externalAi: { mode: 'BLOCKED' } }, reason: 'Local endpoints only' }).expect(200);
+      await request(http).post(`/api/v1/ai/providers/${ext.provider_id}/test`).set(auth(a.owner)).expect(403);
+      // Org B is unaffected by A's policy.
+      expect((await request(http).get('/api/v1/governance/external-ai').set(auth(b.viewer)).expect(200)).body.mode).toBe('ALLOWED');
+
+      // Full org export: officers only, audited, no secrets, nothing from org B.
+      await request(http).post('/api/v1/governance/org-export').set(auth(a.viewer)).send({}).expect(403);
+      const zipRes = await request(http).post('/api/v1/governance/org-export').set(auth(a.owner)).send({}).buffer(true)
+        .parse((res, cb) => { const c: Buffer[] = []; res.on('data', (x: Buffer) => c.push(x)); res.on('end', () => cb(null, Buffer.concat(c))); }).expect(200);
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const AdmZip = require('adm-zip');
+      const zip = new AdmZip(zipRes.body as Buffer);
+      const names = zip.getEntries().map((e: any) => e.entryName);
+      expect(names).toEqual(expect.arrayContaining(['manifest.json', 'users.json', 'ai_models.json', 'ai_provider_configs.json']));
+      const all = zip.getEntries().map((e: any) => e.getData().toString('utf8')).join('\n');
+      expect(all).toContain('FedOrgA Credit');
+      expect(all).not.toContain('FedOrgB');
+      expect(all).not.toContain('hashedPassword');
+      expect(all).not.toContain('apiKeyEncrypted');
+      expect(all).not.toContain('sk-federal-secret-123');
+      const manifest = JSON.parse(zip.getEntry('manifest.json').getData().toString('utf8'));
+      expect(manifest.secrets_removed).toBe(true);
+      const audit = (await request(http).get('/api/v1/audit/events?limit=20').set(auth(a.admin)).expect(200)).body;
+      expect(JSON.stringify(audit)).toContain('org_data_exported');
     });
   });
 });

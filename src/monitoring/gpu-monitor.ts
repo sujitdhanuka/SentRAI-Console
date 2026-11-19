@@ -44,3 +44,29 @@ export function getGpuUtilization(): GpuStat[] {
   // Never fabricate hardware: no nvidia-smi means no GPUs to report.
   return [];
 }
+
+export interface GpuPowerSample {
+  gpu_id: number;
+  power_w: number;
+  at: string;
+}
+
+/**
+ * Current power draw per GPU from nvidia-smi (governance E3.5). Empty on
+ * hosts without GPU tooling: real readings or nothing.
+ */
+export function getGpuPower(): GpuPowerSample[] {
+  try {
+    const out = execFileSync('nvidia-smi', ['--query-gpu=index,power.draw', '--format=csv,noheader,nounits'], { encoding: 'utf-8' });
+    const at = new Date().toISOString();
+    return out
+      .trim()
+      .split('\n')
+      .filter((l) => l.trim())
+      .map((l) => l.split(',').map((s) => s.trim()))
+      .filter((p) => Number.isFinite(parseFloat(p[1])))
+      .map((p) => ({ gpu_id: parseInt(p[0], 10), power_w: parseFloat(p[1]), at }));
+  } catch {
+    return [];
+  }
+}

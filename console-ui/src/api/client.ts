@@ -60,8 +60,10 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
 }
 
 /** Authenticated file download → object URL (PDF exports). */
-export async function apiBlobUrl(path: string): Promise<string> {
-  const res = await fetch(`${API}${path}`, { headers: authHeader() });
+export async function apiBlobUrl(path: string, method: 'GET' | 'POST' = 'GET'): Promise<string> {
+  const res = await fetch(`${API}${path}`, method === 'POST'
+    ? { method, headers: { ...authHeader(), 'Content-Type': 'application/json' }, body: '{}' }
+    : { headers: authHeader() });
   if (!res.ok) throw new ApiError(await readError(res), res.status);
   return URL.createObjectURL(await res.blob());
 }

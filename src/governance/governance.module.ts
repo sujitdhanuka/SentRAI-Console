@@ -35,6 +35,22 @@ import {
   TrainingRecordEntity,
   DatasetEntity,
   ModelDatasetEntity,
+  AiProviderAttestationEntity,
+  AiProviderConfigEntity,
+  BcpStateEntity,
+  DisclosureEntity,
+  EnergyReadingEntity,
+  EngagementRecordEntity,
+  IntegrationDeliveryEntity,
+  IntegrationEndpointEntity,
+  ModelDeployerEntity,
+  ModelRetirementEntity,
+  SecurityEvaluationEntity,
+  SoaEntryEntity,
+  SoaStatementEntity,
+  TestSetEntity,
+  TevvRunEntity,
+  ThreatModelEntity,
 } from '../database/entities';
 import { ComplianceModule } from '../compliance/compliance.module';
 import { NotifierService } from '../common/notifier.service';
@@ -75,6 +91,22 @@ import { DatasetsController } from './datasets/datasets.controller';
 import { DatasetsService } from './datasets/datasets.service';
 import { RedTeamAuditController } from './redteam/redteam-audit.controller';
 import { RedTeamAuditService } from './redteam/redteam-audit.service';
+import { SoaController } from './soa/soa.controller';
+import { SoaService } from './soa/soa.service';
+import { DisclosuresController } from './disclosures/disclosures.controller';
+import { DisclosuresService } from './disclosures/disclosures.service';
+import { IncidentExtensionsController } from './incidents/incident-ext.controller';
+import { IncidentExtensionsService } from './incidents/incident-ext.service';
+import { TevvController } from './tevv/tevv.controller';
+import { TevvService } from './tevv/tevv.service';
+import { EnergyController } from './energy/energy.controller';
+import { EnergyService } from './energy/energy.service';
+import { AiSecurityController } from './security/ai-security.controller';
+import { AiSecurityService } from './security/ai-security.service';
+import { EngagementController } from './engagement/engagement.controller';
+import { EngagementService } from './engagement/engagement.service';
+import { FederalVendorController } from './federal/federal.controller';
+import { FederalVendorService } from './federal/federal.service';
 
 /**
  * Governance module (plan section 3): everything shared across frameworks.
@@ -84,7 +116,10 @@ import { RedTeamAuditService } from './redteam/redteam-audit.service';
  * control; E1.9 accountability. Phase 2: E2.1 Australia DTA register; E2.2
  * US decisions, notices and appeals; E2.3 model validation; E2.4 fair
  * lending; E2.5 vendors and AI BOM; E2.6 training; E2.7 data register; E2.8
- * red-team and audit rules. Each Phase 2 route answers 404 while its flag is off.
+ * red-team and audit rules. Phase 3: E3.1 Statement of Applicability; E3.2
+ * disclosures; E3.3 incident extensions; E3.4 TEVV and retirement; E3.5
+ * energy; E3.6 AI security; E3.7 engagement records; E3.8 federal vendor.
+ * Each Phase 2 and Phase 3 route answers 404 while its flag is off.
  */
 @Module({
   imports: [
@@ -96,6 +131,8 @@ import { RedTeamAuditService } from './redteam/redteam-audit.service';
       ExplainabilityRecordEntity, RegulatorySubmissionEntity, AdverseActionNoticeEntity, DecisionAppealEntity,
       ModelValidationEntity, VendorEntity, VendorAssessmentEntity, AiBomItemEntity, TrainingCourseEntity,
       TrainingRecordEntity, DatasetEntity, ModelDatasetEntity,
+      AiProviderAttestationEntity, AiProviderConfigEntity, BcpStateEntity, DisclosureEntity, EnergyReadingEntity, EngagementRecordEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity,
+      ModelDeployerEntity, ModelRetirementEntity, SecurityEvaluationEntity, SoaEntryEntity, SoaStatementEntity, TestSetEntity, TevvRunEntity, ThreatModelEntity,
     ]),
     InventoryModule,
     ComplianceModule, // board-pack inputs for management review (E1.6)
@@ -106,6 +143,8 @@ import { RedTeamAuditService } from './redteam/redteam-audit.service';
     CorrectiveActionsController, DocumentsController,
     AuDtaController, DecisionsController, FairLendingController, ValidationController, VendorsController,
     TrainingController, DatasetsController, RedTeamAuditController,
+    SoaController, DisclosuresController, IncidentExtensionsController, TevvController, EnergyController,
+    AiSecurityController, EngagementController, FederalVendorController,
   ],
   providers: [
     ActingOrgInterceptor,
@@ -113,6 +152,8 @@ import { RedTeamAuditService } from './redteam/redteam-audit.service';
     ContextProfileService, AimsService, CorrectiveActionsService, DocumentsService, NotifierService, FeatureFlagsService,
     AuDtaService, DecisionsService, FairLendingService, ValidationService, VendorsService, TrainingService,
     DatasetsService, RedTeamAuditService,
+    SoaService, DisclosuresService, IncidentExtensionsService, TevvService, EnergyService, AiSecurityService,
+    EngagementService, FederalVendorService,
   ],
   exports: [
     PacksService, GovernanceSettingsService, AccountabilityService, RisksService, ImpactAssessmentService,

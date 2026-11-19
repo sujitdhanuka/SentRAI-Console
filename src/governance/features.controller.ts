@@ -1,7 +1,7 @@
 import { Controller, Get, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
-import { FeatureFlagsService, PHASE2_FLAGS } from '../common/feature-flags';
+import { FeatureFlagsService, PHASE2_FLAGS, PHASE3_FLAGS } from '../common/feature-flags';
 import { ActingOrgInterceptor } from './acting-org.interceptor';
 
 /**
@@ -19,9 +19,10 @@ export class GovernanceFeaturesController {
   features() {
     const f = this.flags.flags;
     // With the master flag off the response keeps its pre-Phase 2 shape (the console treats a missing key as off).
+    // Phase 3 keys are dropped the same way.
     if (f.governanceV2) return f;
     const out: Record<string, boolean> = { ...f };
-    for (const k of PHASE2_FLAGS) delete out[k];
+    for (const k of [...PHASE2_FLAGS, ...PHASE3_FLAGS]) delete out[k];
     return out;
   }
 }

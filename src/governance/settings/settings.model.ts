@@ -50,10 +50,14 @@ export interface GovernanceSettingsDoc {
   appetite: RiskAppetite;
   /** E2.4: extra proxy terms for the fair-lending scan (optional; absent means the built-in dictionary only). */
   fairLending?: { proxyTerms: Array<{ term: string; basis: string }> };
+  /** E3.5: grid emission factor (kg CO2e per kWh) for energy readings; absent means the jurisdiction default. */
+  energy?: { gridFactorKgPerKwh: number };
+  /** E3.8: whether data may go to external AI providers (absent means ALLOWED, as before). */
+  externalAi?: { mode: 'ALLOWED' | 'ATTESTED_ONLY' | 'BLOCKED' };
 }
 
 /** Optional top-level settings fields (not in the defaults, so existing documents and diffs are unchanged). */
-export const OPTIONAL_SETTINGS_KEYS = ['fairLending'] as const;
+export const OPTIONAL_SETTINGS_KEYS = ['fairLending', 'energy', 'externalAi'] as const;
 
 export const RISK_CATEGORIES = [
   'FAIRNESS', 'TRANSPARENCY', 'PRIVACY', 'SECURITY', 'PERFORMANCE', 'THIRD_PARTY',
@@ -202,6 +206,14 @@ export function validateSettings(doc: GovernanceSettingsDoc, at: Date = new Date
       if (!t || typeof t.term !== 'string' || !/^[a-z0-9_ -]{2,40}$/i.test(t.term)) p.push({ field: `fairLending.proxyTerms[${i}]`, message: 'term must be 2-40 letters, digits, space, dash or underscore' });
       if (!t || typeof t.basis !== 'string' || !t.basis.trim() || t.basis.length > 60) p.push({ field: `fairLending.proxyTerms[${i}]`, message: 'basis must name the prohibited basis it may stand in for' });
     });
+  }
+
+  if (doc.energy !== undefined) {
+    const f = doc.energy?.gridFactorKgPerKwh;
+    if (typeof f !== 'number' || !(f >= 0) || f > 2) p.push({ field: 'energy.gridFactorKgPerKwh', message: 'must be a number of kg CO2e per kWh from 0 to 2' });
+  }
+  if (doc.externalAi !== undefined && !['ALLOWED', 'ATTESTED_ONLY', 'BLOCKED'].includes(doc.externalAi?.mode as string)) {
+    p.push({ field: 'externalAi.mode', message: 'must be ALLOWED, ATTESTED_ONLY or BLOCKED' });
   }
 
   // Pack floors: a setting may be stricter than an enabled pack requires, never looser.

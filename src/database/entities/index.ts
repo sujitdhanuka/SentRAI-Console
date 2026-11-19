@@ -43,6 +43,20 @@ import { TrainingCourseEntity } from './training-course.entity';
 import { TrainingRecordEntity } from './training-record.entity';
 import { DatasetEntity } from './dataset.entity';
 import { ModelDatasetEntity } from './model-dataset.entity';
+import { SoaEntryEntity } from './soa-entry.entity';
+import { SoaStatementEntity } from './soa-statement.entity';
+import { DisclosureEntity } from './disclosure.entity';
+import { ModelDeployerEntity } from './model-deployer.entity';
+import { IntegrationEndpointEntity } from './integration-endpoint.entity';
+import { IntegrationDeliveryEntity } from './integration-delivery.entity';
+import { TestSetEntity } from './test-set.entity';
+import { TevvRunEntity } from './tevv-run.entity';
+import { ModelRetirementEntity } from './model-retirement.entity';
+import { EnergyReadingEntity } from './energy-reading.entity';
+import { ThreatModelEntity } from './threat-model.entity';
+import { SecurityEvaluationEntity } from './security-evaluation.entity';
+import { EngagementRecordEntity } from './engagement-record.entity';
+import { AiProviderAttestationEntity } from './ai-provider-attestation.entity';
 
 export {
   OrganizationEntity,
@@ -90,6 +104,20 @@ export {
   TrainingRecordEntity,
   DatasetEntity,
   ModelDatasetEntity,
+  SoaEntryEntity,
+  SoaStatementEntity,
+  DisclosureEntity,
+  ModelDeployerEntity,
+  IntegrationEndpointEntity,
+  IntegrationDeliveryEntity,
+  TestSetEntity,
+  TevvRunEntity,
+  ModelRetirementEntity,
+  EnergyReadingEntity,
+  ThreatModelEntity,
+  SecurityEvaluationEntity,
+  EngagementRecordEntity,
+  AiProviderAttestationEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -138,4 +166,18 @@ export const ALL_ENTITIES = [
   TrainingRecordEntity,
   DatasetEntity,
   ModelDatasetEntity,
+  SoaEntryEntity,
+  SoaStatementEntity,
+  DisclosureEntity,
+  ModelDeployerEntity,
+  IntegrationEndpointEntity,
+  IntegrationDeliveryEntity,
+  TestSetEntity,
+  TevvRunEntity,
+  ModelRetirementEntity,
+  EnergyReadingEntity,
+  ThreatModelEntity,
+  SecurityEvaluationEntity,
+  EngagementRecordEntity,
+  AiProviderAttestationEntity,
 ];

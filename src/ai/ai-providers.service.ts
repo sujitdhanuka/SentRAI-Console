@@ -24,12 +24,31 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { ModelLifecycleStage, ModelType, RiskLevel, Role } from '../common/enums';
 import { WORKSPACES_DIR } from '../common/paths';
 import { decryptSecret, encryptSecret, maskKey } from './key-crypto';
+import { externalCallAllowed, governanceHooks } from '../governance/hooks';
 import { chatComplete } from './llm-client';
 import { CreateProviderDto, ProviderResponse, TestResult, UpdateProviderDto } from './ai.dto';
 
 /** Hostname shapes that keep traffic on-box / in-network (Ollama, vLLM…). */
 const LOCAL_HOST_RE =
   /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[?::1\]?|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|host\.docker\.internal|.+\.local)$/i;
+
+/** True when the endpoint stays on-box or in-network (an unparseable URL counts as external). */
+export function isLocalEndpoint(baseUrl: string): boolean {
+  try {
+    return LOCAL_HOST_RE.test(new URL(baseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Governance E3.8: whether the organisation's external-AI policy lets a call
+ * go to this endpoint. With no policy hook (flag off) every call is allowed.
+ */
+export async function aiCallAllowed(tenantId: string | null, baseUrl: string, providerId: string | null): Promise<boolean> {
+  const policy = await governanceHooks.externalAiPolicy?.(tenantId);
+  return externalCallAllowed(policy, isLocalEndpoint(baseUrl), providerId);
+}
 
 @Injectable()
 export class AiProvidersService {
@@ -270,6 +289,10 @@ export class AiProvidersService {
   /** Fires a 1-token completion so a bad key/URL fails at setup, not first use. */
   async test(user: CurrentUser, providerId: string): Promise<TestResult> {
     const orm = await this.getScoped(user, providerId);
+    // Governance E3.8: an organisation that keeps data off external AI refuses the call outright.
+    if (!(await aiCallAllowed(orm.tenantId, orm.baseUrl, orm.id))) {
+      throw new ForbiddenException("This organization's external-AI policy does not allow calls to this provider (local endpoints, or attested providers only).");
+    }
     const started = Date.now();
     let status: 'ok' | 'failed' = 'ok';
     let detail = 'Connection OK — provider answered.';
@@ -400,7 +423,10 @@ export class AiProvidersService {
     useCase?: string,
   ): Promise<{ adapter: string; baseUrl: string; model: string; apiKey: string | null; label: string } | null> {
     if (!tenantId) return null;
-    const rows = await this.configs.find({ where: { tenantId, enabled: true }, order: { createdAt: 'ASC' } });
+    const all = await this.configs.find({ where: { tenantId, enabled: true }, order: { createdAt: 'ASC' } });
+    // Governance E3.8: providers the organisation's external-AI policy refuses are never chosen.
+    const policy = await governanceHooks.externalAiPolicy?.(tenantId);
+    const rows = policy ? all.filter((r) => externalCallAllowed(policy, isLocalEndpoint(r.baseUrl), r.id)) : all;
     if (!rows.length) return null;
     const chosen = (useCase && rows.find((r) => r.defaultForUseCase === useCase)) || rows.find((r) => !r.defaultForUseCase) || rows[0];
     return {

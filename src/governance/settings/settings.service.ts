@@ -189,7 +189,9 @@ export class GovernanceSettingsService implements OnModuleInit {
     // Past reports must keep the settings that applied at the time, so a change cannot be back-dated.
     if (effectiveFrom.getTime() < now.getTime() - 60_000) throw new BadRequestException('effective_from cannot be in the past');
 
-    const known = new Set<string>([...Object.keys(defaultSettings()), ...OPTIONAL_SETTINGS_KEYS]);
+    // Phase 3 optional fields are accepted only while their feature is on.
+    const phase3Off: Record<string, boolean> = { energy: !this.flags.isEnabled('energy'), externalAi: !this.flags.isEnabled('federalVendor') };
+    const known = new Set<string>([...Object.keys(defaultSettings()), ...OPTIONAL_SETTINGS_KEYS.filter((k) => !phase3Off[k])]);
     const unknownKeys = Object.keys(body.settings ?? {}).filter((k) => !known.has(k));
     if (unknownKeys.length) throw new BadRequestException(`Unknown settings field(s): ${unknownKeys.join(', ')}`);
 

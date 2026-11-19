@@ -56,6 +56,15 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'operationalStateReason', definition: 'VARCHAR(500) NULL' },
   { table: 'ai_models', column: 'operationalStateSince', definition: 'DATETIME NULL' },
   // organization.entity.ts — accountable official, governance board (governance E1.9).
+  // ai-incident.entity.ts — senior sign-off, affected-party notice, external ticket (governance E3.3).
+  { table: 'ai_incidents', column: 'seniorSignOffBy', definition: 'VARCHAR(255) NULL' },
+  { table: 'ai_incidents', column: 'seniorSignOffAt', definition: 'DATETIME NULL' },
+  { table: 'ai_incidents', column: 'affectedPartiesNotifiedAt', definition: 'DATETIME NULL' },
+  { table: 'ai_incidents', column: 'externalTicketRef', definition: 'VARCHAR(255) NULL' },
+  { table: 'ai_incidents', column: 'governanceExt', definition: 'MEDIUMTEXT NULL' },
+  // ai-model.entity.ts — measured energy and CO2e (governance E3.5).
+  { table: 'ai_models', column: 'energyKwh', definition: 'DOUBLE NULL' },
+  { table: 'ai_models', column: 'co2eKg', definition: 'DOUBLE NULL' },
   { table: 'organizations', column: 'accountableOfficialUserId', definition: 'VARCHAR(36) NULL' },
   { table: 'organizations', column: 'governanceBoard', definition: 'TEXT NULL' },
   { table: 'organizations', column: 'accountabilityHistory', definition: 'TEXT NULL' },
@@ -804,6 +813,271 @@ const REQUIRED_TABLES: TableSpec[] = [
       INDEX \`IDX_control_results_org\` (\`orgId\`),
       INDEX \`IDX_control_results_model\` (\`modelId\`),
       INDEX \`IDX_control_results_evaluated\` (\`evaluatedAt\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'soa_entries', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`soa_entries\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`annexRef\` VARCHAR(20) NOT NULL,
+      \`included\` TINYINT(1) NOT NULL,
+      \`justification\` TEXT NULL,
+      \`manualStatus\` VARCHAR(30) NULL,
+      \`manualNote\` TEXT NULL,
+      \`updatedBy\` VARCHAR(255) NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_soa_entries_orgId\` (\`orgId\`),
+      INDEX \`IDX_soa_entries_annexRef\` (\`annexRef\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'soa_statements', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`soa_statements\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`content\` MEDIUMTEXT NOT NULL,
+      \`contentHash\` VARCHAR(64) NOT NULL,
+      \`approvedBy\` VARCHAR(255) NOT NULL,
+      \`approvedAt\` DATETIME NOT NULL,
+      \`note\` TEXT NULL,
+      INDEX \`IDX_soa_statements_orgId\` (\`orgId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'disclosures', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`disclosures\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`kind\` VARCHAR(40) NOT NULL,
+      \`modelId\` VARCHAR(36) NULL,
+      \`version\` INT NOT NULL,
+      \`title\` VARCHAR(255) NOT NULL,
+      \`periodStart\` DATETIME NULL,
+      \`periodEnd\` DATETIME NULL,
+      \`content\` MEDIUMTEXT NOT NULL,
+      \`contentHash\` VARCHAR(64) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`publishedBy\` VARCHAR(255) NULL,
+      \`publishedAt\` DATETIME NULL,
+      \`publicUrl\` VARCHAR(500) NULL,
+      \`reviewDueAt\` DATETIME NULL,
+      \`notifications\` MEDIUMTEXT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_disclosures_orgId\` (\`orgId\`),
+      INDEX \`IDX_disclosures_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'model_deployers', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`model_deployers\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`name\` VARCHAR(200) NOT NULL,
+      \`contact\` VARCHAR(255) NULL,
+      \`active\` TINYINT(1) NOT NULL,
+      \`addedBy\` VARCHAR(255) NOT NULL,
+      \`addedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_model_deployers_orgId\` (\`orgId\`),
+      INDEX \`IDX_model_deployers_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'integration_endpoints', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`integration_endpoints\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`kind\` VARCHAR(30) NOT NULL,
+      \`label\` VARCHAR(200) NOT NULL,
+      \`url\` VARCHAR(1000) NOT NULL,
+      \`secretEncrypted\` TEXT NULL,
+      \`events\` MEDIUMTEXT NOT NULL,
+      \`enabled\` TINYINT(1) NOT NULL,
+      \`lastDeliveryAt\` DATETIME NULL,
+      \`lastStatus\` VARCHAR(20) NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_integration_endpoints_orgId\` (\`orgId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'integration_deliveries', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`integration_deliveries\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`endpointId\` VARCHAR(36) NOT NULL,
+      \`event\` VARCHAR(60) NOT NULL,
+      \`refId\` VARCHAR(100) NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`httpStatus\` INT NULL,
+      \`error\` VARCHAR(500) NULL,
+      \`payloadHash\` VARCHAR(64) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_integration_deliveries_orgId\` (\`orgId\`),
+      INDEX \`IDX_integration_deliveries_endpointId\` (\`endpointId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'test_sets', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`test_sets\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`datasetId\` VARCHAR(36) NULL,
+      \`name\` VARCHAR(200) NOT NULL,
+      \`purpose\` VARCHAR(30) NOT NULL,
+      \`description\` TEXT NULL,
+      \`criteria\` MEDIUMTEXT NOT NULL,
+      \`reviewIntervalMonths\` INT NOT NULL,
+      \`lastReviewedAt\` DATETIME NULL,
+      \`lastReviewedBy\` VARCHAR(255) NULL,
+      \`lastReviewNote\` TEXT NULL,
+      \`active\` TINYINT(1) NOT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_test_sets_orgId\` (\`orgId\`),
+      INDEX \`IDX_test_sets_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'tevv_runs', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`tevv_runs\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`testSetId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`runAt\` DATETIME NOT NULL,
+      \`modelVersion\` VARCHAR(100) NULL,
+      \`results\` MEDIUMTEXT NOT NULL,
+      \`passed\` TINYINT(1) NOT NULL,
+      \`failures\` MEDIUMTEXT NULL,
+      \`reportRef\` VARCHAR(500) NULL,
+      \`reportDocId\` VARCHAR(36) NULL,
+      \`recordedBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_tevv_runs_orgId\` (\`orgId\`),
+      INDEX \`IDX_tevv_runs_testSetId\` (\`testSetId\`),
+      INDEX \`IDX_tevv_runs_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'model_retirements', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`model_retirements\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`reason\` TEXT NOT NULL,
+      \`replacementModelId\` VARCHAR(36) NULL,
+      \`plannedFor\` DATETIME NULL,
+      \`checklist\` MEDIUMTEXT NOT NULL,
+      \`requestedBy\` VARCHAR(255) NOT NULL,
+      \`requestedAt\` DATETIME NOT NULL,
+      \`decidedBy\` VARCHAR(255) NULL,
+      \`decidedAt\` DATETIME NULL,
+      \`decisionNote\` TEXT NULL,
+      \`completedBy\` VARCHAR(255) NULL,
+      \`completedAt\` DATETIME NULL,
+      INDEX \`IDX_model_retirements_orgId\` (\`orgId\`),
+      INDEX \`IDX_model_retirements_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'energy_readings', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`energy_readings\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`periodStart\` DATETIME NOT NULL,
+      \`periodEnd\` DATETIME NOT NULL,
+      \`kwh\` DOUBLE NOT NULL,
+      \`gridFactor\` DOUBLE NOT NULL,
+      \`co2eKg\` DOUBLE NOT NULL,
+      \`source\` VARCHAR(30) NOT NULL,
+      \`sampleCount\` INT NOT NULL,
+      \`note\` VARCHAR(500) NULL,
+      \`recordedBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_energy_readings_orgId\` (\`orgId\`),
+      INDEX \`IDX_energy_readings_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'threat_models', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`threat_models\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`templateId\` VARCHAR(60) NOT NULL,
+      \`threats\` MEDIUMTEXT NOT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`approvedBy\` VARCHAR(255) NULL,
+      \`approvedAt\` DATETIME NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_threat_models_orgId\` (\`orgId\`),
+      INDEX \`IDX_threat_models_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'security_evaluations', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`security_evaluations\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`ref\` VARCHAR(500) NOT NULL,
+      \`evaluator\` VARCHAR(255) NULL,
+      \`categories\` MEDIUMTEXT NOT NULL,
+      \`evaluatedAt\` DATETIME NOT NULL,
+      \`recordedBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_security_evaluations_orgId\` (\`orgId\`),
+      INDEX \`IDX_security_evaluations_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'engagement_records', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`engagement_records\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`type\` VARCHAR(30) NOT NULL,
+      \`modelId\` VARCHAR(36) NULL,
+      \`title\` VARCHAR(200) NOT NULL,
+      \`participants\` MEDIUMTEXT NOT NULL,
+      \`summary\` TEXT NOT NULL,
+      \`outcome\` TEXT NULL,
+      \`consentRef\` VARCHAR(255) NULL,
+      \`occurredAt\` DATETIME NOT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_engagement_records_orgId\` (\`orgId\`),
+      INDEX \`IDX_engagement_records_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'ai_provider_attestations', // governance Phase 3
+    createSql: `CREATE TABLE IF NOT EXISTS \`ai_provider_attestations\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`providerId\` VARCHAR(36) NOT NULL,
+      \`noTraining\` TINYINT(1) NOT NULL,
+      \`retentionDays\` INT NULL,
+      \`reference\` VARCHAR(500) NOT NULL,
+      \`documentId\` VARCHAR(36) NULL,
+      \`attestedBy\` VARCHAR(255) NOT NULL,
+      \`attestedAt\` DATETIME NOT NULL,
+      \`expiresAt\` DATETIME NULL,
+      \`revokedAt\` DATETIME NULL,
+      INDEX \`IDX_ai_provider_attestations_orgId\` (\`orgId\`),
+      INDEX \`IDX_ai_provider_attestations_providerId\` (\`providerId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
 ];

@@ -31,7 +31,7 @@ export const AIMS_EDITORS: Role[] = [Role.OWNER, Role.CISO, Role.ADMIN];
 const MONTH = 30.44 * 86_400_000;
 
 /** Placeholder entry for organisation-level evaluation (ORG controls never read it). */
-const ORG_ENTRY: AIModelEntry = {
+export const ORG_ENTRY: AIModelEntry = {
   modelId: 'org', name: 'Organisation', modelType: ModelType.MACHINE_LEARNING, functionalArea: '', useCaseDescription: '',
   targetCustomerSegments: [], riskLevel: RiskLevel.LOW, lifecycleStage: ModelLifecycleStage.DESIGN, ownerTeam: '', developedBy: '',
   deploymentDate: null, dependencies: [], performanceBenchmarks: [], sutrasAlignment: [], humanOversightRequired: false,

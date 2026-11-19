@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AiProvidersService } from '../ai/ai-providers.service';
+import { aiCallAllowed, AiProvidersService } from '../ai/ai-providers.service';
 import { PromptVaultService } from '../ai/prompt-vault.service';
 import { chatComplete } from '../ai/llm-client';
 import { renderTemplate } from '../ai/template';
@@ -121,7 +121,8 @@ export class SummarizerService {
     } catch (e) {
       this.log.warn(`Org provider resolution failed (${String(e)}); falling through.`);
     }
-    if (this.envCfg) {
+    // Governance E3.8: the platform-level provider is external unless it points at a local endpoint.
+    if (this.envCfg && (await aiCallAllowed(tenantId, this.envCfg.baseUrl, null))) {
       return {
         s: new ConfiguredLlmSummarizer('anthropic', this.envCfg.baseUrl, this.envCfg.model, this.envCfg.apiKey, this.maxSnippetChars, template.body),
         label: this.envCfg.model,
@@ -200,7 +201,7 @@ export class SummarizerService {
       } catch (e) {
         this.log.warn(`Org provider resolution failed (${String(e)}); falling through.`);
       }
-      if (!cfg && this.envCfg) {
+      if (!cfg && this.envCfg && (await aiCallAllowed(tenantId, this.envCfg.baseUrl, null))) {
         cfg = { adapter: 'anthropic', baseUrl: this.envCfg.baseUrl, model: this.envCfg.model, apiKey: this.envCfg.apiKey, label: this.envCfg.model };
       }
     }

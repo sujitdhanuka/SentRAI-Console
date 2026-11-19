@@ -18,7 +18,7 @@ import { useModels } from './GovernanceRegister';
 
 /* ------------------------------------------------------------- shared */
 
-const useToastCall = () => {
+export const useToastCall = () => {
   const toast = useConsoleUi((s) => s.toast);
   return async <T,>(fn: () => Promise<T>, ok: string, after?: () => void): Promise<T | null> => {
     try {
@@ -33,11 +33,11 @@ const useToastCall = () => {
   };
 };
 
-const post = (path: string, body: unknown, method = 'POST') => api<any>(path, { method, body: JSON.stringify(body) });
-const day = (d: string | null | undefined) => (d ? String(d).slice(0, 10) : '—');
+export const post = (path: string, body: unknown, method = 'POST') => api<any>(path, { method, body: JSON.stringify(body) });
+export const day = (d: string | null | undefined) => (d ? String(d).slice(0, 10) : '—');
 
 /** Loads `path`, exposing data, error and a reload. */
-function useLoad<T>(path: string | null) {
+export function useLoad<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState(false);
   const reload = useCallback(async () => {
@@ -55,8 +55,8 @@ function useLoad<T>(path: string | null) {
   return { data, error, reload };
 }
 
-async function download(path: string, filename: string) {
-  const url = await apiBlobUrl(path);
+export async function download(path: string, filename: string, method: 'GET' | 'POST' = 'GET') {
+  const url = await apiBlobUrl(path, method);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
@@ -64,7 +64,7 @@ async function download(path: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-function ModelSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function ModelSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const models = useModels();
   return (
     <select aria-label="Model" className={`${FIELD} max-w-xs`} value={value} onChange={(e) => onChange(e.target.value)}>
@@ -74,12 +74,15 @@ function ModelSelect({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; empty: string }) {
+/** Header cells use the label look without its `block` display, which broke the table layout. */
+const TH = LABEL.replace(/\bblock\b/, '').trim();
+
+export function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; empty: string }) {
   if (!rows.length) return <p className="p-3 text-[11px] text-text-secondary">{empty}</p>;
   return (
     <table className="w-full text-left text-[11px]">
       <thead>
-        <tr className="border-b border-border">{head.map((h) => <th key={h} className={`${LABEL} px-2 py-1`}>{h}</th>)}</tr>
+        <tr className="border-b border-border">{head.map((h) => <th key={h} className={`${TH} px-2 py-1`}>{h}</th>)}</tr>
       </thead>
       <tbody>
         {rows.map((r, i) => (
@@ -90,7 +93,7 @@ function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[][]; emp
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
       <span className={LABEL}>{label}</span>
@@ -105,10 +108,10 @@ const RESULT_TONE: Record<string, BadgeTone> = {
   CURRENT: 'positive', EXPIRING: 'warning', EXPIRED: 'negative', MISSING: 'negative',
   OPEN: 'warning', DECIDED: 'positive', ORDERED: 'warning', DELETED: 'neutral', NONE: 'neutral',
 };
-const tone = (s: string | null | undefined): BadgeTone => RESULT_TONE[String(s ?? '')] ?? 'neutral';
+export const tone = (s: string | null | undefined): BadgeTone => RESULT_TONE[String(s ?? '')] ?? 'neutral';
 
 /** Viewers are read-only (the server refuses their writes); their write controls are shown disabled. */
-function Writable({ children }: { children: ReactNode }) {
+export function Writable({ children }: { children: ReactNode }) {
   const viewer = useSession((s) => s.user?.role) === 'VIEWER';
   return <fieldset disabled={viewer} title={viewer ? 'Viewers have read-only access' : undefined} className="contents">{children}</fieldset>;
 }

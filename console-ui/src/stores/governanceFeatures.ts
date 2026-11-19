@@ -26,6 +26,14 @@ export interface GovernanceFeatures {
   training?: boolean;
   dataRegister?: boolean;
   redTeamAuditRules?: boolean;
+  soa?: boolean;
+  disclosures?: boolean;
+  incidentExtensions?: boolean;
+  tevv?: boolean;
+  energy?: boolean;
+  aiSecurity?: boolean;
+  orgRecords?: boolean;
+  federalVendor?: boolean;
   [k: string]: boolean | undefined;
 }
 

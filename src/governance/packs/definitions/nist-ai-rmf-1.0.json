@@ -15,7 +15,8 @@
   "changelog": [
     "1.0.0: migrated from frameworks.validator.ts with the Phase 0 corrected codes; results unchanged.",
     "1.0.0 (Phase 1): register-backed MANAGE 1.3 and context-profile MAP 3.2 clauses behind their flags (advisory).",
-    "1.0.0 (Phase 2): GOVERN 6.1 third parties and MEASURE 2.6 red team after escalation, each behind its flag (advisory)."
+    "1.0.0 (Phase 2): GOVERN 6.1 third parties and MEASURE 2.6 red team after escalation, each behind its flag (advisory).",
+    "1.0.0 (Phase 3): TEVV (MEASURE 2.13), incident communication (MANAGE 4.3), energy (MEASURE 2.12), AI security (MEASURE 2.7) and engagement records (MAP 1.2) read the Phase 3 registers, each behind its flag (advisory)."
   ],
   "parameters": {},
   "clauses": [
@@ -298,6 +299,93 @@
         "escalation": "A risk escalation was seen on {required_since} ({reason}); re-evaluate safety with a red-team exercise.",
         "missing": "Evaluate safety with a red-team exercise before this high-risk system goes live.",
         "not_assessed": "The red-team rules are not switched on."
+      }
+    },
+    {
+      "code": "MEASURE-2.13",
+      "clause": "MEASURE 2.13",
+      "name": "Effectiveness of TEVV metrics evaluated",
+      "control": "CTL-TEVV-01",
+      "mandatory": false,
+      "flag": "tevv",
+      "alsoEvidences": [
+        "MEASURE 1.2",
+        "MEASURE 2.1",
+        "MEASURE 2.3",
+        "MEASURE 2.5",
+        "GOVERN 1.7"
+      ],
+      "evidence": {
+        "pass": "{test_sets} test set(s) with acceptance criteria, latest results passing"
+      },
+      "gap": {
+        "missing": "Register test sets with acceptance criteria for the system.",
+        "not_run": "{never_run} test set(s) have no recorded results.",
+        "failing": "The latest results miss the acceptance criteria on {failing} test set(s).",
+        "review_overdue": "Metric effectiveness review is overdue on {review_overdue} test set(s).",
+        "not_assessed": "The TEVV register is not switched on."
+      }
+    },
+    {
+      "code": "MANAGE-4.3",
+      "clause": "MANAGE 4.3",
+      "name": "Incidents communicated to relevant AI actors",
+      "control": "CTL-INC-02",
+      "mandatory": false,
+      "flag": "incidentExtensions",
+      "gap": {
+        "no_sign_off": "{count} serious incident(s) were closed without senior executive sign-off.",
+        "not_notified": "{count} serious incident(s) have no record that affected people were told.",
+        "not_assessed": "Incident extensions are not switched on."
+      }
+    },
+    {
+      "code": "MEASURE-2.12",
+      "clause": "MEASURE 2.12",
+      "name": "Environmental impact and sustainability assessed",
+      "control": "CTL-ENERGY-01",
+      "mandatory": false,
+      "flag": "energy",
+      "evidence": {
+        "pass": "{kwh} kWh, {co2e_kg} kg CO2e (last reading {last_reading})"
+      },
+      "gap": {
+        "missing": "Record the system's energy use (kWh) and CO2e.",
+        "stale": "The last energy reading is {age_days} days old.",
+        "not_assessed": "Energy measurement is not switched on."
+      }
+    },
+    {
+      "code": "MEASURE-2.7",
+      "clause": "MEASURE 2.7",
+      "name": "AI system security and resilience evaluated (attack categories)",
+      "control": "CTL-SEC-AI-01",
+      "mandatory": false,
+      "flag": "aiSecurity",
+      "gap": {
+        "no_threat_model": "Approve an AI threat model for the system (state: {state}).",
+        "untested": "Applicable attack categories not yet evaluated: {untested}.",
+        "failing": "Evaluated attack categories failing without a mitigation: {failing}.",
+        "not_assessed": "AI security is not switched on."
+      }
+    },
+    {
+      "code": "MAP-1.2",
+      "clause": "MAP 1.2",
+      "name": "Interdisciplinary input and consultation documented",
+      "control": "CTL-ORG-ENGAGEMENT",
+      "mandatory": false,
+      "flag": "orgRecords",
+      "alsoEvidences": [
+        "GOVERN 3.1",
+        "MAP 1.6",
+        "MAP 5.2",
+        "MEASURE 4.1"
+      ],
+      "gap": {
+        "missing": "No records for: {items}.",
+        "no_owner": "Customer-owned items without a named owner: {items}.",
+        "not_assessed": "Organisational records are not switched on."
       }
     }
   ]

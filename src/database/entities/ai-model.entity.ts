@@ -194,6 +194,13 @@ export class AIModelEntity {
   @Column('varchar', { length: 36, nullable: true })
   ownerUserId!: string | null;
 
+  /** Governance E3.5: measured energy use (kWh) and emissions (kg CO2e), summed over recorded readings. */
+  @Column('double', { nullable: true })
+  energyKwh!: number | null;
+
+  @Column('double', { nullable: true })
+  co2eKg!: number | null;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

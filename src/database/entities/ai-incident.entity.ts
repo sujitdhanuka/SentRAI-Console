@@ -80,6 +80,25 @@ export class AIIncidentEntity {
   @Column('boolean', { default: false })
   boardInformed!: boolean;
 
+  /** Governance E3.3: senior executive who signed off closure of a serious incident. */
+  @Column('varchar', { length: 255, nullable: true })
+  seniorSignOffBy!: string | null;
+
+  @Column('datetime', { nullable: true })
+  seniorSignOffAt!: Date | null;
+
+  /** Governance E3.3: when the people affected were told. */
+  @Column('datetime', { nullable: true })
+  affectedPartiesNotifiedAt!: Date | null;
+
+  /** Governance E3.3: ticket in the customer's ITSM (Jira, ServiceNow). */
+  @Column('varchar', { length: 255, nullable: true })
+  externalTicketRef!: string | null;
+
+  /** Governance E3.3: sign-off note, affected-party notice, DTA notification, CISA playbook phases. */
+  @Column('simple-json', { nullable: true })
+  governanceExt!: Record<string, any> | null;
+
   @Column('datetime')
   createdAt!: Date;
 

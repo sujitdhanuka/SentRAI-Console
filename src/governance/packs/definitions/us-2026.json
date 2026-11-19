@@ -15,7 +15,8 @@
   "tierClassifier": "us",
   "source": "OMB M-25-21 and M-25-22; Federal Reserve SR 26-2; ECOA / Regulation B; FTC Act s.5; Colorado SB 26-189 (paraphrased from the SentRAI US gap analysis; some sources are law-firm summaries; compliance review required).",
   "changelog": [
-    "2026.1.0 (Phase 2, E2.2): first version. Opt-in; the decision-record retention is the longer of Reg B (25 months) and Colorado (3 years) because the pack covers both."
+    "2026.1.0 (Phase 2, E2.2): first version. Opt-in; the decision-record retention is the longer of Reg B (25 months) and Colorado (3 years) because the pack covers both.",
+    "2026.1.0 (Phase 3): CO-1 developer disclosure to deployers reads the deployer register, behind its flag (advisory)."
   ],
   "parameters": {
     "decisionRecordRetentionMonths": 36,
@@ -268,6 +269,18 @@
         "missing": "No mandatory AI training course"
       },
       "gap": "Train the people who operate and oversee high-impact AI, and record it."
+    },
+    {
+      "code": "US-CO-1",
+      "clause": "CO-1, M21-3",
+      "name": "Developer disclosure and material-update notices to deployers",
+      "control": "CTL-DEPLOYER-01",
+      "mandatory": false,
+      "flag": "disclosures",
+      "gap": {
+        "notice_due": "{notices_due} material update(s) have not been notified to deployers.",
+        "not_assessed": "Developer disclosures are not switched on."
+      }
     }
   ]
 }

@@ -15,7 +15,8 @@
   "tierClassifier": "au",
   "source": "Digital Transformation Agency, Policy for the responsible use of AI in government v2.1 (paraphrased; compliance review required before customer use). Requirement IDs follow the SentRAI AU gap analysis.",
   "changelog": [
-    "2.1.0 (Phase 2, E2.1): first version. Opt-in; applies only to organisations that enable it in governance settings."
+    "2.1.0 (Phase 2, E2.1): first version. Opt-in; applies only to organisations that enable it in governance settings.",
+    "2.1.0 (Phase 3): SO-1 transparency statement reads the disclosure register, behind its flag (advisory)."
   ],
   "parameters": {
     "dtaRegisterShareMonths": 6,
@@ -210,6 +211,32 @@
         "missing": "No course on the AI Ethics Principles"
       },
       "gap": "Add a course or acknowledgement with topic au_ethics_principles for staff who design and implement AI use cases."
+    },
+    {
+      "code": "AU-SO-1",
+      "clause": "SO-1",
+      "name": "AI transparency statement published and reviewed annually",
+      "control": "CTL-ORG-DISCLOSURE",
+      "mandatory": false,
+      "flag": "disclosures",
+      "gap": {
+        "missing": "Publish a transparency statement.",
+        "review_overdue": "The transparency statement (published {published}) is past its review date.",
+        "not_assessed": "Disclosures are not switched on."
+      }
+    },
+    {
+      "code": "AU-PO-5",
+      "clause": "PO-5, IA-11",
+      "name": "Incidents handled with senior sign-off and notice to affected people",
+      "control": "CTL-INC-02",
+      "mandatory": false,
+      "flag": "incidentExtensions",
+      "gap": {
+        "no_sign_off": "{count} serious incident(s) were closed without senior executive sign-off.",
+        "not_notified": "{count} serious incident(s) have no record that affected people were told.",
+        "not_assessed": "Incident extensions are not switched on."
+      }
     }
   ]
 }

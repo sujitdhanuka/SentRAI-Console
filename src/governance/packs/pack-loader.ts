@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 
 import { RiskLevel } from '../../common/enums';
-import { getFeatureFlags, PHASE2_FLAGS } from '../../common/feature-flags';
+import { getFeatureFlags, PHASE2_FLAGS, PHASE3_FLAGS } from '../../common/feature-flags';
 import { isoCodeExists, nistCodeExists } from '../../compliance/framework-codes';
 import { getControl } from '../controls/control-library';
 import { LoadedPackVersion, PackDefinition, PackStatus } from './pack.types';
@@ -128,20 +128,26 @@ export class PackRegistry {
   }
 
   /**
-   * The hash covers the content actually served. Phase 2 clauses (and their changelog note) whose flag is
-   * off are left out, so with Phase 2 off every existing pack hashes exactly as it did before Phase 2.
+   * The hash covers the content actually served. Phase 2 and Phase 3 clauses (and their changelog notes)
+   * whose flag is off are left out, so with a phase off every existing pack hashes exactly as it did
+   * before that phase.
    */
   private hashOf(d: PackDefinition): string {
     const flags = getFeatureFlags();
-    const off = new Set<string>(PHASE2_FLAGS.filter((f) => !flags[f]));
+    const later = [...PHASE2_FLAGS, ...PHASE3_FLAGS];
+    const off = new Set<string>(later.filter((f) => !flags[f]));
     const served = (d.clauses ?? []).filter((c) => !(c.flag && off.has(c.flag)));
-    const phase2On = served.some((c) => c.flag && (PHASE2_FLAGS as readonly string[]).includes(c.flag));
     const key = `${[...off].sort().join(',')}`;
     let byKey = this.hashes.get(d);
     if (!byKey) { byKey = new Map(); this.hashes.set(d, byKey); }
     let h = byKey.get(key);
     if (!h) {
-      const changelog = Array.isArray((d as any).changelog) && !phase2On ? (d as any).changelog.filter((l: unknown) => !/\(Phase 2\)/.test(String(l))) : (d as any).changelog;
+      let changelog = (d as any).changelog;
+      for (const [tag, phaseFlags] of [['Phase 2', PHASE2_FLAGS], ['Phase 3', PHASE3_FLAGS]] as const) {
+        const phaseOn = served.some((c) => c.flag && (phaseFlags as readonly string[]).includes(c.flag));
+        if (!phaseOn && Array.isArray(changelog)) changelog = changelog.filter((l: unknown) => !String(l).includes(`(${tag})`));
+      }
+      if (Array.isArray(changelog) && Array.isArray((d as any).changelog) && changelog.length === (d as any).changelog.length) changelog = (d as any).changelog;
       const view = served.length === (d.clauses ?? []).length && changelog === (d as any).changelog ? d : { ...d, clauses: served, ...(changelog !== undefined ? { changelog } : {}) };
       h = packContentHash(view as PackDefinition);
       byKey.set(key, h);
