@@ -68,7 +68,7 @@ function VerdictBadge({ ev }: { ev: GateEvent }) {
 }
 
 const OVERRIDE_ROLES = ['ADMIN', 'CISO', 'APPROVER'];
-const TOKEN_ROLES = ['ADMIN', 'CISO'];
+const TOKEN_ROLES = ['ADMIN', 'CISO', 'OWNER'];
 
 export function CiLedger() {
   const toast = useConsoleUi((s) => s.toast);

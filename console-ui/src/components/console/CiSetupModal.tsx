@@ -23,7 +23,7 @@ export function CiSetupModal({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Minting is Admin/CISO only on the backend; everyone else gets the guide without the button. */
+  /** Minting is Admin/CISO/Owner only on the backend; everyone else gets the guide without the button. */
   canMint: boolean;
   defaultProjectId?: string | null;
 }) {
@@ -158,7 +158,7 @@ export function CiSetupModal({
         )}
         {!canMint && (
           <p className="mb-3 rounded-md border border-border bg-bg-elevated p-2 text-[10.5px] leading-relaxed text-text-secondary">
-            Only an Admin or CISO can generate a CI token. Ask one to open <span className="font-medium text-text">CI Gate Ledger → Set up CI</span> and
+            Only an Admin, CISO or Owner can generate a CI token. Ask one to open <span className="font-medium text-text">CI Gate Ledger → Set up CI</span> and
             share the token with you as the <code className="font-mono text-accent">SENTRAI_CI_TOKEN</code> secret; the pipeline step below is the same.
           </p>
         )}

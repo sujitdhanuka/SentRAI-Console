@@ -34,9 +34,9 @@ export class CiController {
     return this.ci.runScanAndEvaluate(projectId, actor, dto);
   }
 
-  /** Admin/CISO mints a long-lived CI service token to store as a pipeline secret. */
+  /** Admin/CISO/Owner mints a long-lived CI service token to store as a pipeline secret. */
   @ApiBearerAuth()
-  @Roles(Role.ADMIN, Role.CISO)
+  @Roles(Role.ADMIN, Role.CISO, Role.OWNER)
   @Post('tokens')
   @HttpCode(HttpStatus.CREATED)
   async mintToken(@CurrentUser() user: CurrentUserType, @Body() dto: CiTokenDto) {

@@ -494,14 +494,14 @@ To have your server update itself on every release — the way the hosted instan
 
 Stop ungoverned AI *before* it ships:
 
-1. An **ADMIN/CISO mints a CI service token** (`POST /api/v1/ci/tokens`) and stores it as a pipeline secret named `SENTRAI_CI_TOKEN`.
+1. An **ADMIN, CISO or OWNER mints a CI service token** (`POST /api/v1/ci/tokens`) and stores it as a pipeline secret named `SENTRAI_CI_TOKEN`.
 2. Add the SentRAI gate to your pipeline — a ready-made **GitHub Action** and **GitLab** template live under `ci-integration/`. On each push or PR it sends the changed source to `POST /api/v1/ci/scan`.
 3. SentRAI scans for AI usage, evaluates it against your **`.sentrai/policy.yaml`** (policy-as-code; it falls back to safe defaults if the file is absent), and returns a **pass/fail verdict plus SARIF** (rendered natively in GitHub/GitLab security tabs). A failing gate exits non-zero and blocks the deploy.
 4. Every decision is recorded in the **CI Gate Ledger**, where an auditor can review the flagged code and, if justified, sign off an override.
 
 ### Step-by-step: wiring a GitHub repository
 
-**A. Mint the CI token (in the app).** CI Gate Ledger → **"⚙ Set up CI scanning"** (ADMIN/CISO). Pick the project to gate; the app generates a project-scoped token and a ready-to-paste snippet. The token can *only* drive the pipeline gate — it cannot log into the console.
+**A. Mint the CI token (in the app).** CI Gate Ledger → **"Set up CI"** (ADMIN, CISO or OWNER). Pick the project to gate; the app generates a project-scoped token and a ready-to-paste snippet. The token can *only* drive the pipeline gate — it cannot log into the console.
 
 **B. Add the credentials to GitHub.** In the repository: *Settings → Secrets and variables → Actions*:
 - **Secret** `SENTRAI_CI_TOKEN` — the token from step A.
