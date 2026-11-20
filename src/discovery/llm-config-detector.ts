@@ -29,6 +29,8 @@ export interface LlmConfigFinding {
   keyed_by?: string[];
   /** For literals: a schema/env default, a seed row, or plain code. */
   role?: 'default' | 'seed' | 'code';
+  /** A generic key/value settings table (kept only when model settings keys exist). */
+  kv?: boolean;
 }
 
 export interface LlmConfigSummary {
@@ -352,6 +354,18 @@ export function detectInFile(relPath: string, content: string): LlmConfigFinding
     }
   }
 
+  // A key/value settings table (Setting { key, value }) is where UI-edited
+  // model settings usually live. Kept only if a model settings key exists
+  // somewhere in the project (see summarize).
+  for (const t of tables) {
+    const keyCol = t.columns.find((c) => /^(?:key|name|setting_?key|config_?key)$/i.test(snake(c)));
+    const valCol = t.columns.find((c) => /^(?:value|setting_?value|config_?value|val)$/i.test(snake(c)));
+    if (keyCol && valCol && /setting|config|preference|option|param|kv/i.test(t.name)) {
+      const line = Math.max(1, lines.findIndex((l) => new RegExp(`\\b${t.name}\\b`).test(l)) + 1);
+      push({ kind: 'db_column', file: relPath, line, snippet: (lines[line - 1] ?? '').trim().slice(0, 160), location: `${t.name}.${valCol}`, keyed_by: [keyCol], kv: true });
+    }
+  }
+
   // A model table with a task column picks a model per task.
   for (const t of tables) {
     const taskCols = t.columns.filter(isTaskColumn);
@@ -363,7 +377,11 @@ export function detectInFile(relPath: string, content: string): LlmConfigFinding
 }
 
 /** Fold per-file findings into the project-level picture. Exported for tests. */
-export function summarize(findings: LlmConfigFinding[]): LlmConfigSummary {
+export function summarize(allFindings: LlmConfigFinding[]): LlmConfigSummary {
+  const settingsKeys = allFindings.filter((f) => f.kind === 'settings_key').map((f) => f.location!);
+  const findings = allFindings
+    .filter((f) => !f.kv || settingsKeys.length > 0)
+    .map((f) => (f.kv ? { ...f, kv: undefined, keyed_by: [`${f.keyed_by?.[0] ?? 'key'} in (${[...new Set(settingsKeys)].slice(0, 6).join(', ')})`] } : f));
   const providers = new Set<string>();
   const models = new Map<string, { model: string; provider?: string; roles: Set<string>; count: number }>();
   const storage = new Map<string, LlmConfigSummary['storage'][number]>();
@@ -423,5 +441,6 @@ export function llmConfigForRecord(summary: LlmConfigSummary | null | undefined,
 /** True when a discovered candidate calls an LLM (and so has underlying models to confirm). */
 export function isLlmCandidate(c: { modelTypeGuess?: string; signals?: Array<{ category: string }> }): boolean {
   if (c.signals?.some((s) => s.category.startsWith('llm_') || s.category === 'ast_llm_sdk')) return true;
-  return c.modelTypeGuess === 'GENERATIVE_AI';
+  // Agents almost always run on an LLM, even when the call sits in a shared helper file.
+  return c.modelTypeGuess === 'GENERATIVE_AI' || c.modelTypeGuess === 'AGENT';
 }

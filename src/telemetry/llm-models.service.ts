@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,8 @@ import { ModelType, Role } from '../common/enums';
 import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { aggregateObserved, cleanEntries, LlmModelsAttestation, llmModelsStatus } from './llm-models';
 import { ConfirmLlmModelsDto } from './telemetry.dto';
+import { detectLlmConfig, llmConfigForRecord, LlmRecordConfig } from '../discovery/llm-config-detector';
+import { expandAndResolve, isDirectory } from '../common/fs-utils';
 
 /** How many recent llm_call events feed the "seen at runtime" view. */
 const OBSERVED_WINDOW = 2000;
@@ -58,7 +60,9 @@ export class LlmModelsService {
     });
     const att = model.llmModels ?? null;
     const observed = aggregateObserved(events, att);
-    const detected = model.llmConfig ?? null;
+    // Records imported before this feature have no evidence of their own: fall
+    // back to the project's stored scan, narrowed to the record's files.
+    const detected = model.llmConfig ?? (await this.projectEvidence(model));
     return {
       model_id: model.id,
       model_name: model.name,
@@ -75,6 +79,40 @@ export class LlmModelsService {
       ].filter((s, i, all) => all.findIndex((o) => o.model.toLowerCase() === s.model.toLowerCase() && o.task === s.task) === i)
         .filter((s) => !(att?.entries ?? []).some((e) => e.model.toLowerCase() === s.model.toLowerCase() && e.task.toLowerCase() === s.task.toLowerCase())),
     };
+  }
+
+  private recordFiles(m: AIModelEntity): string[] {
+    return m.sourceRefs?.length ? m.sourceRefs : m.sourceRef ? [m.sourceRef] : [];
+  }
+
+  private async projectEvidence(m: AIModelEntity): Promise<LlmRecordConfig | null> {
+    if (!m.projectId) return null;
+    const p = await this.projects.findOne({ where: { id: m.projectId } });
+    return llmConfigForRecord(p?.lastScanResult?.llm_config ?? null, this.recordFiles(m));
+  }
+
+  /**
+   * Look for the record's models in the project's code now, without a full
+   * re-import. Needs the uploaded code on the server; hosted deployments may
+   * have discarded it, and then the code must be uploaded or imported again.
+   */
+  async rescan(user: CurrentUser, modelId: string) {
+    if (user.role === Role.VIEWER) throw new ForbiddenException('Viewers cannot run a scan.');
+    const model = await this.load(user, modelId);
+    if (!model.projectId) throw new BadRequestException('This record is not linked to a project, so there is no code to scan.');
+    const project = await this.projects.findOne({ where: { id: model.projectId } });
+    if (!project?.rootDirectory || !isDirectory(project.rootDirectory)) {
+      throw new BadRequestException("The project's code is no longer on the server. Upload it again or re-import it from GitHub on Projects, then scan.");
+    }
+    const summary = detectLlmConfig(expandAndResolve(project.rootDirectory));
+    if (project.lastScanResult) {
+      project.lastScanResult = { ...project.lastScanResult, llm_config: summary };
+      await this.projects.save(project);
+    }
+    model.llmConfig = llmConfigForRecord(summary, this.recordFiles(model));
+    model.updatedAt = new Date();
+    await this.models.save(model);
+    return this.get(user, modelId);
   }
 
   /** Replace the confirmed list. An empty list withdraws the confirmation. */
