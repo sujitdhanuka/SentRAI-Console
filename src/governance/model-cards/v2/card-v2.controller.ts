@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -8,6 +8,7 @@ import { ActingOrgInterceptor } from '../../acting-org.interceptor';
 import { OFFICERS } from '../../phase2-util';
 import { Role } from '../../../common/enums';
 import { FrameworkRegistryService } from './registry/framework-registry.service';
+import { CardV2Service } from './card-v2.service';
 import { CardV2MigrationService } from './migration/card-v2-migration.service';
 
 /** Model card v2. 404 unless GOV_E4_2_MODEL_CARD_V2 is on (it is on by default under GOVERNANCE_V2). */
@@ -19,6 +20,7 @@ export class CardV2Controller {
   constructor(
     private readonly migration: CardV2MigrationService,
     private readonly registry: FrameworkRegistryService,
+    private readonly cards: CardV2Service,
   ) {}
 
   /**
@@ -50,4 +52,61 @@ export class CardV2Controller {
   reviseRegistry(@CurrentUser() user: CurrentUserType, @Param('frameworkId') frameworkId: string, @Body() body: { changes?: Record<string, unknown>; reason?: string }) {
     return this.registry.revise(user, frameworkId, body);
   }
+
+  // ---- the card ----
+
+  /** The v2 card: applicable sections and fields with provenance, the four scores, risk explanation, frameworks, gate blockers. */
+  @Get('models/:modelId/card-v2')
+  readCard(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.cards.read(user, modelId);
+  }
+
+  /** Change one field: SET, UNKNOWN, NOT_APPLICABLE (with justification), ACCEPT, ACCEPT_SUGGESTION, ATTACH_EVIDENCE, VERIFY. */
+  @Patch('models/:modelId/card-v2/fields/:fieldId')
+  changeField(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Param('fieldId') fieldId: string, @Body() body: Record<string, any>) {
+    return this.cards.changeField(user, modelId, fieldId, body);
+  }
+
+  /** Assess one registry control on this record (a person, with evidence where the status claims work was done). */
+  @Put('models/:modelId/card-v2/controls/:frameworkId/:controlId')
+  changeControl(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Param('frameworkId') frameworkId: string, @Param('controlId') controlId: string, @Body() body: Record<string, any>) {
+    return this.cards.changeControl(user, modelId, frameworkId, controlId, body);
+  }
+
+  @Post('models/:modelId/card-v2/links')
+  addLink(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Body() body: Record<string, any>) {
+    return this.cards.addLink(user, modelId, body);
+  }
+
+  @Delete('models/:modelId/card-v2/links/:linkId')
+  removeLink(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Param('linkId') linkId: string) {
+    return this.cards.removeLink(user, modelId, linkId);
+  }
+
+  /** Workflow: START_ASSESSMENT, COLLECT_EVIDENCE, SUBMIT_FOR_REVIEW, APPROVE, APPROVE_WITH_CONDITIONS, REJECT, REASSESS, RETIRE, COMMENT, REQUEST_EVIDENCE, ASSIGN_REVIEWER. */
+  @Post('models/:modelId/card-v2/workflow')
+  workflow(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Body() body: Record<string, any>) {
+    return this.cards.workflow(user, modelId, body);
+  }
+
+  @Post('models/:modelId/card-v2/versions')
+  snapshot(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Body() body: Record<string, any>) {
+    return this.cards.snapshot(user, modelId, body);
+  }
+
+  @Get('models/:modelId/card-v2/versions')
+  versions(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.cards.listVersions(user, modelId);
+  }
+
+  @Get('models/:modelId/card-v2/versions/:version')
+  version(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Param('version', ParseIntPipe) version: number) {
+    return this.cards.getVersion(user, modelId, version);
+  }
+
+  @Get('models/:modelId/card-v2/history')
+  history(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.cards.history(user, modelId);
+  }
 }
+

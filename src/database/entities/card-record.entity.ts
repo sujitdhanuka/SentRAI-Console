@@ -30,6 +30,10 @@ export class CardRecordEntity {
   @Column('varchar', { length: 255, nullable: true })
   author!: string | null;
 
+  /** Assigned governance reviewer (email), if any. */
+  @Column('varchar', { length: 255, nullable: true })
+  reviewer!: string | null;
+
   @Column('datetime', { nullable: true })
   nextReviewAt!: Date | null;
 

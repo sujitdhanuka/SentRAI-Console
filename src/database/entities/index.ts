@@ -65,6 +65,8 @@ import { CardFieldValueEntity } from './card-field-value.entity';
 import { FrameworkRegistryEntity } from './framework-registry.entity';
 import { FrameworkControlEntity } from './framework-control.entity';
 import { CardControlAssessmentEntity } from './card-control-assessment.entity';
+import { CardVersionEntity } from './card-version.entity';
+import { CardApprovalEntity } from './card-approval.entity';
 
 export {
   OrganizationEntity,
@@ -133,6 +135,8 @@ export {
   FrameworkRegistryEntity,
   FrameworkControlEntity,
   CardControlAssessmentEntity,
+  CardVersionEntity,
+  CardApprovalEntity,
   EuActRecordEntity,
 };
 
@@ -203,5 +207,7 @@ export const ALL_ENTITIES = [
   FrameworkRegistryEntity,
   FrameworkControlEntity,
   CardControlAssessmentEntity,
+  CardVersionEntity,
+  CardApprovalEntity,
   EuActRecordEntity,
 ];

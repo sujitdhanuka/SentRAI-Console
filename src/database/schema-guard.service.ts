@@ -76,6 +76,7 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   // Model card v2: record type (null until classified) and human/service accounts for owner checks.
   { table: 'ai_models', column: 'recordType', definition: 'VARCHAR(30) NULL' },
   { table: 'users', column: 'accountType', definition: "VARCHAR(10) NOT NULL DEFAULT 'HUMAN'" },
+  { table: 'card_records', column: 'reviewer', definition: 'VARCHAR(255) NULL' },
   // ai-model.entity.ts — governance Phase 2: reason codes (E2.2), MRM scope (E2.3), red-team-required flag (E2.8).
   { table: 'ai_models', column: 'reasonCodeMap', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'reasonCodeSign', definition: 'VARCHAR(10) NULL' },
@@ -1040,6 +1041,7 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`catalogueVersion\` VARCHAR(20) NOT NULL,
       \`workflowState\` VARCHAR(20) NOT NULL,
       \`author\` VARCHAR(255) NULL,
+      \`reviewer\` VARCHAR(255) NULL,
       \`nextReviewAt\` DATETIME NULL,
       \`lastApprovedVersion\` INT NULL,
       \`migratedFromV1\` TINYINT(1) NOT NULL DEFAULT 0,
@@ -1127,6 +1129,42 @@ const REQUIRED_TABLES: TableSpec[] = [
       \`updatedAt\` DATETIME NOT NULL,
       INDEX \`IDX_card_control_assessments_orgId\` (\`orgId\`),
       UNIQUE KEY \`UQ_card_control_assessments_model_fw_control\` (\`modelId\`, \`frameworkId\`, \`controlId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'card_versions', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`card_versions\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`version\` INT NOT NULL,
+      \`kind\` VARCHAR(20) NOT NULL,
+      \`workflowState\` VARCHAR(20) NOT NULL,
+      \`content\` MEDIUMTEXT NOT NULL,
+      \`contentHash\` VARCHAR(64) NOT NULL,
+      \`reason\` TEXT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      INDEX \`IDX_card_versions_orgId\` (\`orgId\`),
+      UNIQUE KEY \`UQ_card_versions_model_version\` (\`modelId\`, \`version\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'card_approvals', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`card_approvals\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`step\` VARCHAR(20) NOT NULL,
+      \`decision\` VARCHAR(30) NOT NULL,
+      \`conditions\` TEXT NULL,
+      \`comment\` TEXT NULL,
+      \`decidedBy\` VARCHAR(255) NOT NULL,
+      \`decidedRole\` VARCHAR(20) NOT NULL,
+      \`decidedAt\` DATETIME NOT NULL,
+      \`superseded\` TINYINT(1) NOT NULL DEFAULT 0,
+      INDEX \`IDX_card_approvals_orgId\` (\`orgId\`),
+      INDEX \`IDX_card_approvals_model\` (\`modelId\`, \`decidedAt\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {

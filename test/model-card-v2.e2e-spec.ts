@@ -113,6 +113,14 @@ describe('Model card v2 (e2e)', () => {
       expect(ctl.filter((c: any) => c.frameworkId === 'iso-42001-2023')).toHaveLength(9);
       expect(ctl.every((c: any) => c.status === 'NOT_ASSESSED' && c.migratedFromV1Verdict)).toBe(true);
 
+      // The migrated card is blocked from FINAL and shows ISO/IEC 42001 controls as NOT_ASSESSED.
+      const card = (await request(http).get(`/api/v1/governance/models/${o.modelId}/card-v2`).set(auth(o.owner)).expect(200)).body;
+      expect(card.gate.can_finalise).toBe(false);
+      expect(card.gate.blockers.map((b: any) => b.code)).toEqual(expect.arrayContaining(['UNACCEPTED_SUGGESTION', 'STATE_NOT_DEPLOYED_ACTIVE']));
+      const isoFw = card.frameworks.find((f: any) => f.framework_id === 'iso-42001-2023');
+      expect(isoFw.heading).toMatch(/cannot show conformity/);
+      expect(isoFw.controls.every((c: any) => c.status === 'NOT_ASSESSED')).toBe(true);
+
       // The v1 record is untouched; the v1 card still reads.
       expect(await db.query('SELECT * FROM ai_models WHERE id = ?', [o.modelId])).toEqual(before);
       await request(http).get(`/api/v1/governance/models/${o.modelId}/model-card`).set(auth(o.owner)).expect(200);
@@ -155,6 +163,103 @@ describe('Model card v2 (e2e)', () => {
       const pinned = (await request(http).get(`${R}/kr-ai-basic-act?revision=1`).set(auth(o.owner)).expect(200)).body;
       expect(pinned.framework).toMatchObject({ revision: 1, effective_note: null });
       expect((await request(http).get(R).set(auth(o.owner)).expect(200)).body.frameworks.find((f: any) => f.framework_id === 'kr-ai-basic-act').revision).toBe(2);
+    });
+  });
+
+  it('edits a card, walks it through separated approvals to an approved version, and reopens it on a triggering change', async () => {
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const o = await setupOrg('McV2Flow');
+      const other = await setupOrg('McV2FlowB');
+      const mk = async (role: string) => {
+        const email = `${role.toLowerCase()}2@mcv2flow.test`;
+        const res = await request(http).post('/api/v1/users').set(auth(o.admin))
+          .send({ email, full_name: `Flow ${role}`, password: 'pw123456', role, organization_id: o.orgId }).expect(201);
+        return { token: await login(email, 'pw123456'), id: res.body.user_id as string, email };
+      };
+      const ciso = await mk('CISO');
+      const approver = await mk('APPROVER');
+      const viewer = await mk('VIEWER');
+      const ownerUser = await mk('OWNER');
+      const C = `/api/v1/governance/models/${o.modelId}/card-v2`;
+      const set = (t: string, field: string, body: Record<string, any>, status = 200) => request(http).patch(`${C}/fields/${field}`).set(auth(t)).send(body).expect(status);
+
+      // A fresh card: nothing stored, blocked from FINAL, four scores with denominators.
+      const fresh = (await request(http).get(C).set(auth(viewer.token)).expect(200)).body;
+      expect(fresh.record.exists).toBe(false);
+      expect(fresh.gate.can_finalise).toBe(false);
+      expect(fresh.scores.map((x: any) => x.id)).toEqual(['documentation', 'evidence', 'control_effectiveness', 'regulatory']);
+      expect(fresh.scores.every((x: any) => typeof x.denominator === 'number' && x.how)).toBe(true);
+      expect(fresh.disclaimer).toMatch(/not evidence of compliance or certification/);
+      expect(JSON.stringify(fresh)).not.toMatch(/"compliant"|certified/i);
+
+      // Viewers read; they cannot edit. Another organisation cannot see the card.
+      await set(viewer.token, 'purpose', { value: 'x' }, 403);
+      await request(http).get(C).set(auth(other.owner)).expect(404);
+
+      // The owner writes first, so the owner is the author.
+      const key: Record<string, any> = {
+        record_type: 'AI_SYSTEM', model_category: 'TRADITIONAL_ML', purpose: 'Ranks support tickets for one internal team.',
+        model_lifecycle: 'DESIGN', deployment_status: 'NOT_DEPLOYED', operational_status: 'INACTIVE', accountable_owner: ownerUser.id,
+        impact_severity: 'MINOR', likelihood: 'UNLIKELY', tenant_reach: 'ONE_TENANT', users_reached: 20, autonomy_level: 'SUGGESTS',
+        data_sensitivity: 'LOW', decision_impact: 'INFORMATIONAL', reversibility: 'EASILY_REVERSED', personal_data: 'NO',
+        third_party_provider_used: 'NO', jurisdictions: ['IN'], inherent_risk_tier: 'LOW', residual_risk_tier: 'LOW',
+        risk_rationale: 'Internal ranking aid for one team; suggestions only, easily ignored, no personal data.',
+      };
+      for (const [f, v] of Object.entries(key)) await set(o.owner, f, { value: v });
+      // A service account cannot own the record.
+      await db.query("UPDATE users SET accountType = 'SERVICE' WHERE id = ?", [ciso.id]);
+      expect((await set(o.owner, 'accountable_owner', { value: ciso.id }, 400)).body.code).toBe('OWNER_SERVICE_ACCOUNT');
+      await db.query("UPDATE users SET accountType = 'HUMAN' WHERE id = ?", [ciso.id]);
+      // N/A needs a justification.
+      await set(o.owner, 'intended_use', { action: 'NOT_APPLICABLE', justification: 'no' }, 400);
+
+      // Fill every remaining required field, recording a justified N/A for the ones this test does not exercise.
+      for (let i = 0; i < 6; i++) {
+        const card = (await request(http).get(C).set(auth(o.owner)).expect(200)).body;
+        const missing = card.gate.blockers.filter((b: any) => b.field_id && !(b.field_id in key)).map((b: any) => b.field_id);
+        if (!missing.length) break;
+        for (const f of missing) await set(o.owner, f, { action: 'NOT_APPLICABLE', justification: 'Not exercised by this end-to-end test.' });
+      }
+      const ready = (await request(http).get(C).set(auth(o.owner)).expect(200)).body;
+      expect(ready.risk.status).toBe('ASSESSED');
+      expect(ready.gate.blockers).toEqual([]);
+      expect(ready.record.author).toBe('owner@mcv2flow.test');
+
+      // Control status moves only with evidence, and the implementer cannot verify.
+      const P = `${C}/controls/nist-ai-rmf-1.0/MAP-1`;
+      await request(http).put(P).set(auth(o.owner)).send({ status: 'IMPLEMENTED' }).expect(400);
+      await request(http).put(P).set(auth(o.owner)).send({ status: 'IMPLEMENTED', evidence_refs: [{ ref: 'doc://context', type: 'DOCUMENT' }] }).expect(200);
+      expect((await request(http).put(P).set(auth(o.owner)).send({ status: 'EVIDENCE_VERIFIED' }).expect(400)).body.code).toBe('SAME_PERSON');
+      await request(http).put(P).set(auth(ciso.token)).send({ status: 'EVIDENCE_VERIFIED' }).expect(200);
+
+      // Workflow with separation of duties.
+      const W = `${C}/workflow`;
+      const act = (t: string, action: string, extra: Record<string, any> = {}, status = 201) => request(http).post(W).set(auth(t)).send({ action, ...extra }).expect(status);
+      await act(o.owner, 'START_ASSESSMENT');
+      await act(o.owner, 'COLLECT_EVIDENCE');
+      await act(o.owner, 'SUBMIT_FOR_REVIEW');
+      expect((await act(o.owner, 'APPROVE', {}, 400)).body.message).toMatch(/author/);
+      await act(approver.token, 'APPROVE_WITH_CONDITIONS', { conditions: [{ text: 'Add monitoring before deployment', owner: ownerUser.email, due: '2027-01-31' }] });
+      expect((await act(approver.token, 'APPROVE', {}, 400)).body.message).toMatch(/Risk approval needs one of these roles/);
+      await act(ciso.token, 'APPROVE');
+      const approved = (await act(ciso.token, 'APPROVE')).body;
+      expect(approved.record).toMatchObject({ workflow_state: 'ACTIVE_MONITORING', last_approved_version: 1, review_status: 'SCHEDULED' });
+      expect(approved.approvals.map((a: any) => [a.step, a.decision])).toEqual([['GOVERNANCE', 'APPROVED_WITH_CONDITIONS'], ['RISK', 'APPROVED'], ['FINAL', 'APPROVED']]);
+
+      // A triggering change reopens it; the approved version stays readable.
+      const changed = (await set(o.owner, 'intended_use', { value: 'Ranks tickets and now drafts replies.' })).body;
+      expect(changed.reassessment).toMatchObject({ from: 'ACTIVE_MONITORING', to: 'REASSESSMENT' });
+      expect(changed.card.approvals.every((a: any) => a.superseded)).toBe(true);
+      const versions = (await request(http).get(`${C}/versions`).set(auth(viewer.token)).expect(200)).body;
+      expect(versions).toHaveLength(1);
+      expect(versions[0]).toMatchObject({ version: 1, kind: 'APPROVED', workflow_state: 'ACTIVE_MONITORING' });
+      const v1 = (await request(http).get(`${C}/versions/1`).set(auth(viewer.token)).expect(200)).body;
+      expect(v1.content.record.workflow_state).toBe('ACTIVE_MONITORING');
+      const history = (await request(http).get(`${C}/history`).set(auth(o.owner)).expect(200)).body.map((h: any) => h.event);
+      expect(history).toEqual(expect.arrayContaining(['CARD_FIELD_CHANGED', 'CARD_CONTROL_CHANGED', 'CARD_WORKFLOW', 'CARD_VERSION_FROZEN', 'CARD_REASSESSMENT_TRIGGERED']));
+      const changeEvent = (await request(http).get(`${C}/history`).set(auth(o.owner)).expect(200)).body.find((h: any) => h.event === 'CARD_FIELD_CHANGED' && h.data.field_id === 'intended_use' && h.data.action === 'SET');
+      expect(changeEvent.data.before).toBeDefined();
+      expect(changeEvent.data.after.value).toBe('Ranks tickets and now drafts replies.');
     });
   });
 });

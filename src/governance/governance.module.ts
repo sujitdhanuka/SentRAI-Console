@@ -56,6 +56,8 @@ import {
   FrameworkRegistryEntity,
   FrameworkControlEntity,
   CardControlAssessmentEntity,
+  CardVersionEntity,
+  CardApprovalEntity,
   CardFieldValueEntity,
   AiRecordLinkEntity,
   ModelApprovalEntity,
@@ -121,6 +123,7 @@ import { ModelCardsService } from './model-cards/model-cards.service';
 import { CardV2Controller } from './model-cards/v2/card-v2.controller';
 import { CardV2MigrationService } from './model-cards/v2/migration/card-v2-migration.service';
 import { FrameworkRegistryService } from './model-cards/v2/registry/framework-registry.service';
+import { CardV2Service } from './model-cards/v2/card-v2.service';
 import { EuActController, EuActPublicController } from './eu-act/eu-act.controller';
 import { EuActService } from './eu-act/eu-act.service';
 
@@ -150,7 +153,7 @@ import { EuActService } from './eu-act/eu-act.service';
       TrainingRecordEntity, DatasetEntity, ModelDatasetEntity,
       AiProviderAttestationEntity, AiProviderConfigEntity, BcpStateEntity, DisclosureEntity, EnergyReadingEntity, EngagementRecordEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity,
       ModelDeployerEntity, ModelRetirementEntity, SecurityEvaluationEntity, SoaEntryEntity, SoaStatementEntity, TestSetEntity, TevvRunEntity, ThreatModelEntity,
-      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity, CardRecordEntity, CardFieldValueEntity, AiRecordLinkEntity, FrameworkRegistryEntity, FrameworkControlEntity, CardControlAssessmentEntity,
+      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity, CardRecordEntity, CardFieldValueEntity, AiRecordLinkEntity, FrameworkRegistryEntity, FrameworkControlEntity, CardControlAssessmentEntity, CardVersionEntity, CardApprovalEntity,
     ]),
     InventoryModule,
     ComplianceModule, // board-pack inputs for management review (E1.6)
@@ -172,7 +175,7 @@ import { EuActService } from './eu-act/eu-act.service';
     AuDtaService, DecisionsService, FairLendingService, ValidationService, VendorsService, TrainingService,
     DatasetsService, RedTeamAuditService,
     SoaService, DisclosuresService, IncidentExtensionsService, TevvService, EnergyService, AiSecurityService,
-    EngagementService, FederalVendorService, ModelCardsService, CardV2MigrationService, FrameworkRegistryService,
+    EngagementService, FederalVendorService, ModelCardsService, CardV2MigrationService, FrameworkRegistryService, CardV2Service,
     EuActService,
   ],
   exports: [
