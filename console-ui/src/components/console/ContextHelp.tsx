@@ -31,6 +31,7 @@ const HELP_SECTIONS: Record<Route, string> = {
   governance: 'Governance',
   model: 'Model page',
   workflows: 'Workflows',
+  leads: 'Leads',
 };
 
 let docsCache: string | null = null;

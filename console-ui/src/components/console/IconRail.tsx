@@ -8,6 +8,7 @@ import {
   FolderGit2,
   Gauge,
   GitPullRequestArrow,
+  Inbox,
   History,
   Landmark,
   MessageSquareWarning,
@@ -22,7 +23,9 @@ import {
 import { navigate, Route, useRoute } from '../../stores/route';
 import { useSession } from '../../stores/session';
 import { useGovernanceFeatures } from '../../stores/governanceFeatures';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '../../api/client';
+import { LEADS_CHANGED } from '../../pages/Leads';
 
 interface NavItem {
   route: Route;
@@ -72,6 +75,7 @@ const FOOTER: NavItem[][] = [
     { route: 'ai-settings', icon: BrainCircuit, label: 'AI Settings', roles: ['ADMIN', 'CISO', 'OWNER'] },
     { route: 'users', icon: Users, label: 'Users', roles: ['ADMIN', 'OWNER'] },
     { route: 'orgs', icon: Building2, label: 'Organizations', globalAdminOnly: true },
+    { route: 'leads', icon: Inbox, label: 'Leads · demos and messages', globalAdminOnly: true },
   ],
   [
     { route: 'docs', icon: BookOpen, label: 'Docs' },
@@ -103,6 +107,19 @@ export function IconRail() {
     void loadFeatures();
   }, [loadFeatures]);
 
+  // Platform admin: count of new landing-page leads (demo bookings + messages),
+  // shown on the Leads icon and refreshed every minute.
+  const [newLeads, setNewLeads] = useState(0);
+  useEffect(() => {
+    if (!isGlobalAdmin) return;
+    let alive = true;
+    const poll = () => api<{ new_total: number }>('/leads/summary').then((s) => alive && setNewLeads(s?.new_total ?? 0)).catch(() => {});
+    poll();
+    const t = window.setInterval(poll, 60_000);
+    window.addEventListener(LEADS_CHANGED, poll);
+    return () => { alive = false; window.clearInterval(t); window.removeEventListener(LEADS_CHANGED, poll); };
+  }, [isGlobalAdmin]);
+
   const allowed = (n: NavItem) => {
     if (n.flag && !features?.[n.flag]) return false;
     if (n.globalAdminOnly) return isGlobalAdmin;
@@ -129,7 +146,12 @@ export function IconRail() {
       }`}
     >
       <Icon size={17} strokeWidth={1.75} />
-      <RailTooltip label={label} />
+      {route === 'leads' && newLeads > 0 && (
+        <span aria-label={`${newLeads} new`} className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-negative px-1 font-mono text-[9px] font-semibold leading-none text-white">
+          {newLeads > 99 ? '99+' : newLeads}
+        </span>
+      )}
+      <RailTooltip label={newLeads > 0 && route === 'leads' ? `${label} · ${newLeads} new` : label} />
     </button>
   );
   const divider = (key: string) => <div key={key} role="separator" className="my-1 h-px w-6 shrink-0 bg-border" />;

@@ -57,6 +57,7 @@ import { ThreatModelEntity } from './threat-model.entity';
 import { SecurityEvaluationEntity } from './security-evaluation.entity';
 import { EngagementRecordEntity } from './engagement-record.entity';
 import { EuActRecordEntity } from './eu-act-record.entity';
+import { LeadEntity } from './lead.entity';
 import { AiProviderAttestationEntity } from './ai-provider-attestation.entity';
 import { ModelCardEntity } from './model-card.entity';
 import { AiRecordLinkEntity } from './ai-record-link.entity';
@@ -138,6 +139,7 @@ export {
   CardVersionEntity,
   CardApprovalEntity,
   EuActRecordEntity,
+  LeadEntity,
 };
 
 export const ALL_ENTITIES = [
@@ -210,4 +212,5 @@ export const ALL_ENTITIES = [
   CardVersionEntity,
   CardApprovalEntity,
   EuActRecordEntity,
+  LeadEntity,
 ];
