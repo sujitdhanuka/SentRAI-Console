@@ -14,6 +14,7 @@ import { routeParam } from '../stores/route';
 import { useSession } from '../stores/session';
 import { EnergyTab, SecurityTab, TevvTab } from './GovernancePhase3';
 import { ModelCardTab } from './ModelCard';
+import { ModelCardV2Tab } from './ModelCardV2';
 import { FairLendingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 
@@ -214,9 +215,11 @@ export function ModelPage() {
       {!f.vendors && <p className="text-[11px] text-text-secondary">Vendors, the AI bill of materials and linked datasets appear here once the vendor register is on.</p>}
     </>
   );
-  else if (tab === 'card') body = f.modelCards
-    ? <ModelCardTab modelId={modelId} />
-    : <p className="text-[11px] text-text-secondary">Model cards appear here once the model card feature is on (GOV_E4_1_MODEL_CARDS).</p>;
+  else if (tab === 'card') body = f.modelCardV2
+    ? <ModelCardV2Tab modelId={modelId} />
+    : f.modelCards
+      ? <ModelCardTab modelId={modelId} />
+      : <p className="text-[11px] text-text-secondary">Model cards appear here once the model card feature is on (GOV_E4_1_MODEL_CARDS).</p>;
   else body = <ModelHistory modelId={modelId} />;
 
   return (
