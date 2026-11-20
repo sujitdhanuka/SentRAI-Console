@@ -39,6 +39,7 @@ export const KNOWN_REQUIREMENTS = [
   'human_oversight',
   'bias_test_evidence',
   'red_team_evidence',
+  'llm_models_confirmed', // the owner confirmed which LLM models an LLM-calling asset uses (opt-in)
 ] as const;
 
 export function defaultPolicy(): PolicyContract {

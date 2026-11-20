@@ -18,6 +18,7 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { NotifierService } from '../common/notifier.service';
 import { authorizeTools } from '../domain/tool-authorization';
 import { ActionEventDto, IngestEventsDto } from './telemetry.dto';
+import { isConfirmedCall, servedModel } from './llm-models';
 
 /**
  * Runtime action telemetry (Roadmap Pillar 3 — Visibility). Ingests the events
@@ -82,10 +83,12 @@ export class TelemetryService {
         tenantId,
         sessionId: ev.session_id ?? null,
         eventType: ev.type,
-        tool: ev.tool ?? null,
+        // An llm_call files its served model under `tool` (llm:<model>) so the
+        // timeline and scope-deviation views name it without a schema change.
+        tool: ev.type === 'llm_call' ? (servedModel(ev) ? `llm:${servedModel(ev)}`.slice(0, 160) : null) : ev.tool ?? null,
         outcome,
         flagged: isFlagged,
-        detail: ev.detail ? maskDict(ev.detail) : null,
+        detail: this.eventDetail(ev),
         actor: user.email,
         occurredAt: ev.occurred_at ? new Date(ev.occurred_at) : new Date(),
       }));
@@ -95,8 +98,26 @@ export class TelemetryService {
     return { ingested, flagged, unknown_models: [...unknownModels] };
   }
 
-  /** Decide the outcome + whether a tool_call violates static authorization. */
+  private eventDetail(ev: ActionEventDto): Record<string, any> | null {
+    const base = ev.detail ? maskDict(ev.detail) : null;
+    if (ev.type !== 'llm_call') return base;
+    const llm = {
+      ...(ev.provider ? { provider: ev.provider } : {}),
+      ...(ev.model ? { model: ev.model } : {}),
+      ...(ev.response_model ? { response_model: ev.response_model } : {}),
+      ...(ev.task ? { task: ev.task } : {}),
+    };
+    return { ...(base ?? {}), llm };
+  }
+
+  /** Decide the outcome + whether a tool_call violates static authorization,
+   *  or an llm_call used a model outside the owner-confirmed list. */
   private evaluateEvent(ev: ActionEventDto, model: AIModelEntity): { isFlagged: boolean; outcome: string } {
+    if (ev.type === 'llm_call') {
+      // Only enforced once models are confirmed; before that the record shows
+      // "not confirmed" instead (same stance as an undeclared tool scope).
+      if (isConfirmedCall(model.llmModels, ev) === false) return { isFlagged: true, outcome: 'unconfirmed_model' };
+    }
     if (ev.type === 'tool_call' && ev.tool) {
       const permitted = model.permittedTools ?? [];
       // Only enforce once a permitted set is declared (matches the CI gate's
@@ -106,7 +127,7 @@ export class TelemetryService {
         if (auth.unauthorized.length > 0) return { isFlagged: true, outcome: 'unauthorized_tool' };
       }
     }
-    const allowed = ['success', 'blocked', 'error', 'unauthorized_tool'];
+    const allowed = ['success', 'blocked', 'error', 'unauthorized_tool', 'unconfirmed_model'];
     return { isFlagged: false, outcome: allowed.includes(ev.outcome ?? '') ? (ev.outcome as string) : 'success' };
   }
 
@@ -292,6 +313,8 @@ export class TelemetryService {
     if (type === 'GOVERNANCE_UPDATED') return `governance updated: ${Object.keys(data).join(', ')}`;
     if (type === 'APPROVAL_GRANTED' || type === 'APPROVAL_REQUESTED') return `${type.toLowerCase().replace('_', ' ')}`;
     if (type === 'OPERATIONAL_SUSPENDED') return `suspended — ${data.reason ?? ''}`;
+    if (type === 'LLM_MODELS_CONFIRMED') return `LLM models confirmed: ${(data.entries ?? []).map((e: any) => `${e.task} → ${e.model}`).join(', ')}`;
+    if (type === 'LLM_MODELS_CLEARED') return 'LLM model confirmation withdrawn';
     if (type === 'SCOPE_DEVIATION_DETECTED') return `scope deviation: ${data.unauthorized_calls} unauthorized tool call(s)`;
     if (type === 'ADVERSARIAL_EVIDENCE_INGESTED') return `adversarial eval: ${data.suite} · ${data.failures} breach(es)`;
     if (type === 'EVAL_EVIDENCE_INGESTED') return `eval evidence: ${data.suite} ${data.passed}/${data.total}`;

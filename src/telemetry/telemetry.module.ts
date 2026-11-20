@@ -13,6 +13,8 @@ import {
 import { NotifierService } from '../common/notifier.service';
 import { TelemetryController } from './telemetry.controller';
 import { TelemetryService } from './telemetry.service';
+import { LlmModelsController } from './llm-models.controller';
+import { LlmModelsService } from './llm-models.service';
 
 /**
  * Pillar 3 — Visibility: runtime action-telemetry ingestion and the cross-ledger
@@ -31,8 +33,8 @@ import { TelemetryService } from './telemetry.service';
       DeploymentGateEventEntity,
     ]),
   ],
-  controllers: [TelemetryController],
-  providers: [TelemetryService, NotifierService],
+  controllers: [TelemetryController, LlmModelsController],
+  providers: [TelemetryService, LlmModelsService, NotifierService],
   exports: [TelemetryService], // for the scheduled scope-deviation escalation
 })
 export class TelemetryModule {}

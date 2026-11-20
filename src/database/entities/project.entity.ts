@@ -1,6 +1,7 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 
 import { largeJsonColumnType, safeJsonTransformer } from '../json-transformer';
+import type { LlmConfigSummary } from '../../discovery/llm-config-detector';
 
 /**
  * A tracked application/codebase. Each project owns its own scan history and
@@ -34,7 +35,7 @@ export class ProjectEntity {
    * a corrupt value back as `null` rather than throwing.
    */
   @Column({ type: largeJsonColumnType(), nullable: true, transformer: safeJsonTransformer })
-  lastScanResult!: { scanned_at: string; ast_coverage: string; files_flagged: number; candidates: any[] } | null;
+  lastScanResult!: { scanned_at: string; ast_coverage: string; files_flagged: number; candidates: any[]; llm_config?: LlmConfigSummary | null } | null;
 
   /**
    * Where the codebase came from: 'zip', 'folder', or 'github:owner/repo@branch'.

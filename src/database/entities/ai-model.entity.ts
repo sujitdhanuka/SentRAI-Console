@@ -1,4 +1,7 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { largeJsonColumnType, safeJsonTransformer } from '../json-transformer';
+import type { LlmRecordConfig } from '../../discovery/llm-config-detector';
+import type { LlmModelsAttestation } from '../../telemetry/llm-models';
 
 /**
  * AI model inventory entry (REC 23). Enum-valued columns are stored as
@@ -113,6 +116,16 @@ export class AIModelEntity {
    *  A detected tool outside this set is an authorization violation. */
   @Column('simple-json', { nullable: true })
   permittedTools!: string[] | null;
+
+  /** Where the scan found this record's LLM models named or stored (schema
+   *  columns, settings keys, env vars, defaults, seeds). Refreshed on scan. */
+  @Column({ type: largeJsonColumnType(), nullable: true, transformer: safeJsonTransformer })
+  llmConfig!: LlmRecordConfig | null;
+
+  /** The per-task LLM models an owner confirmed are in use. Runtime llm_call
+   *  telemetry outside this list is flagged. */
+  @Column('simple-json', { nullable: true })
+  llmModels!: LlmModelsAttestation | null;
 
   /** Deliberate operational control state (kill switch): ACTIVE | SUSPENDED.
    *  Distinct from the drift-driven BCP fallback — this is an operator action. */

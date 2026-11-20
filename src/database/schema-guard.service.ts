@@ -53,6 +53,9 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   // ai-model.entity.ts — static tool authorization + operational control (Pillar 2).
   { table: 'ai_models', column: 'detectedTools', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'permittedTools', definition: 'TEXT NULL' },
+  // ai-model.entity.ts — underlying LLM models: scan evidence + owner confirmation.
+  { table: 'ai_models', column: 'llmConfig', definition: 'MEDIUMTEXT NULL' },
+  { table: 'ai_models', column: 'llmModels', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'operationalState', definition: "VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'" },
   { table: 'ai_models', column: 'operationalStateReason', definition: 'VARCHAR(500) NULL' },
   { table: 'ai_models', column: 'operationalStateSince', definition: 'DATETIME NULL' },

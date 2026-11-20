@@ -23,6 +23,7 @@ import { expandAndResolve } from '../common/fs-utils';
 import { WORKSPACES_DIR } from '../common/paths';
 import { candidateAsDict, candidateFromDict, DiscoveredCandidate, scanDirectory } from './codebase-scanner';
 import { TreeSitterService } from './tree-sitter-parser';
+import { detectLlmConfig, isLlmCandidate, LlmConfigSummary, llmConfigForRecord } from './llm-config-detector';
 import { locationOfCandidate, sourceLocationsOf, upsertLocation } from './source-locations';
 import { GenerationQueueService } from '../inventory/generation-queue.service';
 import { Neo4jClient } from './neo4j-client';
@@ -156,6 +157,7 @@ export class DiscoveryService {
       ast_coverage: r.ast_coverage,
       files_flagged: r.files_flagged,
       candidates: r.candidates,
+      llm_config: r.llm_config ?? null,
       served_from: 'stored',
       scanned_at: r.scanned_at,
     };
@@ -184,8 +186,10 @@ export class DiscoveryService {
     }
 
     let candidates: DiscoveredCandidate[];
+    let llmConfig: LlmConfigSummary | null = null;
     try {
       candidates = scanDirectory(resolved, this.treeSitter);
+      llmConfig = this.safeLlmConfig(resolved);
     } catch (e) {
       // A live read error must never lose a prior result — serve the stored one.
       if (project?.lastScanResult) {
@@ -204,6 +208,7 @@ export class DiscoveryService {
         ast_coverage: astCoverage,
         files_flagged: dicts.length,
         candidates: dicts,
+        llm_config: llmConfig,
       };
       await this.projects.save(project);
     }
@@ -214,8 +219,30 @@ export class DiscoveryService {
       ast_coverage: astCoverage,
       files_flagged: dicts.length,
       candidates: dicts,
+      llm_config: llmConfig,
       served_from: 'live',
     };
+  }
+
+  /** Where the scanned app names or stores its LLM models. Never fails a scan. */
+  private safeLlmConfig(root: string): LlmConfigSummary | null {
+    try {
+      return detectLlmConfig(root);
+    } catch (e) {
+      this.logger.warn(`llm-config detection failed for ${root}: ${String(e)}`);
+      return null;
+    }
+  }
+
+  /** Attach the scan's LLM-model evidence to a record that calls an LLM. */
+  private applyLlmConfig(orm: AIModelEntity, cand: DiscoveredCandidate, summary: LlmConfigSummary | null): boolean {
+    if (!summary || !isLlmCandidate(cand)) return false;
+    const files = orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : [cand.filePath]);
+    const next = llmConfigForRecord(summary, files);
+    const strip = (v: any) => JSON.stringify(v ? { ...v, scanned_at: undefined } : null);
+    if (strip(next) === strip(orm.llmConfig)) return false;
+    orm.llmConfig = next;
+    return true;
   }
 
   private autoDescription(cand: DiscoveredCandidate): string {
@@ -244,6 +271,7 @@ export class DiscoveryService {
   private async mergeIntoExisting(
     orm: AIModelEntity,
     cand: DiscoveredCandidate,
+    llmConfig: LlmConfigSummary | null = null,
   ): Promise<ImportedModel> {
     const matchedOn = orm.sourceRef === cand.filePath ? 'source_ref' : 'name';
     const known = new Set(orm.sourceRefs ?? (orm.sourceRef ? [orm.sourceRef] : []));
@@ -254,8 +282,10 @@ export class DiscoveryService {
     const locations = upsertLocation(sourceLocationsOf(orm), locationOfCandidate(cand));
     const locationsChanged = JSON.stringify(locations) !== JSON.stringify(orm.sourceLocations ?? null);
     orm.sourceLocations = locations;
+    if (isNewFile) orm.sourceRefs = [...new Set([...known, cand.filePath])];
+    const llmChanged = this.applyLlmConfig(orm, cand, llmConfig);
 
-    if (!isNewFile && locationsChanged) {
+    if (!isNewFile && (locationsChanged || llmChanged)) {
       orm.updatedAt = new Date();
       await this.models.save(orm);
     }
@@ -347,10 +377,13 @@ export class DiscoveryService {
       existsSync(resolved) && statSync(resolved).isDirectory() &&
       (this.isManagedWorkspace(dir) || this.config.get<boolean>('allowServerFs'));
     let candidates: DiscoveredCandidate[];
+    let llmConfig: LlmConfigSummary | null = null;
     if (readable) {
       candidates = scanDirectory(resolved, this.treeSitter);
+      llmConfig = this.safeLlmConfig(resolved);
     } else if (project?.lastScanResult) {
       candidates = project.lastScanResult.candidates.map(candidateFromDict);
+      llmConfig = project.lastScanResult.llm_config ?? null;
     } else {
       throw new BadRequestException(
         'No codebase found for this project. Upload a codebase (zip/folder/GitHub) — it is scanned on upload and the result is stored.',
@@ -379,7 +412,7 @@ export class DiscoveryService {
           // Not a duplicate to discard — the same model found in another file.
           // Fold this hit into the record that already governs it so the
           // inventory count matches what the scan actually found.
-          const merged = await this.mergeIntoExisting(existing[0], cand);
+          const merged = await this.mergeIntoExisting(existing[0], cand, llmConfig);
           imported.push(merged);
           continue;
         }
@@ -453,6 +486,9 @@ export class DiscoveryService {
         detectionSignals: [...new Set(cand.signals.map((s) => s.category))],
         // Tools/capabilities the code invokes — the input to tool authorization.
         detectedTools: cand.tools.length ? cand.tools : null,
+        // Where the app names or stores its LLM models (Prisma/SQL/ORM columns,
+        // settings keys, env vars), for the owner to confirm the real ones.
+        llmConfig: llmConfig && isLlmCandidate(cand) ? llmConfigForRecord(llmConfig, [cand.filePath]) : null,
         isActive: true,
         registeredAt: entry.registeredAt,
         updatedAt: entry.updatedAt,
