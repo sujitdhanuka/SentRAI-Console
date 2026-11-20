@@ -58,6 +58,7 @@ const COUNT_STATES = ['ZERO_RECORDED', 'RECORDED', 'NO_DATA', 'NOT_MONITORED'];
 const LABEL = 'text-[9px] font-medium uppercase tracking-widest text-text-tertiary';
 
 const human = (s: string | null | undefined) => (s ? s.replace(/_/g, ' ').toLowerCase() : '—');
+const sentence = (s: string) => { const h = human(s); return h.charAt(0).toUpperCase() + h.slice(1); };
 const show = (v: any): string => {
   if (v === null || v === undefined || v === '') return '—';
   if (Array.isArray(v)) return v.length ? v.map((x) => (x && typeof x === 'object' ? Object.values(x).filter((y) => y !== null && y !== '').join(' / ') : String(x))).join('; ') : '—';
@@ -303,7 +304,7 @@ function WorkflowPanel({ data, modelId, reload }: { data: CardV2; modelId: strin
   const [cond, setCond] = useState({ text: '', owner: '', due: '' });
   const st = data.record.workflow_state;
   const run = (action: string, extra: Record<string, any> = {}) =>
-    call(() => post(`/governance/models/${modelId}/card-v2/workflow`, { action, comment: comment.trim() || undefined, ...extra }), `${human(action)}: done`, () => { setComment(''); reload(); });
+    call(() => post(`/governance/models/${modelId}/card-v2/workflow`, { action, comment: comment.trim() || undefined, ...extra }), `${sentence(action)}: done`, () => { setComment(''); reload(); });
   const inReview = ['GOVERNANCE_REVIEW', 'RISK_APPROVAL', 'FINAL_APPROVAL'].includes(st);
   const next: Record<string, string> = { DRAFT: 'START_ASSESSMENT', ASSESSMENT: 'COLLECT_EVIDENCE', REASSESSMENT: 'COLLECT_EVIDENCE', EVIDENCE_COLLECTION: 'SUBMIT_FOR_REVIEW' };
   return (
@@ -314,7 +315,7 @@ function WorkflowPanel({ data, modelId, reload }: { data: CardV2; modelId: strin
           <>
             <input className={FIELD} placeholder="Comment (a reason is needed to reject, reassess or retire)" value={comment} onChange={(e) => setComment(e.target.value)} />
             <div className="flex flex-wrap gap-1">
-              {next[st] && <Button size="xs" variant="primary" onClick={() => void run(next[st])}>{human(next[st])}</Button>}
+              {next[st] && <Button size="xs" variant="primary" onClick={() => void run(next[st])}>{sentence(next[st])}</Button>}
               {inReview && (
                 <>
                   <Button size="xs" variant="primary" title={st === 'FINAL_APPROVAL' && !data.gate.can_finalise ? 'The gate has blockers' : ''} onClick={() => void run('APPROVE')}><Lock size={11} /> Approve</Button>
