@@ -1032,6 +1032,53 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'card_records', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`card_records\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`catalogueVersion\` VARCHAR(20) NOT NULL,
+      \`workflowState\` VARCHAR(20) NOT NULL,
+      \`author\` VARCHAR(255) NULL,
+      \`nextReviewAt\` DATETIME NULL,
+      \`lastApprovedVersion\` INT NULL,
+      \`migratedFromV1\` TINYINT(1) NOT NULL DEFAULT 0,
+      \`migrationNote\` TEXT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_card_records_orgId\` (\`orgId\`),
+      UNIQUE KEY \`UQ_card_records_modelId\` (\`modelId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'card_field_values', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`card_field_values\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`fieldId\` VARCHAR(80) NOT NULL,
+      \`value\` MEDIUMTEXT NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`provenance\` VARCHAR(20) NULL,
+      \`sourceRef\` VARCHAR(500) NULL,
+      \`enteredBy\` VARCHAR(255) NULL,
+      \`enteredAt\` DATETIME NULL,
+      \`acceptedBy\` VARCHAR(255) NULL,
+      \`acceptedAt\` DATETIME NULL,
+      \`suggestion\` MEDIUMTEXT NULL,
+      \`naJustification\` TEXT NULL,
+      \`naDecidedBy\` VARCHAR(255) NULL,
+      \`evidenceRefs\` TEXT NULL,
+      \`verifiedBy\` VARCHAR(255) NULL,
+      \`verifiedAt\` DATETIME NULL,
+      \`catalogueVersion\` VARCHAR(20) NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_card_field_values_modelId\` (\`modelId\`),
+      INDEX \`IDX_card_field_values_org_field\` (\`orgId\`, \`fieldId\`),
+      UNIQUE KEY \`UQ_card_field_values_model_field\` (\`modelId\`, \`fieldId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'energy_readings', // governance Phase 3
     createSql: `CREATE TABLE IF NOT EXISTS \`energy_readings\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

@@ -60,6 +60,8 @@ import { EuActRecordEntity } from './eu-act-record.entity';
 import { AiProviderAttestationEntity } from './ai-provider-attestation.entity';
 import { ModelCardEntity } from './model-card.entity';
 import { AiRecordLinkEntity } from './ai-record-link.entity';
+import { CardRecordEntity } from './card-record.entity';
+import { CardFieldValueEntity } from './card-field-value.entity';
 
 export {
   OrganizationEntity,
@@ -123,6 +125,8 @@ export {
   AiProviderAttestationEntity,
   ModelCardEntity,
   AiRecordLinkEntity,
+  CardRecordEntity,
+  CardFieldValueEntity,
   EuActRecordEntity,
 };
 
@@ -188,5 +192,7 @@ export const ALL_ENTITIES = [
   AiProviderAttestationEntity,
   ModelCardEntity,
   AiRecordLinkEntity,
+  CardRecordEntity,
+  CardFieldValueEntity,
   EuActRecordEntity,
 ];

@@ -40,7 +40,8 @@ export const PROMPT_USE_CASES: PromptUseCase[] = [
     ],
     defaultBody: [
       'You are an AI-governance analyst. Write a concise, plain-language summary of what this software component does, for a compliance inventory read by risk officers and auditors (not engineers).',
-      'Rules: 2–4 sentences. Say what it does, what decisions/outputs it influences, and who/what it affects. Note if it processes personal data. Do NOT restate code identifiers or include code. Do NOT invent capabilities not evidenced below.',
+      'Rules: 2–4 sentences. Say what it does, what decisions/outputs it influences, and who/what it affects. Say whether it processes personal data only if the evidence below shows it; otherwise write "Personal data: UNKNOWN". Never write "likely" or guess. Do NOT restate code identifiers or include code. Do NOT invent capabilities not evidenced below.',
+      'Answer with the summary only: no preamble such as "Here is", and no closing note about the excerpt.',
       '',
       'Name: {{name}}',
       'Detected type: {{model_type}}',
@@ -69,6 +70,7 @@ export const PROMPT_USE_CASES: PromptUseCase[] = [
     ],
     defaultBody: [
       'You are an AI-governance analyst. Draft an auditor-ready rationale for why this AI model is classified {{risk_level}} risk. 3–5 sentences, plain language, grounded ONLY in the factors below. If evidence is thin, state what must be verified rather than inventing it.',
+      'A value that is missing or "none declared" is NOT evidence and must never be used to justify a lower risk; say it still needs to be assessed. Consider how many users, organisations or tenants one change reaches. Answer with the rationale only: no preamble such as "Here is", and no closing note.',
       '',
       'Model: {{name}} ({{model_type}}) — {{functional_area}}',
       'Assigned risk level: {{risk_level}}',

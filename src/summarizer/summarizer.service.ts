@@ -12,6 +12,7 @@ import { AiUsageEventEntity } from '../database/entities';
 import { ConfiguredLlmSummarizer } from './configured-llm.summarizer';
 import { HeuristicSummarizer } from './heuristic.summarizer';
 import { redactSecrets } from './redact';
+import { sanitiseSuggestion } from './sanitise';
 import { SummarizationContext, Summarizer, SummaryResult } from './summarizer.types';
 
 /**
@@ -227,7 +228,8 @@ export class SummarizerService {
           tenantId, useCase, provider: label, model: cfg.model, status: 'ok',
           tokensIn: r.tokensIn, tokensOut: r.tokensOut, latencyMs: r.latencyMs, actor,
         });
-        return { text: r.text, source: 'ai', model: cfg.model, provider: label };
+        // Strip chat preambles, excerpt disclaimers and speculative sentences (model card v2, D3/D4).
+        return { text: sanitiseSuggestion(r.text).text, source: 'ai', model: cfg.model, provider: label };
       } catch (e) {
         this.recordOutcome(key, false);
         await this.meter({

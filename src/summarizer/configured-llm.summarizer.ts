@@ -1,5 +1,6 @@
 import { chatComplete } from '../ai/llm-client';
 import { buildSummaryPrompt } from './prompt-builder';
+import { sanitiseSuggestion } from './sanitise';
 import { SummarizationContext, Summarizer, SummaryResult } from './summarizer.types';
 
 /**
@@ -32,6 +33,7 @@ export class ConfiguredLlmSummarizer implements Summarizer {
       maxTokens: 400,
       timeoutMs: 45_000,
     });
-    return { text: r.text, source: this.source, model: this.model, tokensIn: r.tokensIn, tokensOut: r.tokensOut, latencyMs: r.latencyMs };
+    // Strip chat preambles, excerpt disclaimers and speculative sentences (model card v2, D3/D4).
+    return { text: sanitiseSuggestion(r.text).text, source: this.source, model: this.model, tokensIn: r.tokensIn, tokensOut: r.tokensOut, latencyMs: r.latencyMs };
   }
 }
