@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Res, UseInterceptors } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -102,6 +103,21 @@ export class CardV2Controller {
   @Get('models/:modelId/card-v2/versions/:version')
   version(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Param('version', ParseIntPipe) version: number) {
     return this.cards.getVersion(user, modelId, version);
+  }
+
+  /** What changed between two versions; either side may be `live`. */
+  @Get('models/:modelId/card-v2/versions/:a/diff/:b')
+  diff(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Param('a') a: string, @Param('b') b: string) {
+    return this.cards.diff(user, modelId, a, b);
+  }
+
+  /** Export as PDF (default) or JSON; `version` picks a frozen version, otherwise the live card (watermarked DRAFT). */
+  @Get('models/:modelId/card-v2/export')
+  async exportCard(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string, @Res() res: Response, @Query('format') format?: string, @Query('version') version?: string): Promise<void> {
+    const file = await this.cards.exportCard(user, modelId, format ?? 'pdf', version);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.send(file.body);
   }
 
   @Get('models/:modelId/card-v2/history')

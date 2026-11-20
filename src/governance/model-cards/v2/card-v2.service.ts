@@ -26,7 +26,9 @@ import { cardV2Settings } from '../../settings/settings.model';
 import { GovernanceSettingsService } from '../../settings/settings.service';
 import { evaluateApplicability } from './applicability/engine';
 import { factsFrom } from './applicability/facts';
+import { generateCardV2Pdf, PdfMeta } from './card-v2.pdf';
 import { CATALOGUE_VERSION, fieldDef, SECTIONS } from './catalogue';
+import { diffCards } from './diff';
 import { resolveConfiguration, Tier } from './config-resolver';
 import { checkConsistency } from './consistency';
 import { ControlAssessment, ControlStateError, changeControl, controlViews, frameworkHeading } from './controls';
@@ -493,6 +495,53 @@ export class CardV2Service {
     const r = await this.versions.findOne({ where: { modelId, version } });
     if (!r) throw new NotFoundException(`Version ${version} not found`);
     return { version: r.version, kind: r.kind, workflow_state: r.workflowState, content_hash: r.contentHash, created_by: r.createdBy, created_at: iso(r.createdAt), content: r.content };
+  }
+
+  /** The card content to compare or export: a frozen version, or 'live' (the card as it stands, with its hash). */
+  private async contentOf(user: CurrentUser, modelId: string, which: string) {
+    if (which === 'live') {
+      const at = new Date();
+      const { model, orgId } = await this.access(user, modelId);
+      const record = await this.records.findOne({ where: { modelId } });
+      const values = await this.valueMap(modelId);
+      const c = await this.compute(model, orgId, record, values, at);
+      const content = this.view(model, orgId, record, values, c, at);
+      const hash = createHash('sha256').update(stable({ values, frameworks: content.frameworks, risk: c.risk, scores: c.scores })).digest('hex');
+      return { version: null as number | null, kind: 'LIVE' as const, content: content as any, hash, until: at };
+    }
+    const n = Number(which);
+    if (!Number.isInteger(n) || n < 1) throw new BadRequestException("A version is a positive whole number or 'live'");
+    const v = await this.getVersion(user, modelId, n);
+    return { version: v.version, kind: v.kind as 'APPROVED' | 'SNAPSHOT', content: v.content as any, hash: v.content_hash, until: new Date(v.created_at as string) };
+  }
+
+  /** What changed between two versions (either may be 'live'). */
+  async diff(user: CurrentUser, modelId: string, a: string, b: string) {
+    const x = await this.contentOf(user, modelId, a);
+    const y = await this.contentOf(user, modelId, b);
+    return { from: { version: x.version, kind: x.kind, content_hash: x.hash }, to: { version: y.version, kind: y.kind, content_hash: y.hash }, ...diffCards(x.content, y.content) };
+  }
+
+  /**
+   * Export the card (spec §12) as PDF or JSON: the live card by default, or a
+   * frozen version. Approvals are those recorded up to that version. Only an
+   * APPROVED version is printed without the DRAFT watermark.
+   */
+  async exportCard(user: CurrentUser, modelId: string, format: string, which?: string) {
+    if (format !== 'pdf' && format !== 'json') throw new BadRequestException("format is 'pdf' or 'json'");
+    const c = await this.contentOf(user, modelId, which && which !== '' ? which : 'live');
+    const approvals = (await this.approvals.find({ where: { modelId }, order: { decidedAt: 'ASC' } }))
+      .filter((a) => a.decidedAt <= c.until)
+      .map((a) => ({ step: a.step, decision: a.decision, conditions: a.conditions ?? [], comment: a.comment, decided_by: a.decidedBy, decided_role: a.decidedRole, decided_at: iso(a.decidedAt), superseded: a.superseded }));
+    const card = { ...c.content, approvals };
+    const meta: PdfMeta = { version: c.version, kind: c.kind, content_hash: c.hash, generated_by: user.email, generated_at: new Date().toISOString() };
+    const slug = String(card.model_name ?? modelId).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'model';
+    const suffix = c.version === null ? 'draft' : `v${c.version}${c.kind === 'APPROVED' ? '' : '-draft'}`;
+    await this.event(modelId, 'CARD_EXPORTED', user.email, new Date(), { format, version: c.version, kind: c.kind, content_hash: c.hash });
+    if (format === 'json') {
+      return { filename: `model-card-${slug}-${suffix}.json`, contentType: 'application/json', body: Buffer.from(JSON.stringify({ document_control: meta, card }, null, 2)) };
+    }
+    return { filename: `model-card-${slug}-${suffix}.pdf`, contentType: 'application/pdf', body: await generateCardV2Pdf(card, meta) };
   }
 
   /** The audit trail of this card (ledger events written by v2). */

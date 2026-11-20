@@ -1,0 +1,190 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`model card v2 PDF lays out the card (snapshot) 1`] = `
+[
+  {
+    "k": "title",
+    "text": "Model card: Global Ai Model Settings",
+  },
+  {
+    "k": "h",
+    "text": "Document control",
+  },
+  {
+    "k": "kv",
+    "label": "Status",
+    "text": "DRAFT (live)",
+  },
+  {
+    "k": "kv",
+    "label": "Workflow state",
+    "text": "DRAFT",
+  },
+  {
+    "k": "kv",
+    "label": "Content hash (SHA-256)",
+    "text": "abc123",
+  },
+  {
+    "k": "kv",
+    "label": "Generated",
+    "text": "2026-11-20T10:00:00.000Z by officer@example.com",
+  },
+  {
+    "k": "kv",
+    "label": "Catalogue version",
+    "text": "2.0.0",
+  },
+  {
+    "k": "p",
+    "text": "This model card documents the system. Framework mappings are not evidence of compliance or certification.",
+  },
+  {
+    "k": "h",
+    "text": "Summary",
+  },
+  {
+    "k": "kv",
+    "label": "Record type",
+    "text": "MODEL_CONFIGURATION (not yet accepted by a person)",
+  },
+  {
+    "k": "kv",
+    "label": "component lifecycle",
+    "text": "PLANNED",
+  },
+  {
+    "k": "kv",
+    "label": "deployment status",
+    "text": "NOT_DEPLOYED",
+  },
+  {
+    "k": "kv",
+    "label": "operational status",
+    "text": "ACTIVE",
+  },
+  {
+    "k": "kv",
+    "label": "governance workflow state",
+    "text": "DRAFT",
+  },
+  {
+    "k": "kv",
+    "label": "Internal risk tier",
+    "text": "inherent —, residual — (BLOCKED)",
+  },
+  {
+    "k": "kv",
+    "label": "Regulatory classification",
+    "text": "EU AI Act —; Korea high-impact — (set separately from the internal tier)",
+  },
+  {
+    "k": "kv",
+    "label": "Next review",
+    "text": "— (NOT_SCHEDULED)",
+  },
+  {
+    "k": "h",
+    "text": "Scores (four separate measures, never combined)",
+  },
+  {
+    "k": "kv",
+    "label": "Documentation completeness",
+    "text": "3 / 62 (5%)",
+  },
+  {
+    "k": "small",
+    "text": "How: Required fields complete or justified N/A.",
+  },
+  {
+    "k": "kv",
+    "label": "Evidence",
+    "text": "0 / 22 (0%)",
+  },
+  {
+    "k": "small",
+    "text": "How: Required evidence attached and fresh.",
+  },
+  {
+    "k": "h",
+    "text": "Blocking a final card (1)",
+  },
+  {
+    "k": "small",
+    "text": "• The risk has not been assessed.",
+  },
+  {
+    "k": "h",
+    "text": "Risk engine explanation",
+  },
+  {
+    "k": "kv",
+    "label": "Score",
+    "text": "23 of 23; score tier CRITICAL; with floors CRITICAL",
+  },
+  {
+    "k": "small",
+    "text": "• Severity of harm: — → 5/5 (not assessed, worst plausible)",
+  },
+  {
+    "k": "small",
+    "text": "• Floor HIGH: Severity not assessed",
+  },
+  {
+    "k": "small",
+    "text": "• Blocking: A person must set the inherent tier.",
+  },
+  {
+    "k": "h",
+    "text": "Framework mapping",
+  },
+  {
+    "k": "kv",
+    "label": "ISO/IEC 42001",
+    "text": "Applies. ISO/IEC 42001 Annex A mapping (supporting evidence only, cannot show conformity). Registry revision 1, UNVERIFIED_REQUIRES_LEGAL_REVIEW.",
+  },
+  {
+    "k": "small",
+    "text": "• A.2 AI policies: NOT_ASSESSED",
+  },
+  {
+    "k": "h",
+    "text": "2. Purpose and scope (0/2 required complete)",
+  },
+  {
+    "k": "kv",
+    "label": "Intended purpose",
+    "text": "Selects the default model  [required · COMPLETE · imported from v1 · awaiting acceptance]",
+  },
+  {
+    "k": "small",
+    "text": "Framework refs: nist-ai-rmf-1.0:MAP-1.1",
+  },
+  {
+    "k": "kv",
+    "label": "Out of scope uses",
+    "text": "N/A: Internal setting only (decided by a@x)  [required · NOT_APPLICABLE · entered by a person]",
+  },
+  {
+    "k": "kv",
+    "label": "Secret",
+    "text": "(sensitive: not printed)  [recommended · COMPLETE · entered by a person]",
+  },
+  {
+    "k": "small",
+    "text": "Evidence: DOCUMENT doc-1; verified by b@x",
+  },
+  {
+    "k": "h",
+    "text": "Approval history",
+  },
+  {
+    "k": "small",
+    "text": "• 2026-11-20T00:00:00.000Z REVIEW APPROVED_WITH_CONDITIONS by r@x (REVIEWER)",
+  },
+  {
+    "k": "small",
+    "text": "   condition: Add a test report (owner o@x, due 2026-12-31)",
+  },
+]
+`;

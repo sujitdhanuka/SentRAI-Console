@@ -260,6 +260,31 @@ describe('Model card v2 (e2e)', () => {
       const changeEvent = (await request(http).get(`${C}/history`).set(auth(o.owner)).expect(200)).body.find((h: any) => h.event === 'CARD_FIELD_CHANGED' && h.data.field_id === 'intended_use' && h.data.action === 'SET');
       expect(changeEvent.data.before).toBeDefined();
       expect(changeEvent.data.after.value).toBe('Ranks tickets and now drafts replies.');
+
+      // Diff of the approved version against the live card.
+      const diff = (await request(http).get(`${C}/versions/1/diff/live`).set(auth(viewer.token)).expect(200)).body;
+      expect(diff.from).toMatchObject({ version: 1, kind: 'APPROVED' });
+      expect(diff.to).toMatchObject({ version: null, kind: 'LIVE' });
+      expect(diff.changes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'field', key: 'intended_use' }),
+        expect.objectContaining({ kind: 'summary', key: 'workflow_state', before: 'ACTIVE_MONITORING', after: 'REASSESSMENT' }),
+      ]));
+      await request(http).get(`${C}/versions/0/diff/live`).set(auth(viewer.token)).expect(400);
+      await request(http).get(`${C}/versions/9/diff/live`).set(auth(viewer.token)).expect(404);
+
+      // Export: the approved version prints as approved, the live card as a draft; JSON carries the same document control.
+      const binary = (r: any, cb: any) => { const parts: Buffer[] = []; r.on('data', (d: Buffer) => parts.push(d)); r.on('end', () => cb(null, Buffer.concat(parts))); };
+      const pdf = await request(http).get(`${C}/export?format=pdf&version=1`).set(auth(viewer.token)).buffer(true).parse(binary).expect(200);
+      expect(pdf.headers['content-type']).toMatch(/application\/pdf/);
+      expect(pdf.headers['content-disposition']).toMatch(/model-card-.*-v1\.pdf/);
+      expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+      const live = await request(http).get(`${C}/export`).set(auth(viewer.token)).buffer(true).parse(binary).expect(200);
+      expect(live.headers['content-disposition']).toMatch(/-draft\.pdf/);
+      const json = (await request(http).get(`${C}/export?format=json&version=1`).set(auth(viewer.token)).expect(200)).body;
+      expect(json.document_control).toMatchObject({ version: 1, kind: 'APPROVED', generated_by: viewer.email });
+      expect(json.document_control.content_hash).toBe(v1.content_hash);
+      expect(json.card.approvals.map((a: any) => a.step)).toEqual(['GOVERNANCE', 'RISK', 'FINAL']);
+      await request(http).get(`${C}/export?format=docx`).set(auth(viewer.token)).expect(400);
     });
   });
 });
