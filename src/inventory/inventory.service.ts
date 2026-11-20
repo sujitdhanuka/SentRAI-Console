@@ -38,6 +38,7 @@ import { ValidationContext } from '../compliance/frameworks.validator';
 import { modelEntityToEntry } from './model.mapper';
 import { expandAndResolve, isDirectory } from '../common/fs-utils';
 import { DiscoveredCandidate, scanDirectory } from '../discovery/codebase-scanner';
+import { detectLlmConfig, isLlmCandidate, LlmConfigSummary, llmConfigForRecord } from '../discovery/llm-config-detector';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { SummarizerService } from '../summarizer/summarizer.service';
 import { GenerationQueueService } from './generation-queue.service';
@@ -1097,14 +1098,19 @@ export class InventoryService implements OnModuleInit {
 
     // Scan each referenced project directory at most once.
     const scanCache = new Map<string, DiscoveredCandidate[] | null>();
+    const llmCache = new Map<string, LlmConfigSummary | null>();
     const scanProject = async (pid: string): Promise<DiscoveredCandidate[] | null> => {
       if (scanCache.has(pid)) return scanCache.get(pid)!;
       const project = await this.projects.findOne({ where: { id: pid } });
       let candidates: DiscoveredCandidate[] | null = null;
+      let llm: LlmConfigSummary | null = null;
       if (project && isDirectory(project.rootDirectory)) {
-        candidates = scanDirectory(expandAndResolve(project.rootDirectory), this.treeSitter);
+        const root = expandAndResolve(project.rootDirectory);
+        candidates = scanDirectory(root, this.treeSitter);
+        try { llm = detectLlmConfig(root); } catch { llm = null; }
       }
       scanCache.set(pid, candidates);
+      llmCache.set(pid, llm);
       return candidates;
     };
 
@@ -1130,6 +1136,13 @@ export class InventoryService implements OnModuleInit {
             const beforeTools = (m.detectedTools ?? []).join(',');
             m.detectedTools = [...new Set([...(m.detectedTools ?? []), ...cand.tools])];
             toolsChanged = beforeTools !== (m.detectedTools ?? []).join(',');
+            // Refresh where the LLM models are named or stored.
+            const llm = llmCache.get(m.projectId) ?? null;
+            if (llm && isLlmCandidate(cand)) {
+              const next = llmConfigForRecord(llm, m.sourceRefs ?? [m.sourceRef]);
+              const strip = (v: any) => JSON.stringify(v ? { ...v, scanned_at: undefined } : null);
+              if (strip(next) !== strip(m.llmConfig)) { m.llmConfig = next; toolsChanged = true; }
+            }
             // Refresh code-derived prompts.
             await this.prompts.delete({ modelId: m.id });
             for (const p of cand.prompts) {

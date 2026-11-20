@@ -14,13 +14,15 @@ import { routeParam } from '../stores/route';
 import { useSession } from '../stores/session';
 import { EnergyTab, SecurityTab, TevvTab } from './GovernancePhase3';
 import { ModelCardTab } from './ModelCard';
+import { LlmModelsTab } from './ModelLlmModels';
 import { FairLendingTab, ValidationTab, VendorsTab } from './GovernancePhase2';
 import { ContextTab, ImpactTab, RiskRegisterTab } from './GovernanceRegister';
 
-type TabId = 'overview' | 'risk' | 'testing' | 'approvals' | 'operations' | 'data' | 'card' | 'history';
+type TabId = 'overview' | 'llm' | 'risk' | 'testing' | 'approvals' | 'operations' | 'data' | 'card' | 'history';
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'overview', label: 'Overview & gaps' },
+  { id: 'llm', label: 'LLM models' },
   { id: 'risk', label: 'Context, risk & impact' },
   { id: 'testing', label: 'Testing & security' },
   { id: 'approvals', label: 'Approvals & lifecycle' },
@@ -178,6 +180,7 @@ export function ModelPage() {
     </Panel>
   );
   else if (tab === 'overview') body = <ModelWorkspace component={component} />;
+  else if (tab === 'llm') body = <LlmModelsTab modelId={modelId} />;
   else if (tab === 'risk') body = (
     <>
       <Section show={f.contextProfile}><ContextTab /></Section>

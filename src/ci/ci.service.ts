@@ -17,6 +17,7 @@ import { CurrentUser } from '../common/interfaces/current-user.interface';
 import { Role } from '../common/enums';
 import { NotifierService } from '../common/notifier.service';
 import { DiscoveredCandidate, scanDirectory } from '../discovery/codebase-scanner';
+import { isLlmCandidate } from '../discovery/llm-config-detector';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { toolLabel } from '../discovery/tool-detector';
 import { modelEntityToEntry } from '../inventory/model.mapper';
@@ -114,6 +115,9 @@ export class CiEvaluationService {
         human_oversight: matched.humanOversightRequired,
         bias_test_evidence: hasEvidence(entry, 'bias_test'),
         red_team_evidence: hasEvidence(entry, 'red_team') || matched.lastRedTeamDate != null,
+        // An asset that calls an LLM needs its real models confirmed (the code
+        // often names only the provider; the model lives in the app's DB).
+        llm_models_confirmed: !isLlmCandidate(candidate) || (matched.llmModels?.entries?.length ?? 0) > 0,
       },
     };
   }

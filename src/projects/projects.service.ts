@@ -24,6 +24,7 @@ import { WORKSPACES_DIR } from '../common/paths';
 import { RemoteRepoConnector } from '../discovery/connectors/repo-connector';
 import { TreeSitterService } from '../discovery/tree-sitter-parser';
 import { candidateAsDict, scanDirectory } from '../discovery/codebase-scanner';
+import { detectLlmConfig, LlmConfigSummary } from '../discovery/llm-config-detector';
 import { frameworkScopeForOrg } from '../compliance/framework-scope';
 import { InventoryService } from '../inventory/inventory.service';
 import { CreateProjectDto, ProjectResponse, UpdateProjectDto } from './projects.dto';
@@ -211,10 +212,16 @@ export class ProjectsService {
     // on disk (redeploys and ephemeral hosting filesystems wipe it).
     const now = new Date();
     let candidates: any[] = [];
+    let llmConfig: LlmConfigSummary | null = null;
     try {
       candidates = scanDirectory(target, this.treeSitter).map(candidateAsDict);
     } catch (e) {
       this.logger.warn(`scan-on-upload failed for project=${project.id}: ${String(e)}`);
+    }
+    try {
+      llmConfig = detectLlmConfig(target);
+    } catch (e) {
+      this.logger.warn(`llm-config detection failed for project=${project.id}: ${String(e)}`);
     }
 
     project.rootDirectory = target;
@@ -225,6 +232,7 @@ export class ProjectsService {
       ast_coverage: this.treeSitter.ready ? 'full' : 'regex_only',
       files_flagged: candidates.length,
       candidates,
+      llm_config: llmConfig,
     };
     project.updatedAt = now;
     await this.projects.save(project);
