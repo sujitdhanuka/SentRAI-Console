@@ -194,7 +194,7 @@ export class GovernanceSettingsService implements OnModuleInit {
     if (effectiveFrom.getTime() < now.getTime() - 60_000) throw new BadRequestException('effective_from cannot be in the past');
 
     // Phase 3 optional fields are accepted only while their feature is on.
-    const phase3Off: Record<string, boolean> = { energy: !this.flags.isEnabled('energy'), externalAi: !this.flags.isEnabled('federalVendor') };
+    const phase3Off: Record<string, boolean> = { energy: !this.flags.isEnabled('energy'), externalAi: !this.flags.isEnabled('federalVendor'), modelCardV2: !this.flags.isEnabled('modelCardV2') };
     const known = new Set<string>([...Object.keys(defaultSettings()), ...OPTIONAL_SETTINGS_KEYS.filter((k) => !phase3Off[k])]);
     const unknownKeys = Object.keys(body.settings ?? {}).filter((k) => !known.has(k));
     if (unknownKeys.length) throw new BadRequestException(`Unknown settings field(s): ${unknownKeys.join(', ')}`);

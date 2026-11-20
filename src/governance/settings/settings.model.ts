@@ -54,10 +54,46 @@ export interface GovernanceSettingsDoc {
   energy?: { gridFactorKgPerKwh: number };
   /** E3.8: whether data may go to external AI providers (absent means ALLOWED, as before). */
   externalAi?: { mode: 'ALLOWED' | 'ATTESTED_ONLY' | 'BLOCKED' };
+  /** E4.2 model card v2 (optional; absent means the defaults in cardV2Settings). */
+  modelCardV2?: Partial<CardV2Settings>;
+}
+
+/** Model card v2 settings: framework adoption, risk thresholds, evidence freshness, approver roles, review cycle. */
+export interface CardV2Settings {
+  /** Registry ids of standards and guidance the organisation adopted; null means "follow the enabled packs" (NIST and ISO baseline). */
+  adoptedFrameworks: string[] | null;
+  /** Lowest risk-engine score of each tier above LOW (the maximum score is 23). */
+  riskThresholds: { MEDIUM: number; HIGH: number; CRITICAL: number };
+  /** Days an evidence item of each type stays current; DEFAULT applies to any type not listed. */
+  evidenceFreshnessDays: Record<string, number>;
+  /** Roles that may give the risk approval step of the card workflow. */
+  riskApproverRoles: string[];
+  /** Months between card reviews. */
+  reviewCycleMonths: number;
+}
+
+export const CARD_V2_DEFAULTS: CardV2Settings = {
+  adoptedFrameworks: null,
+  riskThresholds: { MEDIUM: 6, HIGH: 11, CRITICAL: 16 },
+  evidenceFreshnessDays: { DEFAULT: 365, TEST_REPORT: 180, MONITORING_RECORD: 90 },
+  riskApproverRoles: ['CISO', 'OWNER'],
+  reviewCycleMonths: 12,
+};
+
+/** The organisation's model card v2 settings merged over the defaults. */
+export function cardV2Settings(doc: Pick<GovernanceSettingsDoc, 'modelCardV2'> | null | undefined): CardV2Settings {
+  const m = doc?.modelCardV2 ?? {};
+  return {
+    adoptedFrameworks: m.adoptedFrameworks === undefined ? CARD_V2_DEFAULTS.adoptedFrameworks : m.adoptedFrameworks,
+    riskThresholds: { ...CARD_V2_DEFAULTS.riskThresholds, ...(m.riskThresholds ?? {}) },
+    evidenceFreshnessDays: { ...CARD_V2_DEFAULTS.evidenceFreshnessDays, ...(m.evidenceFreshnessDays ?? {}) },
+    riskApproverRoles: m.riskApproverRoles ?? CARD_V2_DEFAULTS.riskApproverRoles,
+    reviewCycleMonths: m.reviewCycleMonths ?? CARD_V2_DEFAULTS.reviewCycleMonths,
+  };
 }
 
 /** Optional top-level settings fields (not in the defaults, so existing documents and diffs are unchanged). */
-export const OPTIONAL_SETTINGS_KEYS = ['fairLending', 'energy', 'externalAi'] as const;
+export const OPTIONAL_SETTINGS_KEYS = ['fairLending', 'energy', 'externalAi', 'modelCardV2'] as const;
 
 export const RISK_CATEGORIES = [
   'FAIRNESS', 'TRANSPARENCY', 'PRIVACY', 'SECURITY', 'PERFORMANCE', 'THIRD_PARTY',
@@ -211,6 +247,26 @@ export function validateSettings(doc: GovernanceSettingsDoc, at: Date = new Date
   if (doc.energy !== undefined) {
     const f = doc.energy?.gridFactorKgPerKwh;
     if (typeof f !== 'number' || !(f >= 0) || f > 2) p.push({ field: 'energy.gridFactorKgPerKwh', message: 'must be a number of kg CO2e per kWh from 0 to 2' });
+  }
+  if (doc.modelCardV2 !== undefined) {
+    const c = cardV2Settings(doc);
+    const t = c.riskThresholds;
+    for (const k of ['MEDIUM', 'HIGH', 'CRITICAL'] as const) {
+      if (!Number.isInteger(t[k]) || t[k] < 1 || t[k] > 23) p.push({ field: `modelCardV2.riskThresholds.${k}`, message: 'must be a whole number from 1 to 23' });
+    }
+    if (!(t.MEDIUM < t.HIGH && t.HIGH < t.CRITICAL)) p.push({ field: 'modelCardV2.riskThresholds', message: 'must increase: MEDIUM < HIGH < CRITICAL' });
+    if (c.adoptedFrameworks !== null && (!Array.isArray(c.adoptedFrameworks) || c.adoptedFrameworks.some((x) => typeof x !== 'string' || !/^[a-z0-9][a-z0-9.-]{1,60}$/.test(x)))) {
+      p.push({ field: 'modelCardV2.adoptedFrameworks', message: 'must be a list of framework registry ids, or null to follow the enabled packs' });
+    }
+    for (const [k, d] of Object.entries(c.evidenceFreshnessDays)) {
+      if (!Number.isInteger(d) || d < 1 || d > 3650) p.push({ field: `modelCardV2.evidenceFreshnessDays.${k}`, message: 'must be a whole number of days from 1 to 3650' });
+    }
+    if (!Array.isArray(c.riskApproverRoles) || !c.riskApproverRoles.length || c.riskApproverRoles.some((r) => !['OWNER', 'CISO', 'APPROVER', 'ADMIN'].includes(r))) {
+      p.push({ field: 'modelCardV2.riskApproverRoles', message: 'name at least one of OWNER, CISO, APPROVER, ADMIN' });
+    }
+    if (!Number.isInteger(c.reviewCycleMonths) || c.reviewCycleMonths < 1 || c.reviewCycleMonths > 36) {
+      p.push({ field: 'modelCardV2.reviewCycleMonths', message: 'must be a whole number of months from 1 to 36' });
+    }
   }
   if (doc.externalAi !== undefined && !['ALLOWED', 'ATTESTED_ONLY', 'BLOCKED'].includes(doc.externalAi?.mode as string)) {
     p.push({ field: 'externalAi.mode', message: 'must be ALLOWED, ATTESTED_ONLY or BLOCKED' });
