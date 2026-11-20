@@ -97,6 +97,7 @@ export function CiSetupModal({
   // A ready-to-run scan against this host, so a freshly minted token can be
   // proven end to end before any pipeline is touched (ported from /console).
   const origin = window.location.origin;
+  const projectName = projects.find((p) => p.project_id === projectId)?.name ?? '';
   const testSnippet = token
     ? [
         `curl -s -X POST ${origin}/api/v1/ci/scan \\`,
@@ -178,6 +179,59 @@ export function CiSetupModal({
           project-scoped token, store it as the <code className="font-mono text-accent">SENTRAI_CI_TOKEN</code> secret,
           and add the step below.
         </p>
+
+        <details className="mb-3 rounded-md border border-border bg-bg-elevated">
+          <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-medium text-accent">
+            Step-by-step guide: GitHub Actions
+          </summary>
+          <ol className="list-decimal space-y-2 px-2.5 pb-3 pl-7 text-[10.5px] leading-relaxed text-text-secondary">
+            <li>
+              <span className="font-medium text-text">Generate the token.</span> Pick the project below
+              ({projectName || 'the project to gate'}) and click <em>Generate token</em>. Copy it now; it is shown once
+              and is valid for 365 days. Generate it on the same SentRAI that the pipeline will call ({origin}).
+            </li>
+            <li>
+              <span className="font-medium text-text">Add the credentials to the app&apos;s repo</span> (the repo being
+              deployed, not SentRAI). In GitHub: <em>Settings → Secrets and variables → Actions</em>.
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                <li><em>Variables</em> tab → <code className="font-mono text-accent">SENTRAI_URL</code> = <code className="font-mono text-accent">{origin}</code></li>
+                <li><em>Secrets</em> tab → <code className="font-mono text-accent">SENTRAI_CI_TOKEN</code> = the token</li>
+              </ul>
+              Or run the two <code className="font-mono">gh</code> lines in the commands below.
+            </li>
+            <li>
+              <span className="font-medium text-text">Check Actions is enabled:</span> <em>Settings → Actions → General</em>.
+              No third-party Action is needed; the workflow downloads the gate script from SentRAI.
+            </li>
+            <li>
+              <span className="font-medium text-text">Add the workflow.</span> Run the <em>Add it to your repo</em> commands
+              below from the repo root. They create <code className="font-mono">.github/workflows/sentrai-gate.yml</code> on a
+              <code className="font-mono"> ci/sentrai-gate</code> branch. If the default branch is not <code className="font-mono">main</code>,
+              edit <code className="font-mono">branches: [main]</code>.
+            </li>
+            <li>
+              <span className="font-medium text-text">Optional policy.</span> Commit <code className="font-mono">.sentrai/policy.yaml</code>
+              {' '}(see <code className="font-mono">ci-integration/policy.example.yaml</code>). Without it a safe default blocks
+              HIGH/CRITICAL unregistered or ungoverned models.
+            </li>
+            <li>
+              <span className="font-medium text-text">Open the PR.</span> The <em>SentRAI AI Compliance Gate</em> check runs:
+              green on pass, red with file annotations on fail. Findings also appear under <em>Security → Code scanning</em>,
+              and the event lands in this ledger.
+            </li>
+            <li>
+              <span className="font-medium text-text">Make it blocking.</span> <em>Settings → Branches</em> (or Rules → Rulesets)
+              for <code className="font-mono">main</code> → <em>Require status checks to pass</em> → select
+              <code className="font-mono"> sentrai-gate</code> (it appears after the first run).
+            </li>
+          </ol>
+          <div className="mx-2.5 mb-2.5 rounded border border-border p-2 text-[10px] leading-relaxed text-text-tertiary">
+            <span className="font-medium text-text-secondary">Troubleshooting.</span> &ldquo;SENTRAI_URL and SENTRAI_CI_TOKEN are
+            required&rdquo; means the variable or secret is missing or misnamed. A 401 means the token expired, is for another
+            project, or was generated on a different SentRAI server. A reviewed FAIL can be overridden here by an Approver,
+            Admin or CISO; the original verdict stays on the ledger.
+          </div>
+        </details>
 
         <label className="mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Project to gate</label>
         {loadError ? (

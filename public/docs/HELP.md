@@ -507,21 +507,29 @@ Stop ungoverned AI *before* it ships:
 - **Secret** `SENTRAI_CI_TOKEN` — the token from step A.
 - **Variable** `SENTRAI_URL` — your SentRAI base URL (e.g. `https://sentraiconsole.com`).
 
-**C. Add the workflow.** Copy `ci-integration/github-workflow.yml` into the repo as `.github/workflows/sentrai-gate.yml`. It runs on every PR and push to `main`, references the packaged action (nothing to vendor), and uploads SARIF:
+**C. Add the workflow.** In the *Set up CI* dialog, copy the **"Add it to your repo (git + gh)"** commands and run them from the root of the app's repo (the repo being deployed, not SentRAI). They create `.github/workflows/sentrai-gate.yml` on a `ci/sentrai-gate` branch, set the variable and secret with the `gh` CLI, and open a PR. The workflow downloads the gate runner from your SentRAI at run time, so it works for private repos with no cross-repo Action or Access setting:
 
 ```yaml
 - name: SentRAI Pre-Deployment Gate
-  uses: sujitdhanuka/SentRAI-Console/ci-integration/sentrai-gate-action@v1
-  with:
-    sentrai-url: ${{ vars.SENTRAI_URL }}
-    ci-token: ${{ secrets.SENTRAI_CI_TOKEN }}
+  env:
+    SENTRAI_URL: ${{ vars.SENTRAI_URL }}
+    SENTRAI_CI_TOKEN: ${{ secrets.SENTRAI_CI_TOKEN }}
+    GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    PR_NUMBER: ${{ github.event.pull_request.number }}
+  run: |
+    curl -sSfL "$SENTRAI_URL/api/v1/ci/gate.mjs" -o sentrai-gate.mjs
+    node sentrai-gate.mjs
 ```
+
+If the repo's default branch isn't `main`, edit `branches: [main]` in the workflow. (The packaged action `sujitdhanuka/SentRAI-Console/ci-integration/sentrai-gate-action@v1` in `ci-integration/github-workflow.yml` is an alternative for public repos.)
 
 **D. Add your policy.** Copy `ci-integration/policy.example.yaml` to **`.sentrai/policy.yaml`** in the gated repo and tune the gates (risk ceilings, secret rules, tool authorization). No file = safe fail-closed defaults.
 
-**E. Make the gate blocking.** *Settings → Branches → Branch protection rule* for `main` → **"Require status checks to pass"** → select **"SentRAI AI Compliance Gate"**. From now on a PR that introduces ungoverned AI, a leaked secret, or an agent using an unauthorized tool **cannot be merged** until it's fixed or an APPROVER signs an override in the CI Gate Ledger.
+**E. Make the gate blocking.** *Settings → Branches → Branch protection rule* for `main` → **"Require status checks to pass"** → select **`sentrai-gate`** (it appears after the first run). From now on a PR that introduces ungoverned AI, a leaked secret, or an agent using an unauthorized tool **cannot be merged** until it's fixed or an APPROVER signs an override in the CI Gate Ledger.
 
 **F. See findings where developers live.** Violations render in the PR's **Security tab** via SARIF (the workflow's `security-events: write` permission handles the upload; private repos need GitHub Code Scanning enabled).
+
+**Troubleshooting.** *"SENTRAI_URL and SENTRAI_CI_TOKEN are required"* means the variable or secret is missing or misnamed. A **401** means the token has expired (365 days), is for another project, or was minted on a different SentRAI server (a token from `localhost` does not work against the hosted console). Mint a fresh one from *Set up CI*.
 
 **GitLab:** the same gate script (`ci-integration/sentrai-gate.mjs`) runs as a `node` job — see `ci-integration/README.md` for the `.gitlab-ci.yml` block.
 
