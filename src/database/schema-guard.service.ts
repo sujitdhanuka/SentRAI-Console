@@ -1079,6 +1079,35 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'framework_registry', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`framework_registry\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`frameworkId\` VARCHAR(64) NOT NULL,
+      \`revision\` INT NOT NULL,
+      \`type\` VARCHAR(20) NOT NULL,
+      \`title\` VARCHAR(255) NOT NULL,
+      \`verificationStatus\` VARCHAR(40) NOT NULL,
+      \`definition\` MEDIUMTEXT NOT NULL,
+      \`reason\` TEXT NOT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      UNIQUE KEY \`UQ_framework_registry_id_revision\` (\`frameworkId\`, \`revision\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'framework_controls', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`framework_controls\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`frameworkId\` VARCHAR(64) NOT NULL,
+      \`frameworkRevision\` INT NOT NULL,
+      \`controlId\` VARCHAR(64) NOT NULL,
+      \`title\` VARCHAR(255) NOT NULL,
+      \`verificationStatus\` VARCHAR(40) NOT NULL,
+      \`definition\` MEDIUMTEXT NOT NULL,
+      UNIQUE KEY \`UQ_framework_controls_fw_rev_control\` (\`frameworkId\`, \`frameworkRevision\`, \`controlId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'energy_readings', // governance Phase 3
     createSql: `CREATE TABLE IF NOT EXISTS \`energy_readings\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

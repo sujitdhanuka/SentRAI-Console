@@ -11,7 +11,7 @@ import { Facts } from './engine';
 const FACT_FIELDS = [
   'record_type', 'model_category', 'autonomy_level', 'personal_data', 'jurisdictions', 'eu_role', 'eu_art27_criteria',
   'third_party_provider_used', 'tenant_reach', 'tenant_count', 'decision_impact', 'inherent_risk_tier', 'hosting_type', 'deployment_status',
-  'data_classification', 'capabilities',
+  'data_classification', 'capabilities', 'eu_classification', 'in_intermediary', 'us_consequential_decision',
 ] as const;
 
 export interface LinkedFacts {

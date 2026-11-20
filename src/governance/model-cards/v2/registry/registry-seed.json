@@ -1,0 +1,196 @@
+{
+  "seed_version": "2026.11.0",
+  "notice": "Identifiers, dates and SentRAI's own one-line paraphrases only. No text of any standard or law. Every entry and date is UNVERIFIED_REQUIRES_LEGAL_REVIEW until legal review confirms it.",
+  "frameworks": [
+    {
+      "framework_id": "nist-ai-rmf-1.0", "type": "GUIDANCE", "title": "NIST AI Risk Management Framework 1.0", "short_title": "NIST AI RMF",
+      "jurisdiction": "US", "issuer": "NIST", "requires_adoption": true, "pack_id": "nist-ai-rmf", "effective_from": "2023-01-26",
+      "controls": [
+        { "control_id": "GOVERN-2", "title": "Accountability: roles and responsibilities for AI risk are assigned and documented", "evidence_type": "POLICY_OR_RACI" },
+        { "control_id": "MAP-1", "title": "Context: intended purpose, setting and expected users are understood and recorded", "evidence_type": "DOCUMENT" },
+        { "control_id": "MAP-4", "title": "Third-party components: risks from external models, data and software are mapped", "evidence_type": "VENDOR_ASSESSMENT" },
+        { "control_id": "MAP-5", "title": "Impacts: likelihood and size of impacts on people and organisations are characterised", "evidence_type": "IMPACT_ASSESSMENT" },
+        { "control_id": "MEASURE-2", "title": "Evaluation: the system is tested for trustworthiness characteristics, with results recorded", "evidence_type": "TEST_REPORT" },
+        { "control_id": "MANAGE-1", "title": "Treatment: risks are prioritised and a response is decided and recorded", "evidence_type": "RISK_DECISION" },
+        { "control_id": "MANAGE-4", "title": "Monitoring: risk treatments, incidents and recovery are monitored after deployment", "evidence_type": "MONITORING_RECORD" }
+      ]
+    },
+    {
+      "framework_id": "nist-ai-600-1", "type": "GUIDANCE", "title": "NIST AI 600-1 Generative AI Profile", "short_title": "NIST AI 600-1",
+      "jurisdiction": "US", "issuer": "NIST", "requires_adoption": true, "applicability_rule_id": "R_GENERATIVE", "effective_from": "2024-07-26",
+      "notes": "Applies only to generative records of an organisation that adopted it.",
+      "controls": [
+        { "control_id": "CBRN", "title": "Risk area: chemical, biological, radiological or nuclear information or capability" },
+        { "control_id": "CONFABULATION", "title": "Risk area: confidently stated false or fabricated content" },
+        { "control_id": "DANGEROUS_CONTENT", "title": "Risk area: violent, inciting or otherwise dangerous content" },
+        { "control_id": "DATA_PRIVACY", "title": "Risk area: leakage or inference of personal data" },
+        { "control_id": "ENVIRONMENTAL", "title": "Risk area: energy and resource use of training and inference" },
+        { "control_id": "HARMFUL_BIAS", "title": "Risk area: harmful bias and homogenised outputs" },
+        { "control_id": "HUMAN_AI_CONFIGURATION", "title": "Risk area: over-reliance on or misuse of the human-AI interaction" },
+        { "control_id": "INFORMATION_INTEGRITY", "title": "Risk area: content that degrades the reliability of information" },
+        { "control_id": "INFORMATION_SECURITY", "title": "Risk area: attacks on or through the model, such as prompt injection" },
+        { "control_id": "INTELLECTUAL_PROPERTY", "title": "Risk area: infringement through training data or outputs" },
+        { "control_id": "OBSCENE_CONTENT", "title": "Risk area: obscene, degrading or abusive content" },
+        { "control_id": "VALUE_CHAIN", "title": "Risk area: components and providers further up the supply chain" }
+      ]
+    },
+    {
+      "framework_id": "iso-42001-2023", "type": "STANDARD", "title": "ISO/IEC 42001:2023 AI management system", "short_title": "ISO/IEC 42001",
+      "jurisdiction": null, "issuer": "ISO/IEC", "requires_adoption": true, "pack_id": "iso-42001", "effective_from": "2023-12-18", "organisational_only": true,
+      "notes": "An organisational management-system standard. A model card can hold evidence that supports some Annex A controls; it can never show conformity with the standard. Clause numbers only, with SentRAI's own paraphrase.",
+      "controls": [
+        { "control_id": "A.2", "title": "Annex A group: policies related to AI" },
+        { "control_id": "A.3", "title": "Annex A group: internal organisation, roles and responsibilities" },
+        { "control_id": "A.4", "title": "Annex A group: resources for AI systems" },
+        { "control_id": "A.5", "title": "Annex A group: assessing impacts of AI systems" },
+        { "control_id": "A.6", "title": "Annex A group: AI system life cycle" },
+        { "control_id": "A.7", "title": "Annex A group: data for AI systems" },
+        { "control_id": "A.8", "title": "Annex A group: information for interested parties" },
+        { "control_id": "A.9", "title": "Annex A group: use of AI systems" },
+        { "control_id": "A.10", "title": "Annex A group: third-party and customer relationships" }
+      ]
+    },
+    {
+      "framework_id": "iso-23894-2023", "type": "STANDARD", "title": "ISO/IEC 23894:2023 AI risk management guidance", "short_title": "ISO/IEC 23894",
+      "jurisdiction": null, "issuer": "ISO/IEC", "requires_adoption": true, "effective_from": "2023-02-06",
+      "controls": [ { "control_id": "RISK_PROCESS", "title": "SentRAI item: an AI risk process is applied to this record (identify, analyse, evaluate, treat)", "evidence_type": "RISK_DECISION" } ]
+    },
+    {
+      "framework_id": "iso-42005-2025", "type": "STANDARD", "title": "ISO/IEC 42005:2025 AI system impact assessment", "short_title": "ISO/IEC 42005",
+      "jurisdiction": null, "issuer": "ISO/IEC", "requires_adoption": true, "effective_from": null, "effective_note": "Publication date to be confirmed.",
+      "controls": [ { "control_id": "IMPACT_ASSESSMENT", "title": "SentRAI item: an impact assessment of the system on people and society is recorded", "evidence_type": "IMPACT_ASSESSMENT" } ]
+    },
+    {
+      "framework_id": "iso-22989-2022", "type": "STANDARD", "title": "ISO/IEC 22989 AI concepts and terminology", "short_title": "ISO/IEC 22989",
+      "jurisdiction": null, "issuer": "ISO/IEC", "requires_adoption": true, "effective_from": null, "effective_note": "Edition to be confirmed.",
+      "notes": "Terminology reference. It has no controls to assess.", "controls": []
+    },
+    {
+      "framework_id": "oecd-ai-principles", "type": "GUIDANCE", "title": "OECD AI Principles", "short_title": "OECD AI Principles",
+      "jurisdiction": null, "issuer": "OECD", "requires_adoption": true, "effective_from": null, "effective_note": "Adopted 2019, updated 2024; dates to be confirmed.",
+      "controls": [
+        { "control_id": "P1", "title": "Inclusive growth, sustainable development and well-being" },
+        { "control_id": "P2", "title": "Human rights and democratic values, including fairness and privacy" },
+        { "control_id": "P3", "title": "Transparency and explainability" },
+        { "control_id": "P4", "title": "Robustness, security and safety" },
+        { "control_id": "P5", "title": "Accountability" }
+      ]
+    },
+    {
+      "framework_id": "sg-magf", "type": "GUIDANCE", "title": "Singapore Model AI Governance Framework", "short_title": "Singapore MAGF",
+      "jurisdiction": "SG", "issuer": "IMDA / PDPC", "requires_adoption": true, "effective_from": null, "effective_note": "Second edition 2020; to be confirmed.",
+      "controls": [
+        { "control_id": "GOVERNANCE", "title": "Internal governance structures and measures" },
+        { "control_id": "HUMAN_INVOLVEMENT", "title": "Level of human involvement in AI-augmented decisions" },
+        { "control_id": "OPERATIONS", "title": "Operations management, including data and model quality" },
+        { "control_id": "STAKEHOLDERS", "title": "Communication with stakeholders" }
+      ]
+    },
+    {
+      "framework_id": "sg-magf-genai", "type": "GUIDANCE", "title": "Singapore Model AI Governance Framework for Generative AI", "short_title": "Singapore MAGF GenAI",
+      "jurisdiction": "SG", "issuer": "AI Verify Foundation / IMDA", "requires_adoption": true, "applicability_rule_id": "R_GENERATIVE",
+      "effective_from": null, "effective_note": "Published 2024; to be confirmed.", "controls": []
+    },
+    {
+      "framework_id": "eu-ai-act-2024", "type": "REGULATION", "title": "EU AI Act (Regulation (EU) 2024/1689), as amended by the AI Omnibus (2026)", "short_title": "EU AI Act",
+      "jurisdiction": "EU", "issuer": "European Union", "requires_adoption": false, "applicability_rule_id": "R_EU", "pack_id": "eu-ai-act",
+      "effective_from": "2024-08-01",
+      "notes": "Phase dates are the spec's AI Omnibus dates, seeded as configurable values to confirm by legal review. The EU AI Act workspace currently uses different general-application dates; see the legal-review checklist.",
+      "phases": [
+        { "phase_id": "PROHIBITED", "title": "Prohibited practices", "effective_from": "2025-02-02" },
+        { "phase_id": "AI_LITERACY", "title": "AI literacy (Art. 4)", "effective_from": "2025-02-02" },
+        { "phase_id": "GPAI", "title": "GPAI model provider obligations", "effective_from": "2025-08-02", "applicability_rule_id": "R_GPAI_PROVIDER" },
+        { "phase_id": "ART50", "title": "Art. 50 transparency obligations", "effective_from": "2026-08-02" },
+        { "phase_id": "ANNEX_III", "title": "High-risk systems under Annex III", "effective_from": "2027-12-02", "applicability_rule_id": "R_EU_ANNEX_III" },
+        { "phase_id": "ANNEX_I", "title": "High-risk systems under Annex I (product legislation)", "effective_from": "2028-08-02", "applicability_rule_id": "R_EU_ANNEX_I" }
+      ],
+      "controls": [
+        { "control_id": "ART-3", "title": "Determine the organisation's role for this system (provider, deployer, importer, distributor)", "assessment_method": "LEGAL_REVIEW" },
+        { "control_id": "ART-4", "title": "Staff dealing with the system have a sufficient level of AI literacy", "phase_ids": ["AI_LITERACY"], "evidence_type": "TRAINING_RECORD" },
+        { "control_id": "ART-5", "title": "The use is not a prohibited practice", "phase_ids": ["PROHIBITED"], "assessment_method": "LEGAL_REVIEW" },
+        { "control_id": "ART-6", "title": "High-risk classification is decided and recorded", "assessment_method": "LEGAL_REVIEW" },
+        { "control_id": "ART-9", "title": "High-risk: a risk management system runs across the life cycle", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "RISK_DECISION" },
+        { "control_id": "ART-10", "title": "High-risk: training, validation and test data meet quality and governance requirements", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "DATASET_RECORD" },
+        { "control_id": "ART-12", "title": "High-risk: events are logged automatically over the system's lifetime", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "TECHNICAL_RECORD" },
+        { "control_id": "ART-14", "title": "High-risk: designed for effective human oversight", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "DOCUMENT" },
+        { "control_id": "ART-15", "title": "High-risk: appropriate accuracy, robustness and cybersecurity", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "TEST_REPORT" },
+        { "control_id": "ART-27", "title": "Certain deployers of high-risk systems assess the impact on fundamental rights", "applicability_rule_id": "R_EU_FRIA", "roles": ["DEPLOYER"], "phase_ids": ["ANNEX_III"], "evidence_type": "IMPACT_ASSESSMENT" },
+        { "control_id": "ART-50", "title": "Transparency: people are told they interact with AI, and synthetic content is marked", "applicability_rule_id": "R_GENERATIVE", "roles": ["AI_SYSTEM_PROVIDER", "DEPLOYER"], "phase_ids": ["ART50"], "evidence_type": "DOCUMENT" },
+        { "control_id": "ART-53", "title": "GPAI model providers keep technical documentation and a copyright policy, and inform downstream providers", "applicability_rule_id": "R_GPAI_PROVIDER", "roles": ["GPAI_MODEL_PROVIDER"], "phase_ids": ["GPAI"], "evidence_type": "DOCUMENT" },
+        { "control_id": "ART-55", "title": "GPAI models with systemic risk: evaluation, incident reporting and cybersecurity duties", "applicability_rule_id": "R_GPAI_PROVIDER", "roles": ["GPAI_MODEL_PROVIDER"], "phase_ids": ["GPAI"], "evidence_type": "TEST_REPORT" },
+        { "control_id": "ART-72", "title": "High-risk: providers run post-market monitoring", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "MONITORING_RECORD" },
+        { "control_id": "ART-73", "title": "High-risk: serious incidents are reported to the authorities", "applicability_rule_id": "R_EU_HIGH_RISK", "roles": ["AI_SYSTEM_PROVIDER"], "phase_ids": ["ANNEX_III", "ANNEX_I"], "evidence_type": "INCIDENT_RECORD" }
+      ]
+    },
+    {
+      "framework_id": "gdpr", "type": "REGULATION", "title": "General Data Protection Regulation (EU) 2016/679", "short_title": "GDPR",
+      "jurisdiction": "EU", "issuer": "European Union", "requires_adoption": false, "applicability_rule_id": "R_GDPR", "effective_from": "2018-05-25",
+      "controls": [
+        { "control_id": "ART-6", "title": "A lawful basis is identified for the processing", "assessment_method": "LEGAL_REVIEW" },
+        { "control_id": "ART-9", "title": "Special categories of data are processed only under a permitted condition", "assessment_method": "LEGAL_REVIEW" },
+        { "control_id": "ART-35", "title": "A data protection impact assessment is done where the processing is likely high risk", "evidence_type": "IMPACT_ASSESSMENT" },
+        { "control_id": "ART-44", "title": "Transfers outside the EEA rely on a permitted mechanism", "assessment_method": "LEGAL_REVIEW" }
+      ]
+    },
+    {
+      "framework_id": "in-dpdp-2023", "type": "LAW", "title": "India Digital Personal Data Protection Act 2023", "short_title": "DPDP Act",
+      "jurisdiction": "IN", "issuer": "Government of India", "requires_adoption": false, "applicability_rule_id": "R_DPDP",
+      "effective_from": null, "effective_note": "Commenced in phases under the DPDP Rules 2025; full obligations expected by May 2027. Dates to be confirmed.",
+      "controls": [
+        { "control_id": "NOTICE", "title": "Data principals get a notice of what is processed and why" },
+        { "control_id": "CONSENT", "title": "Processing rests on valid consent or a permitted legitimate use" },
+        { "control_id": "RETENTION", "title": "Personal data is erased when the purpose is served" },
+        { "control_id": "CROSS_BORDER", "title": "Transfers abroad respect any government restriction" },
+        { "control_id": "BREACH_NOTICE", "title": "Personal data breaches are notified to the Board and the people affected" }
+      ]
+    },
+    {
+      "framework_id": "in-dpdp-rules-2025", "type": "REGULATION", "title": "India Digital Personal Data Protection Rules 2025", "short_title": "DPDP Rules",
+      "jurisdiction": "IN", "issuer": "Government of India", "requires_adoption": false, "applicability_rule_id": "R_DPDP",
+      "effective_from": null, "effective_note": "Phased; full obligations expected by May 2027. Dates to be confirmed.", "controls": []
+    },
+    {
+      "framework_id": "in-it-rules-2026", "type": "REGULATION", "title": "India IT (Intermediary Guidelines and Digital Media Ethics Code) Amendment Rules 2026", "short_title": "IT Rules 2026",
+      "jurisdiction": "IN", "issuer": "MeitY", "requires_adoption": false, "applicability_rule_id": "R_IN_INTERMEDIARY",
+      "effective_from": null, "effective_note": "Applies where SentRAI or a tenant acts as an intermediary. Date to be confirmed.",
+      "controls": [
+        { "control_id": "SYNTHETIC_LABEL", "title": "Synthetically generated content is labelled", "applicability_rule_id": "R_GENERATIVE" },
+        { "control_id": "TAKEDOWN", "title": "Takedown requests are acted on within the required time" }
+      ]
+    },
+    {
+      "framework_id": "in-meity-ai-guidelines-2025", "type": "GUIDANCE", "title": "MeitY India AI Governance Guidelines (Nov 2025)", "short_title": "India AI Governance Guidelines",
+      "jurisdiction": "IN", "issuer": "MeitY", "requires_adoption": true, "effective_from": null, "effective_note": "Non-binding. Publication date to be confirmed.", "controls": []
+    },
+    {
+      "framework_id": "kr-ai-basic-act", "type": "LAW", "title": "South Korea AI Basic Act and Enforcement Decree", "short_title": "Korea AI Basic Act",
+      "jurisdiction": "KR", "issuer": "Republic of Korea", "requires_adoption": false, "applicability_rule_id": "R_KR", "effective_from": "2026-01-22",
+      "controls": [
+        { "control_id": "HIGH_IMPACT", "title": "Whether the system is high-impact AI is decided and recorded", "assessment_method": "LEGAL_REVIEW" },
+        { "control_id": "USER_NOTICE", "title": "Users are told in advance when generative or high-impact AI is used" },
+        { "control_id": "OUTPUT_LABEL", "title": "Generative outputs are labelled as AI-generated", "applicability_rule_id": "R_GENERATIVE" }
+      ]
+    },
+    {
+      "framework_id": "cn-ai-labelling", "type": "REGULATION", "title": "China measures for labelling AI-generated synthetic content", "short_title": "China AI labelling",
+      "jurisdiction": "CN", "issuer": "CAC", "requires_adoption": false, "applicability_rule_id": "R_CN", "effective_from": null, "effective_note": "Date to be confirmed.",
+      "controls": [ { "control_id": "LABEL", "title": "AI-generated content carries explicit and implicit labels", "applicability_rule_id": "R_GENERATIVE" } ]
+    },
+    {
+      "framework_id": "cn-genai-filing", "type": "REGULATION", "title": "China generative AI service filing", "short_title": "China GenAI filing",
+      "jurisdiction": "CN", "issuer": "CAC", "requires_adoption": false, "applicability_rule_id": "R_CN", "effective_from": null, "effective_note": "Date to be confirmed.",
+      "controls": [ { "control_id": "FILING", "title": "A generative AI service offered to the public is filed with the regulator", "applicability_rule_id": "R_GENERATIVE" } ]
+    },
+    {
+      "framework_id": "us-federal-placeholder", "type": "GUIDANCE", "title": "US federal AI guidance (placeholder)", "short_title": "US federal guidance",
+      "jurisdiction": "US", "issuer": "US federal government", "requires_adoption": true, "applicability_rule_id": "R_US", "effective_from": null,
+      "effective_note": "Placeholder. Add the specific guidance through the registry.", "controls": []
+    },
+    {
+      "framework_id": "us-co-sb26-189", "type": "LAW", "title": "Colorado AI Act as replaced by SB 26-189 (2026)", "short_title": "Colorado SB 26-189",
+      "jurisdiction": "US-CO", "issuer": "State of Colorado", "requires_adoption": false, "applicability_rule_id": "R_US_CO_CONSEQUENTIAL",
+      "effective_from": null, "effective_note": "Applies only to consequential-decision uses. Date to be confirmed.",
+      "controls": [ { "control_id": "CONSEQUENTIAL_DECISION", "title": "Uses in consequential decisions meet the Act's duties (notice, impact assessment, appeal)", "evidence_type": "IMPACT_ASSESSMENT" } ]
+    }
+  ]
+}

@@ -62,6 +62,8 @@ import { ModelCardEntity } from './model-card.entity';
 import { AiRecordLinkEntity } from './ai-record-link.entity';
 import { CardRecordEntity } from './card-record.entity';
 import { CardFieldValueEntity } from './card-field-value.entity';
+import { FrameworkRegistryEntity } from './framework-registry.entity';
+import { FrameworkControlEntity } from './framework-control.entity';
 
 export {
   OrganizationEntity,
@@ -127,6 +129,8 @@ export {
   AiRecordLinkEntity,
   CardRecordEntity,
   CardFieldValueEntity,
+  FrameworkRegistryEntity,
+  FrameworkControlEntity,
   EuActRecordEntity,
 };
 
@@ -194,5 +198,7 @@ export const ALL_ENTITIES = [
   AiRecordLinkEntity,
   CardRecordEntity,
   CardFieldValueEntity,
+  FrameworkRegistryEntity,
+  FrameworkControlEntity,
   EuActRecordEntity,
 ];

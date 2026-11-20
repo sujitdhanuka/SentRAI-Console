@@ -125,4 +125,33 @@ describe('Model card v2 (e2e)', () => {
       expect(named.org_id).toBe(other.orgId);
     });
   });
+
+  it('serves the framework registry, seeded unverified, and revises it only through new revisions by an administrator', async () => {
+    await withEnv({ GOVERNANCE_V2: 'true' }, async () => {
+      const o = await setupOrg('McV2Reg');
+      const R = '/api/v1/governance/framework-registry';
+      const list = (await request(http).get(R).set(auth(o.reviewer)).expect(200)).body;
+      expect(list.frameworks.length).toBeGreaterThanOrEqual(20);
+      expect(list.frameworks.every((f: any) => f.verification_status === 'UNVERIFIED_REQUIRES_LEGAL_REVIEW')).toBe(true);
+      const eu = list.frameworks.find((f: any) => f.framework_id === 'eu-ai-act-2024');
+      expect(eu).toMatchObject({ type: 'REGULATION', revision: 1 });
+      await request(http).get(`${R}/no-such-framework`).set(auth(o.owner)).expect(404);
+
+      // Shared by every organisation: an org owner cannot change it; an administrator must give a reason.
+      const body = { changes: { effective_note: 'Confirmed by test.' }, reason: 'Test revision of the registry entry' };
+      await request(http).post(`${R}/kr-ai-basic-act/revisions`).set(auth(o.owner)).send(body).expect(403);
+      await request(http).post(`${R}/kr-ai-basic-act/revisions`).set(auth(o.admin)).send({ changes: body.changes, reason: 'short' }).expect(400);
+      await request(http).post(`${R}/kr-ai-basic-act/revisions`).set(auth(o.admin)).send({ changes: { framework_id: 'x' }, reason: body.reason }).expect(400);
+      await request(http).post(`${R}/kr-ai-basic-act/revisions`).set(auth(o.admin)).send({ changes: { applicability_rule_id: 'R_NOPE' }, reason: body.reason }).expect(400);
+      const rev = (await request(http).post(`${R}/kr-ai-basic-act/revisions`).set(auth(o.admin)).send(body).expect(201)).body;
+      expect(rev.framework).toMatchObject({ revision: 2, effective_note: 'Confirmed by test.', verification_status: 'UNVERIFIED_REQUIRES_LEGAL_REVIEW' });
+      expect(rev.history.map((h: any) => h.revision)).toEqual([1, 2]);
+
+      // Revision 1 stays readable for assessments pinned to it.
+      const pinned = (await request(http).get(`${R}/kr-ai-basic-act?revision=1`).set(auth(o.owner)).expect(200)).body;
+      expect(pinned.framework).toMatchObject({ revision: 1, effective_note: null });
+      expect((await request(http).get(R).set(auth(o.owner)).expect(200)).body.frameworks.find((f: any) => f.framework_id === 'kr-ai-basic-act').revision).toBe(2);
+    });
+  });
 });
+
