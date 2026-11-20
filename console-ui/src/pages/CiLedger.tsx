@@ -6,6 +6,7 @@ import { AppShell } from '../components/console/AppShell';
 import { CiSetupModal } from '../components/console/CiSetupModal';
 import { GateEventDetail } from '../components/console/GateEventDetail';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Panel, PanelError } from '../components/ui/Panel';
 import { SkeletonRows } from '../components/ui/Skeleton';
 import { useConsoleUi } from '../stores/consoleUi';
@@ -139,11 +140,9 @@ export function CiLedger() {
           <button onClick={() => void load()} title="Refresh" aria-label="Refresh" className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface-hover">
             <RefreshCw size={13} />
           </button>
-          {TOKEN_ROLES.includes(role) && (
-            <button onClick={() => setSetupOpen(true)} className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-hover">
-              <Terminal size={13} /> Set up CI
-            </button>
-          )}
+          <Button variant="primary" size="sm" onClick={() => setSetupOpen(true)} icon={<Terminal size={13} />}>
+            Set up CI
+          </Button>
         </>
       }
     >
@@ -178,6 +177,11 @@ export function CiLedger() {
                 <p className="text-[11px] text-text-secondary">
                   No gate events yet — wire the CI gate into a pipeline to start recording decisions.
                 </p>
+                <div className="mt-3">
+                  <Button variant="primary" size="sm" onClick={() => setSetupOpen(true)} icon={<Terminal size={13} />}>
+                    Set up CI scanning
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
@@ -240,7 +244,12 @@ export function CiLedger() {
         </div>
       </main>
 
-      <CiSetupModal open={setupOpen} onClose={() => setSetupOpen(false)} />
+      <CiSetupModal
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        canMint={TOKEN_ROLES.includes(role)}
+        defaultProjectId={activeProjectId}
+      />
     </AppShell>
   );
 }

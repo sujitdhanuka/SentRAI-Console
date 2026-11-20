@@ -15,26 +15,43 @@ interface Project {
  * snippet. The token is displayed EXACTLY once — the backend never returns it
  * again — so the copy affordance is deliberately prominent.
  */
-export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CiSetupModal({
+  open,
+  onClose,
+  canMint,
+  defaultProjectId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Minting is Admin/CISO only on the backend; everyone else gets the guide without the button. */
+  canMint: boolean;
+  defaultProjectId?: string | null;
+}) {
   const toast = useConsoleUi((s) => s.toast);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setToken(null);
+    setLoadError(null);
     api<Project[]>('/projects')
       .then((p) => {
         setProjects(p);
-        setProjectId((cur) => cur || p[0]?.project_id || '');
+        setProjectId((cur) => {
+          if (cur && p.some((x) => x.project_id === cur)) return cur;
+          if (defaultProjectId && p.some((x) => x.project_id === defaultProjectId)) return defaultProjectId;
+          return p[0]?.project_id || '';
+        });
       })
-      .catch(() => undefined);
+      .catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not load projects'));
     const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, defaultProjectId]);
 
   if (!open) return null;
 
@@ -44,7 +61,10 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
     try {
       const res = await api<{ token: string }>('/ci/tokens', {
         method: 'POST',
-        body: JSON.stringify({ project_id: projectId, label: 'console-generated' }),
+        body: JSON.stringify({
+          project_id: projectId,
+          label: `${projects.find((p) => p.project_id === projectId)?.name ?? 'Console'} CI`.slice(0, 120),
+        }),
       });
       setToken(res.token);
       toast('CI token minted — copy it now, it is not shown again', 'positive');
@@ -74,6 +94,23 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
     curl -sSfL "$SENTRAI_URL/api/v1/ci/gate.mjs" -o sentrai-gate.mjs
     node sentrai-gate.mjs`;
 
+  // A ready-to-run scan against this host, so a freshly minted token can be
+  // proven end to end before any pipeline is touched (ported from /console).
+  const origin = window.location.origin;
+  const testSnippet = token
+    ? [
+        `curl -s -X POST ${origin}/api/v1/ci/scan \\`,
+        `  -H "Authorization: Bearer ${token}" -H 'Content-Type: application/json' \\`,
+        `  -d '{`,
+        `    "commit_sha": "manual-test-001",`,
+        `    "files": [`,
+        `      { "path": ".sentrai/policy.yaml", "content": "gates:\\n  block_on:\\n    - severity: HIGH\\n      missing: [registered, owner_team, board_policy_ref]\\n  frameworks: [eu_ai_act]\\n" },`,
+        `      { "path": "app/model.py", "content": "import openai\\n\\ndef score(x):\\n    return openai.chat.completions.create(model=\\"gpt-4\\", messages=[])\\n" }`,
+        `    ]`,
+        `  }'`,
+      ].join('\n')
+    : '';
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Set up CI scanning">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -92,20 +129,39 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
         </p>
 
         <label className="mb-1 block text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Project to gate</label>
-        <div className="mb-3 flex gap-2">
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="flex-1 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text focus:border-accent"
-          >
-            {projects.map((p) => (
-              <option key={p.project_id} value={p.project_id}>{p.name}</option>
-            ))}
-          </select>
-          <Button variant="primary" size="sm" onClick={mint} disabled={busy || !projectId} icon={<KeyRound size={13} />}>
-            {busy ? 'Minting…' : 'Generate token'}
-          </Button>
-        </div>
+        {loadError ? (
+          <p className="mb-3 text-[11px] text-negative">Couldn't load projects — {loadError}</p>
+        ) : !projects.length ? (
+          <p className="mb-3 text-[11px] text-text-secondary">
+            Create a project first (Projects), then come back to generate a CI token for it.
+          </p>
+        ) : (
+          <div className="mb-3 flex gap-2">
+            <select
+              value={projectId}
+              onChange={(e) => {
+                setProjectId(e.target.value);
+                setToken(null);
+              }}
+              className="flex-1 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text focus:border-accent"
+            >
+              {projects.map((p) => (
+                <option key={p.project_id} value={p.project_id}>{p.name}</option>
+              ))}
+            </select>
+            {canMint && (
+              <Button variant="primary" size="sm" onClick={mint} disabled={busy || !projectId} icon={<KeyRound size={13} />}>
+                {busy ? 'Minting…' : 'Generate token'}
+              </Button>
+            )}
+          </div>
+        )}
+        {!canMint && (
+          <p className="mb-3 rounded-md border border-border bg-bg-elevated p-2 text-[10.5px] leading-relaxed text-text-secondary">
+            Only an Admin or CISO can generate a CI token. Ask one to open <span className="font-medium text-text">CI Gate Ledger → Set up CI</span> and
+            share the token with you as the <code className="font-mono text-accent">SENTRAI_CI_TOKEN</code> secret; the pipeline step below is the same.
+          </p>
+        )}
 
         {token && (
           <div className="mb-3 rounded-md border border-warning bg-warning-soft p-2.5">
@@ -119,15 +175,29 @@ export function CiSetupModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
         )}
 
+        {token && (
+          <>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Test it now — paste into a terminal</label>
+              <Button variant="secondary" size="xs" onClick={() => copy(testSnippet, 'Test command')} icon={<Copy size={11} />}>Copy</Button>
+            </div>
+            <pre className="mb-3 overflow-x-auto rounded-md border border-border bg-bg-elevated p-2.5 font-mono text-[9.5px] leading-relaxed text-text">
+{testSnippet}
+            </pre>
+          </>
+        )}
+
         <div className="mb-1 flex items-center justify-between">
-          <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Pipeline step</label>
+          <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Pipeline step (GitHub Actions)</label>
           <Button variant="secondary" size="xs" onClick={() => copy(snippet, 'Snippet')} icon={<Copy size={11} />}>Copy</Button>
         </div>
         <pre className="overflow-x-auto rounded-md border border-border bg-bg-elevated p-2.5 font-mono text-[9.5px] leading-relaxed text-text">
 {snippet}
         </pre>
         <p className="mt-2 text-[10px] text-text-tertiary">
+          Set the <code className="font-mono text-accent">SENTRAI_URL</code> variable to <code className="font-mono text-accent">{origin}</code>.
           Works on GitLab CI, Jenkins, and any runner — the gate script is served publicly and honours its own exit code.
+          Refresh this ledger after a run to see the gate event.
         </p>
       </div>
     </div>
