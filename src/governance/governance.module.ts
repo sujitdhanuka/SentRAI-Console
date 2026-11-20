@@ -52,6 +52,9 @@ import {
   TevvRunEntity,
   ThreatModelEntity,
   ModelCardEntity,
+  CardRecordEntity,
+  CardFieldValueEntity,
+  AiRecordLinkEntity,
   ModelApprovalEntity,
   EuActRecordEntity,
 } from '../database/entities';
@@ -112,6 +115,8 @@ import { FederalVendorController } from './federal/federal.controller';
 import { FederalVendorService } from './federal/federal.service';
 import { ModelCardsController } from './model-cards/model-cards.controller';
 import { ModelCardsService } from './model-cards/model-cards.service';
+import { CardV2Controller } from './model-cards/v2/card-v2.controller';
+import { CardV2MigrationService } from './model-cards/v2/migration/card-v2-migration.service';
 import { EuActController, EuActPublicController } from './eu-act/eu-act.controller';
 import { EuActService } from './eu-act/eu-act.service';
 
@@ -141,7 +146,7 @@ import { EuActService } from './eu-act/eu-act.service';
       TrainingRecordEntity, DatasetEntity, ModelDatasetEntity,
       AiProviderAttestationEntity, AiProviderConfigEntity, BcpStateEntity, DisclosureEntity, EnergyReadingEntity, EngagementRecordEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity,
       ModelDeployerEntity, ModelRetirementEntity, SecurityEvaluationEntity, SoaEntryEntity, SoaStatementEntity, TestSetEntity, TevvRunEntity, ThreatModelEntity,
-      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity,
+      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity, CardRecordEntity, CardFieldValueEntity, AiRecordLinkEntity,
     ]),
     InventoryModule,
     ComplianceModule, // board-pack inputs for management review (E1.6)
@@ -153,7 +158,7 @@ import { EuActService } from './eu-act/eu-act.service';
     AuDtaController, DecisionsController, FairLendingController, ValidationController, VendorsController,
     TrainingController, DatasetsController, RedTeamAuditController,
     SoaController, DisclosuresController, IncidentExtensionsController, TevvController, EnergyController,
-    AiSecurityController, EngagementController, FederalVendorController, ModelCardsController,
+    AiSecurityController, EngagementController, FederalVendorController, ModelCardsController, CardV2Controller,
     EuActController, EuActPublicController,
   ],
   providers: [
@@ -163,7 +168,7 @@ import { EuActService } from './eu-act/eu-act.service';
     AuDtaService, DecisionsService, FairLendingService, ValidationService, VendorsService, TrainingService,
     DatasetsService, RedTeamAuditService,
     SoaService, DisclosuresService, IncidentExtensionsService, TevvService, EnergyService, AiSecurityService,
-    EngagementService, FederalVendorService, ModelCardsService,
+    EngagementService, FederalVendorService, ModelCardsService, CardV2MigrationService,
     EuActService,
   ],
   exports: [
