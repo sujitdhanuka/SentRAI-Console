@@ -111,6 +111,57 @@ export function CiSetupModal({
       ].join('\n')
     : '';
 
+  // Everything needed to wire the gate into a GitHub repo from a terminal:
+  // the self-contained workflow (ci-integration/github-workflow-selfcontained.yml),
+  // the repo variable + secret via the gh CLI, and a branch + PR to land it.
+  const gitSetup = [
+    '# Run from the root of the app repo you want to gate (needs git + the gh CLI, logged in)',
+    'git checkout -b ci/sentrai-gate',
+    'mkdir -p .github/workflows',
+    "cat > .github/workflows/sentrai-gate.yml <<'YAML'",
+    'name: SentRAI AI Compliance Gate',
+    'on:',
+    '  pull_request:',
+    '  push:',
+    '    branches: [main]',
+    'permissions:',
+    '  contents: read',
+    '  security-events: write',
+    'jobs:',
+    '  sentrai-gate:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - uses: actions/checkout@v4',
+    '      - uses: actions/setup-node@v4',
+    "        with: { node-version: '20' }",
+    '      - name: SentRAI Pre-Deployment Gate',
+    '        env:',
+    '          SENTRAI_URL: ${{ vars.SENTRAI_URL }}',
+    '          SENTRAI_CI_TOKEN: ${{ secrets.SENTRAI_CI_TOKEN }}',
+    '          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}',
+    '          PR_NUMBER: ${{ github.event.pull_request.number }}',
+    '          GITHUB_RUN_ID: ${{ github.run_id }}',
+    '        run: |',
+    '          curl -sSfL "$SENTRAI_URL/api/v1/ci/gate.mjs" -o sentrai-gate.mjs',
+    '          node sentrai-gate.mjs',
+    '      - name: Upload SARIF to the Security tab',
+    "        if: always() && hashFiles('sentrai-results.sarif') != ''",
+    '        uses: github/codeql-action/upload-sarif@v3',
+    '        with: { sarif_file: sentrai-results.sarif }',
+    'YAML',
+    '',
+    '# Repo variable + secret the workflow reads',
+    `gh variable set SENTRAI_URL --body "${origin}"`,
+    token
+      ? `gh secret set SENTRAI_CI_TOKEN --body "${token}"`
+      : 'gh secret set SENTRAI_CI_TOKEN   # paste the CI token when prompted',
+    '',
+    'git add .github/workflows/sentrai-gate.yml',
+    'git commit -m "ci: add SentRAI AI compliance gate"',
+    'git push -u origin ci/sentrai-gate',
+    'gh pr create --fill   # the gate runs on this PR; refresh the ledger to see it',
+  ].join('\n');
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Set up CI scanning">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -188,7 +239,15 @@ export function CiSetupModal({
         )}
 
         <div className="mb-1 flex items-center justify-between">
-          <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Pipeline step (GitHub Actions)</label>
+          <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Add it to your repo (git + gh)</label>
+          <Button variant="secondary" size="xs" onClick={() => copy(gitSetup, 'Git commands')} icon={<Copy size={11} />}>Copy</Button>
+        </div>
+        <pre className="mb-3 max-h-64 overflow-auto rounded-md border border-border bg-bg-elevated p-2.5 font-mono text-[9.5px] leading-relaxed text-text">
+{gitSetup}
+        </pre>
+
+        <div className="mb-1 flex items-center justify-between">
+          <label className="text-[9px] font-medium uppercase tracking-widest text-text-tertiary">Or just the step, for an existing workflow / other CI</label>
           <Button variant="secondary" size="xs" onClick={() => copy(snippet, 'Snippet')} icon={<Copy size={11} />}>Copy</Button>
         </div>
         <pre className="overflow-x-auto rounded-md border border-border bg-bg-elevated p-2.5 font-mono text-[9.5px] leading-relaxed text-text">
