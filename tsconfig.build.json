@@ -6,6 +6,7 @@
     "dist",
     "console-ui",
     "workspaces",
+    "_to_delete",
     "**/*spec.ts"
   ]
 }

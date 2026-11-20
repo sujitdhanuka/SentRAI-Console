@@ -24,6 +24,7 @@
     "node_modules",
     "dist",
     "console-ui",
-    "workspaces"
+    "workspaces",
+    "_to_delete"
   ]
 }
