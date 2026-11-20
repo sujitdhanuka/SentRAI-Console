@@ -111,9 +111,17 @@ export function acceptSuggestion(prev: FieldValue, def: FieldDef, actor: string,
   };
 }
 
-/** A person accepts an imported (IMPORTED_V1) value as it stands. */
-export function acceptImported(prev: FieldValue, actor: string, at: Date): FieldValue {
-  if (prev.provenance !== 'IMPORTED_V1' || prev.accepted_by) throw new FieldStateError('NOTHING_TO_ACCEPT', 'Only an unaccepted imported value can be accepted.');
+/** A person accepts an imported (IMPORTED_V1) or scanned (CODE_SCAN) value as it stands. */
+export function acceptImported(prev: FieldValue, def: FieldDef, actor: string, at: Date): FieldValue {
+  if ((prev.provenance !== 'IMPORTED_V1' && prev.provenance !== 'CODE_SCAN') || prev.accepted_by) {
+    throw new FieldStateError('NOTHING_TO_ACCEPT', 'Only an unaccepted imported or scanned value can be accepted.');
+  }
+  // A human-only field drafted by AI in v1 (for example the risk rationale) must be rewritten, not accepted.
+  if (HUMAN_ONLY_FIELDS.has(def.field_id) && /\((ai|heuristic|unknown)\)/.test(prev.source_ref ?? '')) {
+    throw new FieldStateError('HUMAN_ONLY', `${def.label} was drafted by AI in v1 and must be written by a person.`);
+  }
+  const errors = validateValue(def, prev.value);
+  if (errors.length) throw new FieldStateError('INVALID_VALUE', `The imported value does not fit the v2 field: ${errors.join('; ')}. Enter it again.`);
   return { ...prev, accepted_by: actor, accepted_at: at.toISOString() };
 }
 
@@ -159,4 +167,4 @@ export function isPopulated(v: FieldValue | null | undefined): boolean {
 
 /** A suggestion or imported value waiting for a person. */
 export const awaitingAcceptance = (v: FieldValue | null | undefined): boolean =>
-  Boolean(v && (v.suggestion || (v.provenance === 'IMPORTED_V1' && !v.accepted_by && v.value !== null)));
+  Boolean(v && (v.suggestion || ((v.provenance === 'IMPORTED_V1' || v.provenance === 'CODE_SCAN') && !v.accepted_by && v.value !== null)));

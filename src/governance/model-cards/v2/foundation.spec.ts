@@ -54,7 +54,8 @@ describe('model card v2: state consistency (D2)', () => {
     expect(hit({ modelLifecycle: 'DECOMMISSIONED', operationalStatus: 'ACTIVE' })).toContain('STATE_DECOMMISSIONED_IN_USE');
     expect(hit({ componentLifecycle: 'IN_TEST', deploymentStatus: 'DEPLOYED_PRODUCTION' })).toContain('STATE_COMPONENT_UNRELEASED_IN_PRODUCTION');
     expect(hit({ componentLifecycle: 'RETIRED', deploymentStatus: 'DEPLOYED_NON_PRODUCTION' })).toContain('STATE_COMPONENT_RETIRED_IN_USE');
-    expect(CONSISTENCY_RULE_CODES).toHaveLength(7);
+    expect(hit({ componentLifecycle: 'PLANNED', operationalStatus: 'ACTIVE' })).toContain('STATE_COMPONENT_UNRELEASED_ACTIVE');
+    expect(CONSISTENCY_RULE_CODES).toHaveLength(8);
   });
 });
 

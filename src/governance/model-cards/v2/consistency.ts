@@ -75,6 +75,12 @@ const RULES: Rule[] = [
     message: (s) => `The component is ${s.componentLifecycle} but is deployed to production.`,
   },
   {
+    code: 'STATE_COMPONENT_UNRELEASED_ACTIVE',
+    fields: ['componentLifecycle', 'operationalStatus'],
+    when: (s) => known(s.componentLifecycle, s.operationalStatus) && PRE_RELEASE.includes(s.componentLifecycle!) && s.operationalStatus === 'ACTIVE',
+    message: (s) => `The component is ${s.componentLifecycle} but operational status is ACTIVE. An unreleased component cannot be operating.`,
+  },
+  {
     code: 'STATE_COMPONENT_RETIRED_IN_USE',
     fields: ['componentLifecycle', 'deploymentStatus', 'operationalStatus'],
     when: (s) => s.componentLifecycle === 'RETIRED' && ((s.deploymentStatus !== null && DEPLOYED.includes(s.deploymentStatus)) || s.operationalStatus === 'ACTIVE'),

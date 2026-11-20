@@ -42,7 +42,11 @@ describe('model card v2: provenance (spec §5)', () => {
     const v = systemValue(emptyField('purpose'), def('purpose'), 'Old text', 'IMPORTED_V1', 'ai_models.useCaseDescription', at);
     expect(isPopulated(v)).toBe(false);
     expect(awaitingAcceptance(v)).toBe(true);
-    expect(isPopulated(acceptImported(v, 'carol@example.test', at))).toBe(true);
+    expect(isPopulated(acceptImported(v, def('purpose'), 'carol@example.test', at))).toBe(true);
+    const aiRationale = systemValue(emptyField('risk_rationale'), def('risk_rationale'), 'Low risk because...', 'IMPORTED_V1', 'ai_models.riskRationale (ai)', at);
+    expect(code(() => acceptImported(aiRationale, def('risk_rationale'), 'carol@example.test', at))).toBe('HUMAN_ONLY');
+    const badShape = systemValue(emptyField('evaluation_records'), def('evaluation_records'), ['bias_test: B-1'], 'IMPORTED_V1', 'v1', at);
+    expect(code(() => acceptImported(badShape, def('evaluation_records'), 'carol@example.test', at))).toBe('INVALID_VALUE');
     expect(isPopulated(systemValue(emptyField('incident_count'), def('incident_count'), { state: 'ZERO_RECORDED', count: 0 }, 'INTEGRATION', 'incidents', at))).toBe(true);
   });
 });
