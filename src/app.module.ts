@@ -31,6 +31,7 @@ import { AlignmentModule } from './alignment/alignment.module';
 import { ControlModule } from './control/control.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { GrievancesModule } from './grievances/grievances.module';
+import { LeadsModule } from './leads/leads.module';
 import { CardsModule } from './cards/cards.module';
 import { AdminModule } from './admin/admin.module';
 import { GovernanceModule } from './governance/governance.module';
@@ -70,6 +71,7 @@ import { WorkflowsModule } from './governance/workflows/workflows.module';
     ControlModule,
     TelemetryModule,
     GrievancesModule,
+    LeadsModule,
     CardsModule,
     AdminModule,
     GovernanceModule,

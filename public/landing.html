@@ -12,355 +12,1385 @@
   </script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SentRAI — AI Governance for Financial Services · RBI FREE-AI, NIST AI RMF, EU AI Act, ISO 42001</title>
-  <meta name="description" content="SentRAI is a self-hosted AI governance console: discover the models in your code, score them against India's RBI FREE-AI, the US NIST AI RMF, the EU AI Act, and ISO/IEC 42001, monitor drift, and keep regulator-ready evidence." />
+  <title>SentRAI — AI governance from code to boardroom · EU AI Act, NIST AI RMF, ISO 42001, RBI FREE-AI, AU DTA, US policy</title>
+  <meta name="description" content="SentRAI is a self-hosted AI governance console. It finds the AI in your code, guides each model from setup to retirement, gates risky deployments, and produces model cards and board reports across six frameworks: EU AI Act, NIST AI RMF, ISO/IEC 42001, RBI FREE-AI, Australia's DTA policy and US AI policy." />
+  <meta property="og:title" content="SentRAI — AI governance that runs itself, from code to boardroom" />
+  <meta property="og:description" content="257 of 275 applicable requirements implemented across six frameworks in five regions. Guided workflows, model cards, deployment gates and an EU AI Act workspace." />
   <link rel="icon" type="image/png" href="/static/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400..600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
-    /* ── SentRAI Design Language (SR-DL-001): paper world, one Signal Blue,
-       three type families, 8px scale, 3px radius, no gradients. ── */
+    /* SentRAI Design Language v1.8: navy plate + paper, one Signal Blue, blueprint grid. */
     :root{
-      --paper:#F5F6F3; --raise:#FFFFFF; --ink:#10202F; --graphite:#55677A; --hairline:#D6DCDE;
+      --paper:#F5F6F3; --raise:#FFFFFF; --ink:#10202F; --graphite:#55677A; --hairline:#D9DFE2;
       --signal:#2240C9; --signal-tint:#E4E9FB;
-      --plate:#0E2A4E; --plate-deep:#081D38; --plate-line:#B9D6EC; --plate-dim:#4E7196;
-      --verify:#1E8A5A; --caution:#B97416; --fail:#B93A2B;
+      --plate:#0E2341; --plate-deep:#081A33; --plate-card:rgba(10,24,48,.72); --plate-edge:rgba(185,214,236,.18);
+      --ice:#B9D6EC; --ice-dim:#7F9BBA; --ice-bright:#DCEBF7;
+      --verify:#1E8A5A; --verify-l:#5BD39A; --caution:#B97416; --caution-l:#F2B45A; --fail:#B93A2B; --fail-l:#F07A6A;
       --sans:'Archivo','Helvetica Neue',Arial,sans-serif;
-      --serif:'Source Serif 4',Georgia,serif;
       --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
-      --s2:16px; --s3:24px; --s4:32px; --s5:48px; --s6:64px; --s7:96px;
-      --radius:3px;
+      --radius:10px;
     }
     *{margin:0;padding:0;box-sizing:border-box}
     html{scroll-behavior:smooth}
-    body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+    body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
     ::selection{background:var(--signal);color:#fff}
     a{color:var(--signal);text-decoration:none}
-    .container{max-width:1140px;margin:0 auto;padding:0 var(--s4)}
-    h1,h2,h3,.btn,.nav,.kicker,.stat .num,.n,.chip,.fw-name{font-family:var(--sans)}
-    .mono,code,.eyebrow,.kicker,.stat .lbl,.chip,.tb,.fw-name{font-family:var(--mono)}
-    h1{font-size:clamp(2.1rem,4.6vw,3.4rem);font-weight:700;letter-spacing:-.03em;line-height:1.04}
-    h2{font-size:clamp(1.5rem,2.6vw,1.95rem);font-weight:600;letter-spacing:-.02em;line-height:1.15}
-    h3{font-size:1.14rem;font-weight:600;letter-spacing:-.005em}
-    p{max-width:64ch}
-    code{font-size:.86em;background:var(--signal-tint);color:var(--signal);border-radius:2px;padding:1px 5px}
-    strong,b{font-weight:600}
-    .kicker{font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--signal);font-weight:600;display:block;margin-bottom:12px}
+    img{max-width:100%}
+    .container{max-width:1200px;margin:0 auto;padding:0 32px}
+    h1,h2,h3{letter-spacing:-.025em;line-height:1.08}
+    h1{font-size:clamp(2.3rem,5vw,3.75rem);font-weight:800}
+    h2{font-size:clamp(1.8rem,3.4vw,2.6rem);font-weight:700}
+    h3{font-size:1.12rem;font-weight:650;letter-spacing:-.01em;line-height:1.3}
+    p{max-width:66ch}
+    .mono{font-family:var(--mono)}
+    .kicker{font-family:var(--mono);font-size:.74rem;letter-spacing:.2em;text-transform:uppercase;color:var(--signal);font-weight:600;display:inline-block;margin-bottom:16px}
+    .lead{font-size:1.14rem;color:var(--graphite);margin-top:18px;line-height:1.55}
+    .accent{color:var(--ice)}
 
-    /* nav */
-    .nav{position:sticky;top:0;z-index:20;background:rgba(245,246,243,.9);backdrop-filter:saturate(140%) blur(6px);border-bottom:1px solid var(--hairline)}
-    .nav-inner{display:flex;align-items:center;justify-content:space-between;height:60px}
-    .nav-brand{display:flex;align-items:center;gap:10px;font-family:var(--sans);font-weight:700;font-size:1.05rem;color:var(--ink);letter-spacing:-.01em}
-    .nav-brand img{width:26px;height:26px;border-radius:4px}
-    .nav-links{display:flex;align-items:center;gap:var(--s3);font-family:var(--sans);font-size:.92rem}
-    .nav-links a{color:var(--graphite)} .nav-links a:hover{color:var(--ink)}
+    /* blueprint grid plate */
+    .plate{background:
+      radial-gradient(1200px 500px at 85% -10%, rgba(34,64,201,.35), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(185,214,236,.055) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(185,214,236,.055) 0 1px, transparent 1px 32px),
+      linear-gradient(180deg,var(--plate),var(--plate-deep));
+      color:var(--ice-bright)}
 
     /* buttons */
-    .btn{display:inline-block;padding:11px 22px;border-radius:var(--radius);font-weight:600;font-size:.92rem;border:1px solid var(--ink);background:var(--ink);color:#fff;transition:opacity .16s}
-    .btn:hover{opacity:.9}
-    .btn-primary{background:var(--signal);border-color:var(--signal)}
-    .btn-ghost{background:transparent;color:var(--ink)}
-    .btn-sm{padding:7px 15px;font-size:.85rem}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:8px;font-weight:600;font-size:.95rem;border:1px solid transparent;transition:transform .15s, background .15s, border-color .15s;white-space:nowrap}
+    .btn:hover{transform:translateY(-1px)}
+    .btn-primary{background:var(--signal);color:#fff;box-shadow:0 6px 24px -8px rgba(34,64,201,.8)}
+    .btn-primary:hover{background:#2c4de0}
+    .btn-light{background:#fff;color:var(--ink)}
+    .btn-ghost{background:transparent;color:#fff;border-color:rgba(185,214,236,.35)}
+    .btn-ghost:hover{border-color:var(--ice)}
+    .btn-outline{background:transparent;color:var(--ink);border-color:var(--hairline)}
+    .btn-sm{padding:8px 15px;font-size:.86rem}
+
+    /* nav */
+    .nav{position:sticky;top:0;z-index:30;background:#0B1F3D;backdrop-filter:saturate(150%) blur(10px);border-bottom:1px solid var(--plate-edge)}
+    .nav-inner{display:flex;align-items:center;justify-content:space-between;height:64px;gap:24px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:#fff;letter-spacing:-.01em}
+    .brand img{width:28px;height:28px;border-radius:6px}
+    .brand .ver{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;color:var(--ice-dim);border:1px solid var(--plate-edge);border-radius:20px;padding:2px 8px;margin-left:4px}
+    .nav-links{display:flex;align-items:center;gap:26px;font-size:.92rem}
+    .nav-links a{color:var(--ice)} .nav-links a:hover{color:#fff}
+    .nav-cta{display:flex;gap:10px;align-items:center}
+    .nav-cta .signin{color:var(--ice);font-size:.92rem}
 
     /* hero */
-    .hero{padding:var(--s7) 0 var(--s6)}
-    .eyebrow{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--graphite);display:block;margin-bottom:20px}
-    .hero h1{max-width:20ch}
-    .hero .sub{font-size:1.24rem;color:var(--graphite);max-width:62ch;margin:var(--s3) 0 var(--s4);line-height:1.5}
-    .hero .sub b{color:var(--ink)}
-    .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:var(--s6)}
+    .hero{padding:88px 0 0;overflow:hidden}
+    .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+    .announce{display:inline-flex;align-items:center;gap:10px;font-size:.84rem;color:var(--ice);border:1px solid var(--plate-edge);background:rgba(185,214,236,.06);border-radius:30px;padding:5px 14px 5px 6px;margin-bottom:28px}
+    .announce .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;font-weight:600;background:var(--signal);color:#fff;border-radius:20px;padding:3px 9px}
+    .announce:hover{color:#fff}
+    .hero h1{color:#fff}
+    .hero .lead{color:var(--ice);font-size:1.2rem;max-width:56ch}
+    .hero .lead b{color:#fff;font-weight:600}
+    .hero-ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:34px}
+    .hero-meta{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:28px;font-family:var(--mono);font-size:.72rem;letter-spacing:.03em;color:var(--ice-dim)}
+    .hero-meta span::before{content:"✓";color:var(--verify-l);margin-right:7px}
 
-    /* plate hero figure */
-    figure{margin:0}
-    .plate{background:
-      repeating-linear-gradient(0deg, rgba(185,214,236,.06) 0 1px, transparent 1px 26px),
-      repeating-linear-gradient(90deg, rgba(185,214,236,.06) 0 1px, transparent 1px 26px),
-      var(--plate);
-      border:1px solid #17456f;border-radius:var(--radius);overflow:hidden;color:var(--plate-line)}
-    .plate .art{padding:var(--s4)}
-    .plate svg{width:100%;height:auto;display:block}
-    .tblock{display:flex;flex-wrap:wrap;border-top:1px solid rgba(185,214,236,.35);font-family:var(--mono);font-size:.66rem;letter-spacing:.06em}
-    .tblock>div{padding:9px 14px;border-right:1px solid rgba(185,214,236,.35)}
-    .tblock b{display:block;color:#fff;font-weight:600;letter-spacing:.1em}
-    .tblock span{color:var(--plate-dim)}
-    figcaption{font-family:var(--mono);font-size:.8rem;color:var(--graphite);margin-top:12px;max-width:74ch}
+    /* product mock */
+    .mock{background:var(--plate-card);border:1px solid var(--plate-edge);border-radius:14px;box-shadow:0 40px 80px -30px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);overflow:hidden;font-size:.86rem}
+    .mock-bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--plate-edge);font-family:var(--mono);font-size:.7rem;color:var(--ice-dim);letter-spacing:.04em}
+    .mock-bar i{width:9px;height:9px;border-radius:50%;background:rgba(185,214,236,.22);display:inline-block}
+    .mock-bar .path{margin-left:10px}
+    .mock-body{padding:20px}
+    .m-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+    .m-title{color:#fff;font-weight:650;font-size:1.04rem}
+    .m-sub{font-family:var(--mono);font-size:.7rem;color:var(--ice-dim);margin-top:3px;letter-spacing:.03em}
+    .pill{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;font-weight:600;border-radius:20px;padding:3px 9px;white-space:nowrap}
+    .pill.high{background:rgba(240,122,106,.14);color:var(--fail-l);border:1px solid rgba(240,122,106,.35)}
+    .pill.ok{background:rgba(91,211,154,.12);color:var(--verify-l);border:1px solid rgba(91,211,154,.3)}
+    .pill.warn{background:rgba(242,180,90,.12);color:var(--caution-l);border:1px solid rgba(242,180,90,.3)}
+    .m-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+    .m-kv{border:1px solid var(--plate-edge);border-radius:8px;padding:9px 11px}
+    .m-kv b{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--ice-dim);font-weight:500;text-transform:uppercase}
+    .m-kv span{color:#fff;font-size:.86rem;font-weight:550}
+    .m-label{font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;color:var(--ice-dim);text-transform:uppercase;margin:4px 0 8px}
+    .steps{display:flex;gap:4px;margin-bottom:16px}
+    .steps div{flex:1;height:6px;border-radius:3px;background:rgba(185,214,236,.14)}
+    .steps .d{background:var(--verify-l)} .steps .a{background:var(--caution-l)}
+    .gate{border:1px solid rgba(240,122,106,.35);background:rgba(240,122,106,.06);border-radius:10px;padding:12px 14px}
+    .gate-h{display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:600;margin-bottom:8px}
+    .gate ul{list-style:none;display:grid;gap:5px}
+    .gate li{display:flex;gap:9px;color:var(--ice);font-size:.82rem}
+    .gate li .y{color:var(--verify-l)} .gate li .n{color:var(--fail-l)}
+    .m-foot{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+    .clock{border:1px solid var(--plate-edge);border-radius:8px;padding:9px 11px;display:flex;justify-content:space-between;align-items:center;color:var(--ice);font-size:.8rem}
+    .clock b{font-family:var(--mono);color:var(--caution-l);font-size:.9rem}
 
-    /* metric quartet */
-    .stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--hairline);background:var(--raise);border-radius:var(--radius);margin-top:var(--s5)}
-    .stat{padding:20px 24px} .stat + .stat{border-left:1px solid var(--hairline)}
-    .stat .num{font-size:2.4rem;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
-    .stat .lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--graphite);margin-top:10px}
-    .stat .det{font-size:.78rem;color:var(--graphite);margin-top:5px;font-family:var(--serif)}
+    /* framework strip */
+    .strip{border-top:1px solid var(--plate-edge);margin-top:88px;padding:26px 0 30px}
+    .strip-inner{display:flex;align-items:center;gap:28px;flex-wrap:wrap;justify-content:space-between}
+    .strip-label{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;color:var(--ice-dim);text-transform:uppercase}
+    .fw-list{display:flex;gap:10px 30px;flex-wrap:wrap;align-items:center}
+    .fw-list a:hover span{color:var(--ice)}
+    .fw-list span{color:#fff;font-weight:600;font-size:.98rem;letter-spacing:-.01em}
+    .fw-list small{font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;color:var(--ice-dim);margin-left:6px}
 
     /* sections */
-    section{padding:var(--s7) 0;border-top:1px solid var(--hairline)}
-    .section-sub{color:var(--graphite);max-width:70ch;margin:14px 0 var(--s5);font-size:1.06rem}
+    section{padding:112px 0}
+    .s-head{max-width:760px;margin-bottom:56px}
+    .s-head.center{margin-left:auto;margin-right:auto;text-align:center}
+    .s-head.center p{margin-left:auto;margin-right:auto}
+    .card{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:28px;transition:border-color .2s, box-shadow .2s, transform .2s}
+    .card:hover{border-color:#b9c3f0;box-shadow:0 18px 40px -24px rgba(16,32,47,.35);transform:translateY(-2px)}
 
-    /* framework cards */
-    .juris-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
-    .juris{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s4)}
-    .juris-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--hairline);padding-bottom:12px;margin-bottom:14px}
-    .juris-head h3{font-size:1.05rem}
-    .jcode{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;color:var(--signal);text-transform:uppercase}
-    .fw-name{margin-left:auto;font-size:.72rem;color:var(--graphite);letter-spacing:.04em}
-    .juris .what{font-size:.98rem;margin-bottom:12px}
-    .juris .checks{font-size:.94rem;color:var(--graphite);border-left:2px solid var(--signal);padding-left:14px}
-    .juris .checks b{color:var(--ink)}
+    /* pillars */
+    .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .pillar .num{font-family:var(--mono);font-size:.74rem;letter-spacing:.14em;color:var(--signal);font-weight:600}
+    .pillar h3{font-size:1.4rem;margin:12px 0 10px}
+    .pillar p{color:var(--graphite);font-size:.98rem}
+    .pillar ul{list-style:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--hairline);display:grid;gap:8px;font-size:.92rem}
+    .pillar li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--signal);margin-right:10px;vertical-align:middle}
+    .ico{width:44px;height:44px;border-radius:10px;background:var(--signal-tint);display:grid;place-items:center;margin-bottom:20px}
+    .ico svg{width:22px;height:22px;stroke:var(--signal);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-    /* pipeline */
-    .pipeline{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s2)}
-    .pipe-step{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s3)}
-    .pipe-step .n{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;color:var(--signal);font-weight:600;margin-bottom:10px}
-    .pipe-step h3{font-size:1rem;margin-bottom:8px}
-    .pipe-step p{font-size:.9rem;color:var(--graphite)}
+    /* workflow lifecycle */
+    .wf{background:var(--raise);border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+    .wf-split{display:grid;grid-template-columns:.85fr 1.15fr;gap:64px;align-items:start}
+    .wf-split .s-head{margin-bottom:0;position:sticky;top:110px}
+    .wf-points{margin-top:28px;display:grid;gap:14px}
+    .wf-points div{display:flex;gap:14px;font-size:.96rem;color:var(--graphite)}
+    .wf-points b{color:var(--ink);font-weight:600}
+    .wf-points .tick{flex:none;width:22px;height:22px;border-radius:50%;background:var(--signal-tint);color:var(--signal);display:grid;place-items:center;font-size:.72rem;font-weight:700;margin-top:2px}
+    .timeline{position:relative;display:grid;gap:12px}
+    .timeline::before{content:"";position:absolute;left:23px;top:24px;bottom:24px;width:2px;background:linear-gradient(var(--signal),var(--hairline))}
+    .t-step{position:relative;display:grid;grid-template-columns:48px 1fr auto;gap:16px;align-items:center;background:var(--paper);border:1px solid var(--hairline);border-radius:var(--radius);padding:14px 18px 14px 0}
+    .t-dot{justify-self:center;width:26px;height:26px;border-radius:50%;background:var(--raise);border:2px solid var(--signal);display:grid;place-items:center;font-family:var(--mono);font-size:.66rem;font-weight:600;color:var(--signal);z-index:1;margin-left:22px}
+    .t-step h3{font-size:1rem}
+    .t-step p{font-size:.88rem;color:var(--graphite);margin-top:2px}
+    .t-tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;color:var(--graphite);border:1px solid var(--hairline);border-radius:20px;padding:3px 9px;white-space:nowrap;background:var(--raise)}
 
-    /* principles */
-    .prin-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
-    .prin{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s4)}
-    .prin h3{display:flex;align-items:baseline;gap:12px;font-size:1.05rem;margin-bottom:12px}
-    .prin h3 .num{font-family:var(--mono);color:var(--signal);font-size:.95rem;font-weight:600}
-    .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-    .chip{font-size:.66rem;letter-spacing:.04em;color:var(--graphite);border:1px solid var(--hairline);border-radius:10px;padding:3px 9px}
-    .prin .how{font-size:.94rem;color:var(--graphite)} .prin .how b{color:var(--ink)}
+    /* capabilities */
+    .caps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .cap .label{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;color:var(--signal);font-weight:600;text-transform:uppercase}
+    .cap h3{margin:10px 0 8px}
+    .cap p{font-size:.94rem;color:var(--graphite)}
+    .cap .formats{display:flex;gap:6px;margin-top:14px;flex-wrap:wrap}
+    .cap .formats span{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;background:var(--signal-tint);color:var(--signal);border-radius:5px;padding:3px 8px;font-weight:600}
 
-    /* features */
-    .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s3)}
-    .feat{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:var(--s4)}
-    .feat .eyebrow{color:var(--signal);margin-bottom:10px}
-    .feat h3{font-size:1.02rem;margin-bottom:8px}
-    .feat p{font-size:.92rem;color:var(--graphite)}
+    /* EU spotlight */
+    .eu{padding:112px 0}
+    .eu h2{color:#fff}
+    .eu .lead{color:var(--ice)}
+    .eu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:52px}
+    .eu-card{background:var(--plate-card);border:1px solid var(--plate-edge);border-radius:var(--radius);padding:24px}
+    .eu-card .art{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;color:var(--ice-dim);text-transform:uppercase}
+    .eu-card h3{color:#fff;margin:8px 0 8px}
+    .eu-card p{color:var(--ice);font-size:.92rem}
+    .roles{display:flex;gap:8px;margin-top:14px}
+    .roles span{font-family:var(--mono);font-size:.68rem;border:1px solid var(--plate-edge);border-radius:6px;padding:4px 10px;color:#fff}
+    .roles span.on{background:var(--signal);border-color:var(--signal)}
+    .clocks{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+    .clk{background:var(--plate-card);border:1px solid var(--plate-edge);border-radius:var(--radius);padding:22px 24px;display:flex;gap:18px;align-items:center}
+    .clk .d{font-size:2.7rem;font-weight:800;color:#fff;letter-spacing:-.04em;line-height:1}
+    .clk .d small{font-size:.9rem;font-weight:500;color:var(--ice-dim);margin-left:4px;letter-spacing:0}
+    .clk p{color:var(--ice);font-size:.86rem;line-height:1.45}
+    .clk-head{display:flex;justify-content:space-between;align-items:baseline;margin-top:56px;gap:16px;flex-wrap:wrap}
+    .clk-head .m-label{margin:0}
 
-    /* final cta */
-    .final{background:
-      repeating-linear-gradient(0deg, rgba(185,214,236,.055) 0 1px, transparent 1px 28px),
-      repeating-linear-gradient(90deg, rgba(185,214,236,.055) 0 1px, transparent 1px 28px),
-      var(--plate-deep);
-      color:#fff;text-align:center;padding:var(--s7) 0;border:0}
-    .final h2{color:#fff;max-width:22ch;margin:0 auto}
-    .final .section-sub{color:var(--plate-line);margin:16px auto var(--s4);max-width:60ch}
-    .final .hero-ctas{justify-content:center;margin-bottom:0}
-    .final .btn-ghost{color:#fff;border-color:rgba(185,214,236,.5)}
+    /* coverage */
+    .cov{display:grid;grid-template-columns:.8fr 1.2fr;gap:56px;align-items:center}
+    .cov-big{font-size:clamp(4rem,9vw,6.6rem);font-weight:800;letter-spacing:-.05em;line-height:.9}
+    .cov-big small{font-size:.38em;color:var(--graphite);font-weight:600;letter-spacing:-.02em}
+    .cov-left p{color:var(--graphite);margin-top:16px}
+    .bars{display:grid;gap:12px}
+    .bar{background:var(--raise);border:1px solid var(--hairline);border-radius:var(--radius);padding:16px 20px}
+    .bar-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+    .bar-top b{font-weight:650}
+    .bar-top .reg{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;color:var(--graphite);margin-left:10px;text-transform:uppercase}
+    .bar-top .n{font-family:var(--mono);font-weight:600;font-size:.92rem}
+    .bar-top .n small{color:var(--graphite);font-weight:400}
+    .track{height:6px;border-radius:3px;background:#E8ECEE;overflow:hidden}
+    .track div{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--signal),#5C78F0)}
+
+    /* trust */
+    .trust{background:var(--raise);border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+    .trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--hairline);border-radius:var(--radius);overflow:hidden}
+    .trust-item{padding:28px;border-right:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+    .trust-item:nth-child(4n){border-right:0}
+    .trust-item:nth-last-child(-n+4){border-bottom:0}
+    .trust-item h3{font-size:1rem;margin:14px 0 6px}
+    .trust-item p{font-size:.88rem;color:var(--graphite)}
+    .trust-item .ico{margin-bottom:0;width:38px;height:38px}
+    .trust-item .ico svg{width:19px;height:19px}
+
+    /* quote + cta */
+    .why{padding:96px 0}
+    .why blockquote{font-size:clamp(1.4rem,2.6vw,2rem);font-weight:600;letter-spacing:-.02em;line-height:1.3;max-width:28ch;margin:0 auto;text-align:center}
+    .why blockquote span{color:var(--signal)}
+    .final{padding:104px 0;text-align:center}
+    .final h2{color:#fff;max-width:20ch;margin:0 auto}
+    .final .lead{color:var(--ice);margin:18px auto 0}
+    .final .hero-ctas{justify-content:center}
 
     /* footer */
-    footer{background:var(--raise);border-top:1px solid var(--hairline);padding:var(--s5) 0 var(--s4)}
-    .foot{display:flex;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;font-size:.85rem;color:var(--graphite)}
-    .foot .links{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--sans)}
-    .disclaimer{margin-top:var(--s3);font-size:.78rem;color:var(--graphite);max-width:none;line-height:1.6}
+    footer{background:var(--plate-deep);color:var(--ice-dim);padding:64px 0 36px;border-top:1px solid var(--plate-edge)}
+    .foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:32px}
+    .foot-grid h4{font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ice);font-weight:600;margin-bottom:14px}
+    .foot-grid a{display:block;color:var(--ice-dim);font-size:.9rem;margin-bottom:8px}
+    .foot-grid a:hover{color:#fff}
+    .foot-grid .brand{margin-bottom:12px;color:#fff}
+    .foot-grid p{font-size:.88rem}
+    .disclaimer{margin-top:44px;padding-top:24px;border-top:1px solid var(--plate-edge);font-size:.76rem;line-height:1.65;max-width:none;color:var(--ice-dim)}
+    .copy{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:18px;font-family:var(--mono);font-size:.68rem;letter-spacing:.1em}
 
-    @media (max-width:900px){
-      .juris-grid,.prin-grid,.feat-grid{grid-template-columns:1fr}
-      .stats{grid-template-columns:repeat(2,1fr)} .stat:nth-child(3),.stat:nth-child(4){border-top:1px solid var(--hairline)}
-      .stat:nth-child(odd){border-left:0}
-      .pipeline{grid-template-columns:1fr 1fr}
+    /* hero proof stats */
+    .hero-stats{display:grid;grid-template-columns:repeat(3,auto);justify-content:start;gap:0;margin-top:36px;border:1px solid var(--plate-edge);border-radius:12px;background:rgba(185,214,236,.04);width:max-content;max-width:100%}
+    .hero-stats div{padding:14px 22px;border-right:1px solid var(--plate-edge)}
+    .hero-stats div:last-child{border-right:0}
+    .hero-stats b{display:block;color:#fff;font-size:1.35rem;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+    .hero-stats span{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ice-dim)}
+
+    /* the gap (problem framing) */
+    .gap{background:var(--raise);border-bottom:1px solid var(--hairline)}
+    .gaps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .gap-card{display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--hairline);border-radius:var(--radius);overflow:hidden}
+    .gap-card .g-body{padding:28px 28px 22px;flex:1}
+    .gap-card .g-num{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;color:var(--fail);font-weight:600;text-transform:uppercase}
+    .gap-card h3{font-size:1.3rem;margin:10px 0 10px}
+    .gap-card p{font-size:.95rem;color:var(--graphite)}
+    .gap-card .g-fix{border-top:1px solid var(--hairline);background:var(--raise);padding:18px 28px 22px}
+    .gap-card .g-fix b{display:block;font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;color:var(--verify);text-transform:uppercase;margin-bottom:6px;font-weight:600}
+    .gap-card .g-fix p{font-size:.9rem;color:var(--ink)}
+
+    /* architecture diagram */
+    .arch{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:0;align-items:stretch;margin-top:8px}
+    .arch-col{display:flex;flex-direction:column;gap:10px;justify-content:center}
+    .arch-col .m-label{color:var(--graphite);text-align:center;margin:0 0 4px}
+    .src{background:var(--raise);border:1px solid var(--hairline);border-radius:8px;padding:12px 14px;font-size:.9rem;font-weight:600;display:flex;align-items:center;gap:10px;position:relative}
+    .src small{display:block;font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;color:var(--graphite);font-weight:400}
+    .src i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--signal)}
+    .arch-left .src::after,.arch-right .src::before{content:"";position:absolute;top:50%;width:36px;height:2px;background:repeating-linear-gradient(90deg,var(--signal) 0 6px,transparent 6px 11px);background-size:22px 2px;animation:flow 1.2s linear infinite}
+    .arch-left .src::after{right:-37px}
+    .arch-right .src::before{left:-37px}
+    @keyframes flow{to{background-position:22px 0}}
+    .arch-core{margin:0 36px;border-radius:14px;padding:22px;color:var(--ice-bright);display:flex;flex-direction:column;gap:10px}
+    .core-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+    .core-head b{color:#fff;font-size:1.05rem}
+    .core-head .pill{font-size:.6rem}
+    .layer{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center;background:var(--plate-card);border:1px solid var(--plate-edge);border-radius:9px;padding:12px 14px}
+    .layer .ln{grid-row:span 2;font-family:var(--mono);font-size:.66rem;font-weight:600;color:var(--ice);border:1px solid var(--plate-edge);border-radius:6px;padding:6px 8px}
+    .layer b{color:#fff;font-size:.95rem}
+    .layer span{font-size:.8rem;color:var(--ice-dim)}
+    .packs{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;padding-top:12px;border-top:1px dashed var(--plate-edge)}
+    .packs span{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;color:var(--ice);border:1px solid var(--plate-edge);border-radius:20px;padding:3px 9px}
+
+    /* audience tabs */
+    .aud-tabs{display:inline-flex;gap:4px;padding:4px;background:var(--raise);border:1px solid var(--hairline);border-radius:30px;margin-bottom:32px;flex-wrap:wrap}
+    .aud-tabs button{font:inherit;font-size:.9rem;font-weight:600;border:0;background:transparent;color:var(--graphite);padding:9px 18px;border-radius:30px;cursor:pointer;transition:background .15s,color .15s}
+    .aud-tabs button[aria-selected="true"]{background:var(--ink);color:#fff}
+    .aud-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .aud-panel[hidden]{display:none}
+    .aud-card .label{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;color:var(--signal);font-weight:600;text-transform:uppercase}
+    .aud-card h3{margin:10px 0 8px}
+    .aud-card p{font-size:.93rem;color:var(--graphite)}
+
+    /* FAQ */
+    .faq-wrap{display:grid;grid-template-columns:.8fr 1.2fr;gap:64px;align-items:start}
+    .faq-wrap .s-head{position:sticky;top:110px;margin-bottom:0}
+    .faq details{border-bottom:1px solid var(--hairline);padding:4px 0}
+    .faq details:first-child{border-top:1px solid var(--hairline)}
+    .faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:20px;align-items:center;padding:18px 0;font-weight:600;font-size:1.04rem}
+    .faq summary::-webkit-details-marker{display:none}
+    .faq summary::after{content:"+";flex:none;width:28px;height:28px;border-radius:50%;border:1px solid var(--hairline);display:grid;place-items:center;font-weight:500;color:var(--signal);transition:transform .2s}
+    .faq details[open] summary::after{transform:rotate(45deg)}
+    .faq details p{color:var(--graphite);font-size:.96rem;padding:0 44px 20px 0}
+
+    /* final band ticker */
+    .ticker{font-family:var(--mono);font-size:.7rem;letter-spacing:.22em;color:var(--ice-dim);text-transform:uppercase;margin-bottom:22px}
+
+    /* scroll reveal (only when JS is running) */
+    .js .reveal{opacity:0;transform:translateY(18px);transition:opacity .6s ease, transform .6s ease}
+    .js .reveal.in{opacity:1;transform:none}
+
+    @media (max-width:1020px){
+      .gaps,.aud-panel{grid-template-columns:1fr 1fr}
+      .arch{grid-template-columns:1fr;gap:28px}
+      .arch-core{margin:0}
+      .arch-left .src::after,.arch-right .src::before{display:none}
+      .faq-wrap{grid-template-columns:1fr;gap:32px}
+      .faq-wrap .s-head{position:static}
     }
-    @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+    @media (max-width:640px){
+      .gaps,.aud-panel{grid-template-columns:1fr}
+      .hero-stats{grid-template-columns:1fr;width:100%}
+      .hero-stats div{border-right:0;border-bottom:1px solid var(--plate-edge)}
+      .hero-stats div:last-child{border-bottom:0}
+    }
+
+    @media (max-width:1020px){
+      .hero-grid,.wf-split,.cov{grid-template-columns:1fr;gap:44px}
+      .wf-split .s-head{position:static}
+      .caps,.pillars,.eu-grid{grid-template-columns:1fr 1fr}
+      .trust-grid{grid-template-columns:1fr 1fr}
+      .trust-item:nth-child(2n){border-right:0}
+      .trust-item:nth-child(4n){border-right:0}
+      .trust-item:nth-last-child(-n+4){border-bottom:1px solid var(--hairline)}
+      .trust-item:nth-last-child(-n+2){border-bottom:0}
+      .nav-links{display:none}
+      .foot-grid{grid-template-columns:1fr 1fr}
+    }
+    @media (max-width:640px){
+      .container{padding:0 16px}
+      section,.eu{padding:72px 0}
+      .hero{padding-top:56px}
+      .caps,.pillars,.eu-grid,.clocks,.trust-grid,.foot-grid{grid-template-columns:1fr}
+      .trust-item{border-right:0 !important;border-bottom:1px solid var(--hairline) !important}
+      .trust-item:last-child{border-bottom:0 !important}
+      .m-row{grid-template-columns:1fr 1fr}
+      .m-foot{grid-template-columns:1fr}
+      .t-tag{display:none}
+      .t-step{grid-template-columns:48px 1fr}
+      .nav-cta .signin{display:none}
+      .strip{margin-top:64px}
+    }
+
+    /* nav: frameworks dropdown + mobile menu */
+    .dd{position:relative}
+    .dd-btn{font:inherit;font-size:.92rem;color:var(--ice);background:none;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:8px 0}
+    .dd-btn:hover,.dd.open .dd-btn{color:#fff}
+    .dd-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;transition:transform .2s}
+    .dd.open .dd-btn svg{transform:rotate(180deg)}
+    .dd-menu{position:absolute;top:calc(100% + 12px);left:50%;transform:translateX(-50%) translateY(6px);width:min(640px,92vw);background:#0B1F3D;border:1px solid var(--plate-edge);border-radius:14px;box-shadow:0 30px 60px -20px rgba(0,0,0,.65);padding:10px;opacity:0;visibility:hidden;transition:opacity .16s, transform .16s, visibility .16s;display:grid;grid-template-columns:1fr 1fr;gap:4px;z-index:40}
+    .dd.open .dd-menu{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+    @media (hover:hover){.dd:hover .dd-menu{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}}
+    .dd-menu::before{content:"";position:absolute;top:-14px;left:0;right:0;height:14px}
+    .dd-item{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 14px;border-radius:9px;color:var(--ice)}
+    .dd-item:hover,.dd-item:focus-visible{background:rgba(185,214,236,.08);outline:none}
+    .dd-item b{color:#fff;font-weight:600;font-size:.93rem}
+    .dd-item small{grid-column:1;font-size:.78rem;color:var(--ice-dim);line-height:1.4}
+    .dd-item .cnt{grid-row:1 / span 2;grid-column:2;align-self:center;font-family:var(--mono);font-size:.7rem;color:var(--ice);border:1px solid var(--plate-edge);border-radius:20px;padding:3px 9px;white-space:nowrap}
+    .dd-foot{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--plate-edge);margin-top:6px;padding:12px 14px 6px;font-size:.84rem;color:var(--ice-dim)}
+    .dd-foot a{color:#fff;font-weight:600}
+    .menu-btn{display:none;background:none;border:1px solid var(--plate-edge);border-radius:8px;color:#fff;width:40px;height:38px;cursor:pointer;place-items:center}
+    .menu-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
+    .mnav{display:none;border-top:1px solid var(--plate-edge);background:#0B1F3D;padding:12px 16px 20px}
+    .mnav.open{display:block}
+    .mnav a{display:block;color:var(--ice);padding:10px 0;border-bottom:1px solid rgba(185,214,236,.08);font-size:.98rem}
+    .mnav .m-label{margin:16px 0 4px}
+    .mnav .fw a{display:flex;justify-content:space-between}
+    .mnav .fw a span{font-family:var(--mono);font-size:.72rem;color:var(--ice-dim)}
+
+    /* frameworks section */
+    .fw-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .fw-card{display:flex;flex-direction:column;scroll-margin-top:96px}
+    .fw-card .fw-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .fw-card .reg{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;color:var(--signal);font-weight:600;text-transform:uppercase}
+    .fw-card .cnt{font-family:var(--mono);font-size:.78rem;font-weight:600}
+    .fw-card .cnt small{color:var(--graphite);font-weight:400}
+    .fw-card h3{font-size:1.2rem;margin:12px 0 4px}
+    .fw-card .full{font-size:.8rem;color:var(--graphite);font-family:var(--mono);letter-spacing:.02em}
+    .fw-card p{font-size:.93rem;color:var(--graphite);margin-top:12px}
+    .fw-card ul{list-style:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline);display:grid;gap:7px;font-size:.9rem;flex:1}
+    .fw-card li{padding-left:16px;position:relative}
+    .fw-card li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--signal)}
+    .fw-card .track{margin-top:18px}
+    .fw-card .more{margin-top:14px;font-size:.88rem;font-weight:600}
+    .fw-card:target{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-tint)}
+
+    /* sample model card */
+    .mc-wrap{display:grid;grid-template-columns:1.45fr .85fr;gap:28px;align-items:start}
+    .mc-doc{background:var(--raise);border:1px solid var(--hairline);border-radius:14px;overflow:hidden;box-shadow:0 30px 60px -36px rgba(16,32,47,.45)}
+    .mc-band{padding:24px 28px;color:#fff}
+    .mc-band .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.18em;color:var(--ice);text-transform:uppercase}
+    .mc-band h3{font-size:1.5rem;margin:8px 0 6px;color:#fff}
+    .mc-band .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .mc-band .meta span{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;border:1px solid var(--plate-edge);border-radius:20px;padding:3px 9px;color:var(--ice-bright)}
+    .mc-band .meta .ok{border-color:rgba(91,211,154,.4);color:var(--verify-l)}
+    .mc-band .meta .high{border-color:rgba(240,122,106,.45);color:var(--fail-l)}
+    .mc-tabs{display:flex;gap:4px;padding:10px 16px 0;border-bottom:1px solid var(--hairline);background:var(--paper)}
+    .mc-tabs button{font:inherit;font-size:.86rem;font-weight:600;color:var(--graphite);background:none;border:0;border-bottom:2px solid transparent;padding:9px 12px;cursor:pointer}
+    .mc-tabs button[aria-selected="true"]{color:var(--signal);border-bottom-color:var(--signal)}
+    .mc-pane{padding:8px 28px 24px}
+    .mc-pane[hidden]{display:none}
+    .mc-sec{padding:18px 0;border-bottom:1px solid var(--hairline)}
+    .mc-sec:last-child{border-bottom:0}
+    .mc-sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    .mc-sec-h h4{font-size:1rem;font-weight:650}
+    .maps{display:flex;flex-wrap:wrap;gap:5px}
+    .maps span{font-family:var(--mono);font-size:.6rem;letter-spacing:.04em;background:var(--signal-tint);color:var(--signal);border-radius:4px;padding:2px 7px;font-weight:600}
+    .kv{display:grid;grid-template-columns:180px 1fr;gap:6px 16px;font-size:.9rem}
+    .kv dt{color:var(--graphite)}
+    .kv dd{color:var(--ink)}
+    .code{font-family:var(--mono);font-size:.76rem;line-height:1.6;background:#0B1F3D;color:var(--ice-bright);border-radius:10px;padding:18px 20px;margin-top:16px;overflow:auto;max-height:520px;white-space:pre}
+    .code .k{color:#9DB8DD}.code .s{color:#A8E0C2}.code .c{color:#7F9BBA}
+    .mc-side{display:grid;gap:16px;position:sticky;top:96px}
+    .mc-side .card{padding:22px}
+    .mc-side h4{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--graphite);font-weight:600;margin-bottom:12px}
+    .ready{display:flex;align-items:baseline;gap:10px}
+    .ready b{font-size:2.2rem;font-weight:800;letter-spacing:-.04em;line-height:1}
+    .ready span{font-size:.86rem;color:var(--graphite)}
+    .vers{list-style:none;display:grid;gap:0}
+    .vers li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--hairline);font-size:.88rem}
+    .vers li:last-child{border-bottom:0}
+    .vers .v{font-family:var(--mono);font-weight:600;font-size:.8rem}
+    .vers small{display:block;color:var(--graphite);font-size:.78rem}
+    .tagp{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;font-weight:600;border-radius:20px;padding:2px 8px;border:1px solid var(--hairline);color:var(--graphite)}
+    .tagp.cur{background:#E3F4EB;color:var(--verify);border-color:#BFE3CF}
+    .exp{display:flex;gap:8px;flex-wrap:wrap}
+    .exp button{font:inherit;font-family:var(--mono);font-size:.74rem;font-weight:600;border:1px solid var(--hairline);background:var(--paper);border-radius:7px;padding:7px 12px;cursor:pointer;color:var(--ink)}
+    .exp button:hover{border-color:var(--signal);color:var(--signal)}
+    .flag{display:flex;gap:10px;font-size:.86rem;color:var(--graphite);background:#FFF7EA;border:1px solid #F1DDB8;border-radius:9px;padding:12px 14px}
+    .flag b{color:var(--caution)}
+    .sample-note{font-size:.8rem;color:var(--graphite);margin-top:12px}
+
+    @media (max-width:1020px){
+      .menu-btn{display:grid}
+      .nav-cta .btn{display:none}
+      .fw-grid{grid-template-columns:1fr 1fr}
+      .mc-wrap{grid-template-columns:1fr}
+      .mc-side{position:static}
+    }
+    @media (max-width:640px){
+      .fw-grid{grid-template-columns:1fr}
+      .kv{grid-template-columns:1fr;gap:2px}
+      .kv dd{margin-bottom:8px}
+      .mc-pane{padding:4px 18px 18px}
+      .mc-band{padding:20px 18px}
+    }
+    @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn,.card{transition:none}.js .reveal{opacity:1;transform:none;transition:none}.arch-left .src::after,.arch-right .src::before{animation:none}}
+
+    /* contact + book a demo */
+    #contact{padding:112px 0}
+    .ct-grid{display:grid;grid-template-columns:1.25fr .9fr;gap:28px;align-items:start}
+    .ct-card{background:var(--raise);border:1px solid var(--hairline);border-radius:14px;padding:28px;min-width:0}
+    .ct-card h3{font-size:1.3rem;display:flex;align-items:center;gap:10px}
+    .ct-card h3 .ic{width:30px;height:30px;border-radius:8px;background:var(--signal-tint);color:var(--signal);display:grid;place-items:center}
+    .ct-card h3 .ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .ct-card > p{color:var(--graphite);font-size:.95rem;margin-top:8px}
+    .ct-step{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--graphite);margin:22px 0 10px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .ct-step em{font-style:normal;color:var(--ink);letter-spacing:.04em;text-transform:none}
+    .days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+    .day{flex:none;width:68px;border:1px solid var(--hairline);border-radius:10px;background:var(--paper);padding:9px 0 8px;text-align:center;cursor:pointer;font:inherit;color:var(--ink);transition:border-color .15s,background .15s}
+    .day small{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--graphite);text-transform:uppercase}
+    .day b{display:block;font-size:1.25rem;line-height:1.2}
+    .day span{display:block;font-family:var(--mono);font-size:.6rem;color:var(--graphite)}
+    .day:hover{border-color:#b9c3f0}
+    .day[aria-pressed=true]{background:var(--signal);border-color:var(--signal);color:#fff}
+    .day[aria-pressed=true] small,.day[aria-pressed=true] span{color:#dfe6ff}
+    .day:disabled{opacity:.4;cursor:not-allowed}
+    .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+    .slot{border:1px solid var(--hairline);border-radius:8px;background:var(--raise);padding:9px 0;font:inherit;font-family:var(--mono);font-size:.82rem;color:var(--signal);cursor:pointer;transition:border-color .15s,background .15s}
+    .slot:hover{border-color:var(--signal)}
+    .slot[aria-pressed=true]{background:var(--signal);color:#fff;border-color:var(--signal)}
+    .slot:disabled{color:var(--graphite);text-decoration:line-through;opacity:.5;cursor:not-allowed;background:var(--paper)}
+    .ct-note{font-size:.84rem;color:var(--graphite);margin-top:10px}
+    .ct-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+    .ct-form .full{grid-column:1/-1}
+    .fld label{display:block;font-size:.8rem;font-weight:600;margin-bottom:5px}
+    .fld label i{font-style:normal;font-weight:400;color:var(--graphite)}
+    .fld input,.fld select,.fld textarea{width:100%;font:inherit;font-size:.93rem;color:var(--ink);background:var(--paper);border:1px solid var(--hairline);border-radius:8px;padding:10px 12px}
+    .fld textarea{min-height:96px;resize:vertical}
+    .fld input:focus,.fld select:focus,.fld textarea:focus,.day:focus-visible,.slot:focus-visible{outline:2px solid var(--signal);outline-offset:1px;border-color:var(--signal)}
+    .hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}
+    .ct-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:16px}
+    .ct-actions .btn[disabled]{opacity:.55;cursor:not-allowed;transform:none}
+    .ct-err{color:var(--fail);font-size:.86rem}
+    .ct-sel{display:flex;align-items:center;gap:10px;background:var(--signal-tint);border-radius:8px;padding:10px 14px;font-size:.9rem;color:var(--ink);margin-top:18px}
+    .ct-sel b{font-weight:650}
+    .ct-done{text-align:center;padding:24px 8px 8px}
+    .ct-done .ok{width:46px;height:46px;border-radius:50%;background:rgba(30,138,90,.12);color:var(--verify);display:grid;place-items:center;margin:0 auto 14px;font-size:1.4rem}
+    .ct-done h4{font-size:1.15rem}
+    .ct-done p{color:var(--graphite);margin:8px auto 0;font-size:.94rem}
+    .ct-done .ct-actions{justify-content:center}
+    .ct-side{display:grid;gap:14px;margin-top:22px;padding-top:20px;border-top:1px solid var(--hairline)}
+    .ct-side div{display:flex;gap:12px;font-size:.9rem;color:var(--graphite)}
+    .ct-side b{color:var(--ink);font-weight:600}
+    .ct-side .tick{flex:none;width:22px;height:22px;border-radius:50%;background:var(--signal-tint);color:var(--signal);display:grid;place-items:center;font-size:.72rem;font-weight:700}
+    .sk{height:58px;border-radius:10px;background:linear-gradient(90deg,var(--paper),#eceee9,var(--paper));background-size:200% 100%;animation:sk 1.2s infinite}
+    @keyframes sk{to{background-position:-200% 0}}
+    @media (max-width:1020px){.ct-grid{grid-template-columns:1fr}}
+    @media (max-width:640px){.ct-form{grid-template-columns:1fr}.ct-card{padding:20px}#contact{padding:80px 0}}
+    @media (prefers-reduced-motion:reduce){.sk{animation:none}}
   </style>
 </head>
 <body>
 
   <nav class="nav">
     <div class="container nav-inner">
-      <a class="nav-brand" href="/"><img src="/static/logo.png" alt="SentRAI logo" /> SentRAI</a>
+      <a class="brand" href="/"><img src="/static/logo.png" alt="SentRAI logo" /> SentRAI <span class="ver">V1.8</span></a>
       <div class="nav-links">
-        <a href="#frameworks">Frameworks</a>
-        <a href="#product">How it works</a>
-        <a href="#principles">Principles</a>
-        <a href="/coverage">Coverage</a>
-        <a href="/dashboard/" class="btn btn-ghost btn-sm">Sign in</a>
+        <a href="#why">Why SentRAI</a>
+        <a href="#platform">Platform</a>
+        <a href="#workflows">Workflows</a>
+        <div class="dd" id="fw-dd">
+          <button class="dd-btn" aria-haspopup="true" aria-expanded="false" aria-controls="fw-menu">Frameworks <svg viewBox="0 0 12 12"><path d="m2 4 4 4 4-4"/></svg></button>
+          <div class="dd-menu" id="fw-menu" role="menu"><a class="dd-item" role="menuitem" href="#fw-eu"><b>EU AI Act</b><small>EU · Regulation 2024/1689</small><span class="cnt">45 / 45</span></a><a class="dd-item" role="menuitem" href="#fw-nist"><b>NIST AI RMF</b><small>US · voluntary · built in</small><span class="cnt">66 / 72</span></a><a class="dd-item" role="menuitem" href="#fw-iso"><b>ISO/IEC 42001</b><small>Global · AI management system · built in</small><span class="cnt">63 / 65</span></a><a class="dd-item" role="menuitem" href="#fw-us"><b>US AI policy pack</b><small>US · federal + state</small><span class="cnt">40 / 44</span></a><a class="dd-item" role="menuitem" href="#fw-au"><b>DTA AI policy v2.1</b><small>Australia · government use</small><span class="cnt">24 / 29</span></a><a class="dd-item" role="menuitem" href="#fw-rbi"><b>RBI FREE-AI</b><small>India · banks and NBFCs</small><span class="cnt">19 / 20</span></a><div class="dd-foot"><span>257 of 275 applicable requirements implemented</span><a href="/coverage">Coverage disclosure &rarr;</a></div></div>
+        </div>
+        <a href="#model-card">Model cards</a>
+        <a href="#coverage">Coverage</a>
+        <a href="#faq">FAQ</a>
+        <a href="#contact">Contact</a>
       </div>
+      <div class="nav-cta">
+        <a class="signin" href="/dashboard/">Sign in</a>
+        <a class="btn btn-primary btn-sm" href="#book">Book a demo</a>
+        <button class="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mnav"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      </div>
+    </div>
+    <div class="mnav" id="mnav">
+      <a href="#why">Why SentRAI</a><a href="#platform">Platform</a><a href="#workflows">Workflows</a><a href="#model-card">Model cards</a><a href="#coverage">Coverage</a><a href="#faq">FAQ</a><a href="#contact">Contact</a>
+      <div class="m-label">Frameworks</div>
+      <div class="fw"><a href="#fw-eu">EU AI Act<span>45 / 45</span></a><a href="#fw-nist">NIST AI RMF<span>66 / 72</span></a><a href="#fw-iso">ISO/IEC 42001<span>63 / 65</span></a><a href="#fw-us">US AI policy pack<span>40 / 44</span></a><a href="#fw-au">DTA AI policy v2.1<span>24 / 29</span></a><a href="#fw-rbi">RBI FREE-AI<span>19 / 20</span></a></div>
+      <a class="btn btn-primary" style="margin-top:18px;display:flex;justify-content:center;color:#fff" href="#book">Book a demo</a>
+      <a class="btn btn-ghost" style="margin-top:10px;display:flex;justify-content:center" href="/dashboard/">Launch console</a>
     </div>
   </nav>
 
-  <header class="hero">
+  <!-- ───────── HERO ───────── -->
+  <header class="hero plate">
     <div class="container">
-      <span class="eyebrow">RBI FREE-AI · NIST AI RMF · EU AI Act · ISO/IEC 42001</span>
-      <h1>Governance you can read like a schematic.</h1>
-      <p class="sub">
-        SentRAI is a self-hosted AI governance console for financial services. It finds the models
-        hiding in your code, scores each one against <b>India's RBI FREE-AI framework</b>, the
-        <b>US NIST AI Risk Management Framework</b>, the <b>EU AI Act</b>, and <b>ISO/IEC 42001</b>,
-        monitors them for drift, and maintains the evidence trail your next audit will ask for.
-      </p>
-      <div class="hero-ctas">
-        <a class="btn btn-primary" href="/dashboard/">Launch the console</a>
-        <a class="btn btn-ghost" href="#product">See how it works</a>
-      </div>
-
-      <figure>
-        <div class="plate">
-          <div class="art">
-            <svg viewBox="0 0 1040 300" role="img" aria-label="The governance graph: estate to repositories to AI artifacts to deployments">
-              <g stroke="#4E7196" stroke-width="1" fill="none">
-                <path d="M150 150 L360 80 M150 150 L360 150 M150 150 L360 220 M360 80 L600 55 M360 80 L600 130 M360 150 L600 130 M360 150 L600 200 M360 220 L600 200 M360 220 L600 260 M600 55 L850 95 M600 130 L850 95 M600 200 L850 95 M600 200 L850 215 M600 260 L850 215"/>
-              </g>
-              <g>
-                <circle cx="150" cy="150" r="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <circle cx="150" cy="150" r="19" fill="none" stroke="#B9D6EC" stroke-width="1" opacity=".4"/>
-                <circle cx="360" cy="80" r="13" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <circle cx="360" cy="150" r="13" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <circle cx="360" cy="220" r="13" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <rect x="587" y="42" width="26" height="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <rect x="587" y="117" width="26" height="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <rect x="587" y="187" width="26" height="26" fill="none" stroke="#B9D6EC" stroke-width="1.5"/>
-                <rect x="587" y="247" width="26" height="26" fill="none" stroke="#7FB3A0" stroke-width="1.5"/>
-                <circle cx="850" cy="95" r="17" fill="none" stroke="#fff" stroke-width="2"/>
-                <circle cx="850" cy="215" r="17" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>
-              </g>
-              <g font-family="IBM Plex Mono" font-size="10.5" fill="#B9D6EC" letter-spacing="1">
-                <text x="124" y="196">ORG ESTATE</text>
-                <text x="330" y="45">REPOSITORIES</text>
-                <text x="560" y="28">MODELS + DATASETS</text>
-                <text x="812" y="66">PRODUCTION</text>
-                <text x="824" y="256">STAGED</text>
-              </g>
-            </svg>
+      <div class="hero-grid">
+        <div>
+          <h1>AI governance that runs itself, <span class="accent">from code to boardroom.</span></h1>
+          <p class="lead">
+            Most AI governance lives in spreadsheets that are out of date the day they're written.
+            <b>SentRAI starts from your code.</b> It finds every AI component in your repositories, builds a live
+            model inventory for each project, and guides your team through the full governance lifecycle,
+            across every jurisdiction you operate in.
+          </p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="/dashboard/">Launch the console</a>
+            <a class="btn btn-ghost" href="#book">Book a demo</a>
+            <a class="btn btn-ghost" href="/demo">&#9654;&nbsp; Watch the 2-minute demo</a>
           </div>
-          <div class="tblock">
-            <div><b>FIG 1.0</b><span>Governance Graph</span></div>
-            <div><b>STYLE</b><span>Blueprint plate</span></div>
-            <div><b>SOURCE</b><span>Live scan</span></div>
-            <div><b>REV</b><span>1.0</span></div>
+          <div class="hero-stats" aria-label="SentRAI at a glance">
+            <div><b>257 / 275</b><span>Requirements implemented</span></div>
+            <div><b>6</b><span>Frameworks in 5 regions</span></div>
+            <div><b>Self-hosted</b><span>Data stays with you</span></div>
           </div>
         </div>
-        <figcaption>Estate → repositories → AI artifacts → deployments. Emphasis is carried by stroke weight (white = production); state by pattern (dashed = staged) — never by extra colour.</figcaption>
-      </figure>
 
-      <div class="stats">
-        <div class="stat"><div class="num">4</div><div class="lbl">Frameworks, one scan</div><div class="det">FREE-AI · NIST · EU AI Act · ISO 42001</div></div>
-        <div class="stat"><div class="num">3</div><div class="lbl">Jurisdictions covered</div><div class="det">India · United States · European Union</div></div>
-        <div class="stat"><div class="num">7</div><div class="lbl">Principles enforced</div><div class="det">from ownership to human oversight</div></div>
-        <div class="stat"><div class="num">100%</div><div class="lbl">Actions audit-logged</div><div class="det">every mutating action, PII-masked</div></div>
+        <!-- illustrative console mock -->
+        <div class="mock" role="img" aria-label="Illustration of a SentRAI model record: a high-risk credit scoring model with workflow progress, a blocked deployment gate and an EU AI Act incident deadline">
+          <div class="mock-bar"><i></i><i></i><i></i><span class="path">sentrai / retail-lending / models / retail-credit-scorer</span></div>
+          <div class="mock-body">
+            <div class="m-head">
+              <div>
+                <div class="m-title">Retail Credit Scorer</div>
+                <div class="m-sub">Model card v3 · signed off · PDF · MD · JSON</div>
+              </div>
+              <span class="pill high">HIGH RISK</span>
+            </div>
+            <div class="m-row">
+              <div class="m-kv"><b>EU role</b><span>Provider</span></div>
+              <div class="m-kv"><b>Annex III</b><span>5(b) Credit</span></div>
+              <div class="m-kv"><b>Deployed</b><span>14 Oct 2026</span></div>
+            </div>
+            <div class="m-label">Workflow · phase 4 of 7 · approve and ship</div>
+            <div class="steps"><div class="d"></div><div class="d"></div><div class="d"></div><div class="a"></div><div></div><div></div><div></div></div>
+            <div class="gate">
+              <div class="gate-h"><span>Deploy gate: v4 &rarr; production</span><span class="pill high">BLOCKED</span></div>
+              <ul>
+                <li><span class="y">✓</span> Art. 5 prohibited-practice screening signed</li>
+                <li><span class="y">✓</span> Bias-test report attached as evidence</li>
+                <li><span class="y">✓</span> Human-oversight plan approved</li>
+                <li><span class="n">✗</span> Conformity assessment and EU database registration</li>
+              </ul>
+            </div>
+            <div class="m-foot">
+              <div class="clock"><span>Art. 73 report due</span><b>9d 04h</b></div>
+              <div class="clock"><span>NIST · ISO · RBI</span><span class="pill ok">PASSING</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="strip">
+      <div class="container strip-inner">
+        <span class="strip-label">One inventory, six frameworks</span>
+        <div class="fw-list">
+          <a href="#fw-eu"><span>EU AI Act<small>EU</small></span></a>
+          <a href="#fw-nist"><span>NIST AI RMF<small>US</small></span></a>
+          <a href="#fw-iso"><span>ISO/IEC 42001<small>GLOBAL</small></span></a>
+          <a href="#fw-us"><span>US AI policy<small>FED + STATE</small></span></a>
+          <a href="#fw-au"><span>DTA AI policy<small>AU</small></span></a>
+          <a href="#fw-rbi"><span>RBI FREE-AI<small>IN</small></span></a>
+        </div>
       </div>
     </div>
   </header>
 
+  <!-- ───────── THE GAP (problem framing) ───────── -->
+  <section id="why" class="gap">
+    <div class="container">
+      <div class="s-head reveal">
+        <span class="kicker">Why governance stalls</span>
+        <h2>A policy on paper doesn't stop a model from shipping.</h2>
+        <p class="lead">As AI spreads across teams, repos and serving clusters, three gaps open between what your policy says and what's actually running in production.</p>
+      </div>
+      <div class="gaps">
+        <div class="gap-card reveal">
+          <div class="g-body">
+            <span class="g-num">Gap 01 · Visibility</span>
+            <h3>You can't govern what you haven't found.</h3>
+            <p>Models arrive in code, notebooks and serving infrastructure long before anyone fills in a register. The spreadsheet inventory is stale the day it's written.</p>
+          </div>
+          <div class="g-fix"><b>How SentRAI closes it</b><p>Scans local code, GitHub and Kubernetes/Triton to build the inventory from what's really deployed.</p></div>
+        </div>
+        <div class="gap-card reveal">
+          <div class="g-body">
+            <span class="g-num">Gap 02 · Enforcement</span>
+            <h3>A rule nobody checks is a suggestion.</h3>
+            <p>Sign-offs live in email threads, and a high-risk model can reach production with its screening, bias tests or oversight plan still missing.</p>
+          </div>
+          <div class="g-fix"><b>How SentRAI closes it</b><p>Deployment gates and a CI step refuse promotion until the required evidence is in place, and list exactly what's missing.</p></div>
+        </div>
+        <div class="gap-card reveal">
+          <div class="g-body">
+            <span class="g-num">Gap 03 · Evidence</span>
+            <h3>Every audit turns into archaeology.</h3>
+            <p>When the board or a regulator asks, teams rebuild the story by hand from scattered documents, and the numbers rarely match.</p>
+          </div>
+          <div class="g-fix"><b>How SentRAI closes it</b><p>Model cards, board reports and Annex IV exports come from live data, backed by an append-only audit trail.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── PLATFORM PILLARS ───────── -->
+  <section id="platform">
+    <div class="container">
+      <div class="s-head">
+        <span class="kicker">The platform</span>
+        <h2>Discover. Govern. Prove.</h2>
+        <p class="lead">Three jobs every AI programme has to do, in one self-hosted console. Each feeds the next, so the evidence you show a regulator is the same data your engineers work from.</p>
+      </div>
+      <div class="pillars">
+        <div class="card pillar">
+          <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+          <span class="num">01 · DISCOVER</span>
+          <h3>Find the AI you're really running</h3>
+          <p>Regex and AST scanning across local code, GitHub and Kubernetes/Triton serving infrastructure builds the inventory from reality, not from forms.</p>
+          <ul><li>Project-scoped model inventory</li><li>Owner, purpose, risk tier and deployment date</li><li>Lineage across repos, datasets and deployments</li></ul>
+        </div>
+        <div class="card pillar">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <span class="num">02 · GOVERN</span>
+          <h3>Guide every model, end to end</h3>
+          <p>Choose where you operate and SentRAI asks only what applies. Guided workflows, risk registers and impact assessments keep each model moving to the next step.</p>
+          <ul><li>Guided workflows from setup to retirement</li><li>Risk, impact, red-team, vendors, incidents</li><li>Deployment gates that refuse missing evidence</li></ul>
+        </div>
+        <div class="card pillar">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div>
+          <span class="num">03 · PROVE</span>
+          <h3>Show your work, on demand</h3>
+          <p>Versioned model cards, readiness PDFs and board reports are generated from live data, backed by an append-only audit trail.</p>
+          <ul><li>Model cards in PDF, Markdown or JSON</li><li>Board and portfolio readiness reports</li><li>Annex IV and Art. 13 documentation exports</li></ul>
+        </div>
+      </div>
+
+      <div class="s-head center reveal" style="margin-top:104px">
+        <span class="kicker">How it fits together</span>
+        <h2>One governed record, from repository to regulator.</h2>
+        <p class="lead">SentRAI sits between where your AI is built and everyone who has to answer for it. The same record serves each of them.</p>
+      </div>
+      <div class="arch reveal" role="img" aria-label="Diagram: code repositories, GitHub, Kubernetes and Triton, and CI pipelines feed SentRAI's discover, govern, prove and operate layers, which serve engineers, risk and compliance, the board and regulators.">
+        <div class="arch-col arch-left">
+          <span class="m-label">Where AI is built</span>
+          <div class="src"><i></i><div>Local code<small>Regex + AST scan</small></div></div>
+          <div class="src"><i></i><div>GitHub repositories<small>Project-scoped inventory</small></div></div>
+          <div class="src"><i></i><div>Kubernetes / Triton<small>Serving infrastructure</small></div></div>
+          <div class="src"><i></i><div>CI pipelines<small>Deploy gate step</small></div></div>
+        </div>
+        <div class="arch-core plate">
+          <div class="core-head"><b>SentRAI console</b><span class="pill ok">SELF-HOSTED</span></div>
+          <div class="layer"><span class="ln">L1</span><b>Discover</b><span>Inventory, owners, risk tier, lineage</span></div>
+          <div class="layer"><span class="ln">L2</span><b>Govern</b><span>Guided workflows, risk registers, deploy gates</span></div>
+          <div class="layer"><span class="ln">L3</span><b>Prove</b><span>Model cards, readiness reports, audit trail</span></div>
+          <div class="layer"><span class="ln">L4</span><b>Operate</b><span>Drift checks, incidents, regulatory deadlines</span></div>
+          <div class="packs"><span>EU AI Act</span><span>NIST AI RMF</span><span>ISO/IEC 42001</span><span>US policy</span><span>AU DTA</span><span>RBI FREE-AI</span></div>
+        </div>
+        <div class="arch-col arch-right">
+          <span class="m-label">Who it answers to</span>
+          <div class="src"><i></i><div>Engineers<small>What's blocking this deploy</small></div></div>
+          <div class="src"><i></i><div>Risk &amp; compliance<small>Workflows, registers, owners</small></div></div>
+          <div class="src"><i></i><div>The board<small>Readiness from live data</small></div></div>
+          <div class="src"><i></i><div>Regulators<small>Annex IV, model cards</small></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── WORKFLOWS ───────── -->
+  <section id="workflows" class="wf">
+    <div class="container wf-split">
+      <div class="s-head">
+        <span class="kicker">Guided workflows</span>
+        <h2>A step-by-step journey from setup to retirement.</h2>
+        <p class="lead">The Workflows page turns a framework into a to-do list your team can actually finish. Each step opens the right form, and it's only marked done when the real compliance checks pass.</p>
+        <div class="wf-points">
+          <div><span class="tick">✓</span><span><b>No self-certification.</b> Steps complete from validator results, not from someone ticking a box.</span></div>
+          <div><span class="tick">✓</span><span><b>Jurisdiction-aware.</b> EU, US, Australian and Indian requirements appear only where they apply.</span></div>
+          <div><span class="tick">✓</span><span><b>One place to start.</b> New team members see exactly what's next for every model.</span></div>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="t-step"><span class="t-dot">00</span><div><h3>Set up the organisation</h3><p>Policies, roles, jurisdictions and the AI management system. Reviewed yearly.</p></div><span class="t-tag">ONCE</span></div>
+        <div class="t-step"><span class="t-dot">01</span><div><h3>Onboard</h3><p>Inventory the model, classify risk, and set EU AI Act role, screening and Annex III category.</p></div><span class="t-tag">W1 · W2 · EU</span></div>
+        <div class="t-step"><span class="t-dot">02</span><div><h3>Assess</h3><p>The impact questionnaires your packs require, then a risk register with scoring and treatment.</p></div><span class="t-tag">W3 · W4</span></div>
+        <div class="t-step"><span class="t-dot">03</span><div><h3>Evidence and test</h3><p>Close gaps with real evidence, evals, red-teaming and a formal audit.</p></div><span class="t-tag">W5 · W9</span></div>
+        <div class="t-step"><span class="t-dot">04</span><div><h3>Approve and ship</h3><p>Board approval, then promotion through the deploy gate and CI. High-risk models can't ship without the evidence.</p></div><span class="t-tag">W6 · GATE</span></div>
+        <div class="t-step"><span class="t-dot">05</span><div><h3>Operate</h3><p>Drift monitoring and runtime control, plus incidents and grievances with regulatory deadlines.</p></div><span class="t-tag">W7 · W8</span></div>
+        <div class="t-step"><span class="t-dot">06</span><div><h3>Review and disclose</h3><p>Periodic review, model card, public transparency card and US adverse-action notices.</p></div><span class="t-tag">W10 · W11</span></div>
+        <div class="t-step"><span class="t-dot">07</span><div><h3>Retire</h3><p>Documented decommissioning, with the full history kept.</p></div><span class="t-tag">W12</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── CAPABILITIES ───────── -->
+  <section id="capabilities">
+    <div class="container">
+      <div class="s-head">
+        <span class="kicker">What's in the box</span>
+        <h2>Everything your AI governance programme needs, wired together.</h2>
+      </div>
+      <div class="caps">
+        <div class="card cap">
+          <span class="label">Model cards</span>
+          <h3>Model cards on demand</h3>
+          <p>Versioned, signed-off cards mapped to your frameworks, and flagged for review when the model changes.</p>
+          <div class="formats"><span>PDF</span><span>MARKDOWN</span><span>JSON</span></div>
+        </div>
+        <div class="card cap">
+          <span class="label">Jurisdictions</span>
+          <h3>Multi-jurisdiction compliance</h3>
+          <p>NIST AI RMF and ISO 42001 built in. Packs for the EU AI Act, US rules (OMB, SR 26-2, Colorado SB 26-189), Australia's DTA policy v2.1 and India's RBI FREE-AI.</p>
+        </div>
+        <div class="card cap">
+          <span class="label">Risk &amp; assurance</span>
+          <h3>Risk, impact and assurance</h3>
+          <p>Risk registers with heatmaps, impact assessments, red-team tracking, incidents, vendors and an ISO-style management system, in one place.</p>
+        </div>
+        <div class="card cap">
+          <span class="label">Controls</span>
+          <h3>Deployment gates</h3>
+          <p>Promotion to a live stage is refused until owner, risk tier, screening and required evidence are in place, and SentRAI lists exactly what's missing. Also available as a CI pipeline step.</p>
+        </div>
+        <div class="card cap">
+          <span class="label">Reporting</span>
+          <h3>Board-ready reporting</h3>
+          <p>Readiness PDFs and board reports generated from live data, so the numbers in the boardroom match the numbers in the console.</p>
+        </div>
+        <div class="card cap">
+          <span class="label">Runtime</span>
+          <h3>Monitoring that acts</h3>
+          <p>Hourly PSI and Wasserstein drift checks trip a persistent circuit breaker, open a human-review ticket and notify your serving layer by webhook.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── SAMPLE MODEL CARD ───────── -->
+  <section id="model-card" class="wf">
+    <div class="container">
+      <div class="s-head">
+        <span class="kicker">Sample model card</span>
+        <h2>A model card that writes itself from the record.</h2>
+        <p class="lead">Every field comes from the governed record, every section is mapped to the frameworks in force, and each version is signed off and kept. Here is a sample for a high-risk credit model.</p>
+      </div>
+      <div class="mc-wrap">
+        <div class="mc-doc">
+          <div class="mc-band plate">
+            <span class="k">Model card · Retail Lending Platform</span>
+            <h3>Retail Credit Scorer</h3>
+            <div class="meta"><span>v3</span><span class="ok">FINAL · SIGNED OFF</span><span class="high">HIGH RISK</span><span>EU PROVIDER</span><span>DEPLOYED 14 OCT 2026</span></div>
+          </div>
+          <div class="mc-tabs" role="tablist" aria-label="Model card format">
+            <button role="tab" aria-selected="true" aria-controls="mc-card" id="mct-card">Card</button>
+            <button role="tab" aria-selected="false" aria-controls="mc-md" id="mct-md" tabindex="-1">Markdown</button>
+            <button role="tab" aria-selected="false" aria-controls="mc-json" id="mct-json" tabindex="-1">JSON</button>
+          </div>
+          <div class="mc-pane" id="mc-card" role="tabpanel" aria-labelledby="mct-card">
+            <div class="mc-sec">
+              <div class="mc-sec-h"><h4>Model details</h4><div class="maps"><span>NIST GOVERN 2.1</span><span>ISO 42001 A.6.2.7</span><span>EU Art. 11</span><span>RBI Sutra 5</span></div></div>
+              <dl class="kv"><dt>Model type</dt><dd>Gradient-boosted probability-of-default model</dd><dt>Accountable owner</dt><dd>Model Risk Committee · named owner: Head of Credit Models</dd><dt>Lifecycle stage</dt><dd>Production · deployed 14 Oct 2026</dd><dt>Source</dt><dd><code>svc/credit/retail_credit_scorer.py</code></dd></dl>
+            </div>
+            <div class="mc-sec">
+              <div class="mc-sec-h"><h4>Intended use</h4><div class="maps"><span>NIST MAP 1.1</span><span>EU Art. 13</span><span>EU Art. 14</span><span>DTA</span></div></div>
+              <dl class="kv"><dt>Purpose</dt><dd>Scores personal-loan applications to support underwriting decisions.</dd><dt>Out of scope</dt><dd>Fully automated declines; business lending; collections.</dd><dt>Human oversight</dt><dd>An underwriter reviews every decline before it is issued.</dd></dl>
+            </div>
+            <div class="mc-sec">
+              <div class="mc-sec-h"><h4>Risk and impact</h4><div class="maps"><span>NIST MEASURE 2.10</span><span>ISO 42001 6.1.2</span><span>EU Art. 9</span><span>EU Art. 27</span></div></div>
+              <dl class="kv"><dt>Risk tier</dt><dd>HIGH · Annex III 5(b), creditworthiness assessment</dd><dt>Top residual risks</dt><dd>Unfair outcomes for a protected group (treated, within appetite); drift after deployment (monitored)</dd><dt>Impact assessment</dt><dd>Final, signed 30 Sep 2026</dd></dl>
+            </div>
+            <div class="mc-sec">
+              <div class="mc-sec-h"><h4>Data and provenance</h4><div class="maps"><span>NIST MAP 4.1</span><span>EU Art. 10</span><span>RBI Rec 14</span></div></div>
+              <dl class="kv"><dt>Training data</dt><dd>Loan book 2019–2025, 1.2M applications, PII masked</dd><dt>Suppliers</dt><dd>Credit bureau feed (vendor assessed, AI bill of materials on file)</dd></dl>
+            </div>
+            <div class="mc-sec">
+              <div class="mc-sec-h"><h4>Evaluation and testing</h4><div class="maps"><span>NIST MEASURE 2.7</span><span>EU Art. 15</span><span>US SR 26-2</span></div></div>
+              <dl class="kv"><dt>Performance</dt><dd>AUC 0.81 on the 2025 hold-out set</dd><dt>Fairness</dt><dd>Bias-test report attached; adverse-impact ratio 0.91 (threshold 0.80)</dd><dt>Independent validation</dt><dd>Completed 02 Oct 2026 by Model Validation</dd><dt>Red team</dt><dd>09 Oct 2026, no open findings</dd></dl>
+            </div>
+            <div class="mc-sec">
+              <div class="mc-sec-h"><h4>Monitoring and operations</h4><div class="maps"><span>NIST MANAGE 4.1</span><span>EU Art. 72</span><span>ISO 42001 9.1</span></div></div>
+              <dl class="kv"><dt>Drift</dt><dd>Hourly PSI and Wasserstein checks; circuit breaker armed</dd><dt>Fallback</dt><dd>Rules-based scorecard if the breaker trips</dd><dt>Incidents</dt><dd>None open</dd></dl>
+            </div>
+          </div>
+          <div class="mc-pane" id="mc-md" role="tabpanel" aria-labelledby="mct-md" hidden>
+<pre class="code"><span class="c"># Model card: Retail Credit Scorer (v3, final)</span>
+
+<span class="k">**Risk tier:**</span> HIGH · EU AI Act Annex III 5(b)
+<span class="k">**Owner:**</span> Model Risk Committee
+<span class="k">**Deployed:**</span> 2026-10-14
+<span class="k">**Signed off:**</span> 2026-10-12
+
+<span class="c">## Intended use</span>
+<span class="c">&lt;!-- NIST MAP 1.1 · EU AI Act Art. 13, 14 --&gt;</span>
+Scores personal-loan applications to support underwriting.
+Out of scope: fully automated declines; business lending.
+
+<span class="c">## Evaluation and testing</span>
+<span class="c">&lt;!-- NIST MEASURE 2.7 · EU AI Act Art. 15 · SR 26-2 --&gt;</span>
+| Metric                 | Value | Threshold |
+|------------------------|-------|-----------|
+| AUC (2025 hold-out)    | 0.81  | 0.75      |
+| Adverse-impact ratio   | 0.91  | 0.80      |
+</pre>
+          </div>
+          <div class="mc-pane" id="mc-json" role="tabpanel" aria-labelledby="mct-json" hidden>
+<pre class="code">{
+  <span class="k">"model"</span>: <span class="s">"Retail Credit Scorer"</span>,
+  <span class="k">"version"</span>: 3,
+  <span class="k">"status"</span>: <span class="s">"final"</span>,
+  <span class="k">"risk_tier"</span>: <span class="s">"HIGH"</span>,
+  <span class="k">"deployment_date"</span>: <span class="s">"2026-10-14"</span>,
+  <span class="k">"eu_ai_act"</span>: { <span class="k">"role"</span>: <span class="s">"provider"</span>, <span class="k">"annex_iii"</span>: <span class="s">"5(b)"</span> },
+  <span class="k">"sections"</span>: {
+    <span class="k">"intended_use"</span>: {
+      <span class="k">"purpose"</span>: <span class="s">"Scores personal-loan applications…"</span>,
+      <span class="k">"maps_to"</span>: [<span class="s">"NIST MAP 1.1"</span>, <span class="s">"EU Art. 13"</span>, <span class="s">"EU Art. 14"</span>]
+    },
+    <span class="k">"evaluation"</span>: {
+      <span class="k">"auc"</span>: 0.81,
+      <span class="k">"adverse_impact_ratio"</span>: 0.91,
+      <span class="k">"maps_to"</span>: [<span class="s">"NIST MEASURE 2.7"</span>, <span class="s">"EU Art. 15"</span>, <span class="s">"SR 26-2"</span>]
+    }
+  }
+}</pre>
+          </div>
+        </div>
+        <aside class="mc-side">
+          <div class="card">
+            <h4>Readiness</h4>
+            <div class="ready"><b>100%</b><span>9 of 9 required · 21 of 24 recommended fields</span></div>
+            <div class="track" style="margin-top:14px"><div style="width:100%"></div></div>
+          </div>
+          <div class="card">
+            <h4>Versions</h4>
+            <ul class="vers">
+              <li><span class="v">v3</span><span>Final · signed off<small>12 Oct 2026 · Model Risk Committee</small></span><span class="tagp cur">CURRENT</span></li>
+              <li><span class="v">v2</span><span>Final<small>02 Jul 2026 · retrained on 2025 data</small></span><span class="tagp">SUPERSEDED</span></li>
+              <li><span class="v">v1</span><span>Draft<small>18 Mar 2026</small></span><span class="tagp">DRAFT</span></li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>Export</h4>
+            <div class="exp"><button type="button" data-fmt="card">PDF</button><button type="button" data-fmt="md">Markdown</button><button type="button" data-fmt="json">JSON</button></div>
+            <p class="sample-note">PDF for the file, Markdown for the repo, JSON for your other systems.</p>
+          </div>
+          <div class="flag"><span>&#9888;</span><span><b>Change watch.</b> If the model, its data or its risk tier changes after sign-off, the card is flagged for review before the next release.</span></div>
+          <p class="sample-note">Sample card with illustrative data.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── AUDIENCES ───────── -->
+  <section id="teams">
+    <div class="container">
+      <div class="s-head reveal">
+        <span class="kicker">One platform, every team</span>
+        <h2>Each team sees the part of the job that's theirs.</h2>
+        <p class="lead">Pick a role to see how SentRAI fits into the work they already do.</p>
+      </div>
+      <div class="aud-tabs" role="tablist" aria-label="Choose a team">
+        <button role="tab" id="tab-risk" aria-controls="p-risk" aria-selected="true">Risk &amp; compliance</button>
+        <button role="tab" id="tab-eng" aria-controls="p-eng" aria-selected="false" tabindex="-1">ML engineering</button>
+        <button role="tab" id="tab-board" aria-controls="p-board" aria-selected="false" tabindex="-1">Leadership &amp; board</button>
+      </div>
+      <div class="aud-panel" id="p-risk" role="tabpanel" aria-labelledby="tab-risk">
+        <div class="card aud-card"><span class="label">Scope</span><h3>Only the duties that apply</h3><p>Choose your jurisdictions and EU operator role, and SentRAI asks only the questions those frameworks require.</p></div>
+        <div class="card aud-card"><span class="label">Assess</span><h3>Risk and impact in one place</h3><p>Impact questionnaires, risk registers with heatmaps, red-team tracking, vendors and incidents, all tied to the model record.</p></div>
+        <div class="card aud-card"><span class="label">Deadlines</span><h3>Incident clocks that run themselves</h3><p>Art. 73 serious-incident deadlines and grievances are tracked with owners and due dates from the moment they're logged.</p></div>
+      </div>
+      <div class="aud-panel" id="p-eng" role="tabpanel" aria-labelledby="tab-eng" hidden>
+        <div class="card aud-card"><span class="label">Discover</span><h3>No forms to fill in first</h3><p>The inventory is built from scans of your code, GitHub and serving infrastructure, so it starts from what you've actually shipped.</p></div>
+        <div class="card aud-card"><span class="label">CI</span><h3>A gate in your pipeline</h3><p>Fail a build when a model isn't ready to ship, with a clear list of the evidence that's still missing.</p></div>
+        <div class="card aud-card"><span class="label">Integrate</span><h3>API-first by design</h3><p>Full REST API, outbound webhooks, Prometheus metrics, and drift alerts that notify your serving layer directly.</p></div>
+      </div>
+      <div class="aud-panel" id="p-board" role="tabpanel" aria-labelledby="tab-board" hidden>
+        <div class="card aud-card"><span class="label">Oversight</span><h3>Readiness at portfolio level</h3><p>Board and portfolio readiness reports generated from live data, so boardroom numbers match the console.</p></div>
+        <div class="card aud-card"><span class="label">Approval</span><h3>Sign-off that means something</h3><p>Board approval is a step in the workflow, and high-risk models can't be promoted without it and the evidence behind it.</p></div>
+        <div class="card aud-card"><span class="label">Assurance</span><h3>Published coverage, gaps included</h3><p>Every framework's coverage is disclosed requirement by requirement, so you know exactly what's handled and what isn't.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── FRAMEWORKS ───────── -->
   <section id="frameworks">
     <div class="container">
-      <span class="kicker">Regulatory coverage</span>
-      <h2>Four frameworks, one model inventory, zero duplicate work.</h2>
-      <p class="section-sub">
-        Wherever you operate — or plan to — the rules differ, but the questions are the same:
-        what AI are you running, who owns it, is it fair, can you explain it, and can you prove
-        all of that? SentRAI answers once and maps the answer to each regulator's language. Exact
-        control counts are published on the <a href="/coverage">coverage disclosure</a>.
-      </p>
-      <div class="juris-grid">
-        <div class="juris">
-          <div class="juris-head"><span class="jcode">IN</span><h3>India</h3><span class="fw-name">RBI FREE-AI + DPDP Act</span></div>
-          <p class="what">The Reserve Bank of India's 2025 <em>Framework for Responsible and Ethical Enablement of AI</em>: seven guiding principles (Sutras), six pillars, and 26 recommendations for banks, NBFCs, and fintechs. India's DPDP Act adds strict personal-data rules.</p>
-          <p class="checks"><b>SentRAI validates</b> all seven Sutras on every model plus the Governance, Protection, and Assurance recommendations (14, 16, 20, 24), with DPDP-aligned PII masking across the entire console — the deepest of the four frameworks.</p>
+      <div class="s-head">
+        <span class="kicker">Frameworks</span>
+        <h2>Six frameworks, one model inventory.</h2>
+        <p class="lead">NIST AI RMF and ISO/IEC 42001 apply to everyone. Add the regional packs for where you operate, and SentRAI asks only what applies. One answer is reused across every framework that needs it.</p>
+      </div>
+      <div class="fw-grid">
+        <article class="card fw-card" id="fw-eu">
+          <div class="fw-top"><span class="reg">European Union</span><span class="cnt">45 <small>/ 45</small></span></div>
+          <h3>EU AI Act</h3><div class="full">Regulation (EU) 2024/1689</div>
+          <p>Obligations scale with risk, and credit scoring sits in Annex III as high-risk. SentRAI scopes the duties to your operator role.</p>
+          <ul><li>Provider and deployer duties per system</li><li>Signed Art. 5 prohibited-practice screening</li><li>Annex III classification, conformity, CE marking and EU database registration</li><li>Art. 73 serious-incident deadlines</li></ul>
+          <div class="track" aria-label="45 of 45 requirements implemented"><div style="width:100.0%"></div></div>
+          <a class="more" href="#eu-ai-act">See the EU AI Act workspace &rarr;</a>
+        </article>
+        <article class="card fw-card" id="fw-nist">
+          <div class="fw-top"><span class="reg">United States · voluntary</span><span class="cnt">66 <small>/ 72</small></span></div>
+          <h3>NIST AI RMF</h3><div class="full">AI RMF 1.0 · built in</div>
+          <p>The four functions, Govern, Map, Measure and Manage, run under every model whichever regions you choose.</p>
+          <ul><li>Ownership, board policy and audit cadence</li><li>Documented context, purpose and provenance</li><li>Red-team recency, drift and privacy measurement</li><li>Oversight gates, fallback plans and incident hygiene</li></ul>
+          <div class="track" aria-label="66 of 72 requirements implemented"><div style="width:91.7%"></div></div>
+          
+        </article>
+        <article class="card fw-card" id="fw-iso">
+          <div class="fw-top"><span class="reg">Global</span><span class="cnt">63 <small>/ 65</small></span></div>
+          <h3>ISO/IEC 42001</h3><div class="full">ISO/IEC 42001:2023 · built in</div>
+          <p>The AI management system standard. SentRAI keeps the organisation-level records an auditor asks for, not just model checks.</p>
+          <ul><li>AIMS scope, policy, objectives and management reviews</li><li>Statement of Applicability (Annex A), exported as PDF or XLSX</li><li>Document control, internal audit and corrective actions</li><li>Training records and policy acknowledgements</li></ul>
+          <div class="track" aria-label="63 of 65 requirements implemented"><div style="width:96.9%"></div></div>
+          
+        </article>
+        <article class="card fw-card" id="fw-us">
+          <div class="fw-top"><span class="reg">United States · federal + state</span><span class="cnt">40 <small>/ 44</small></span></div>
+          <h3>US AI policy pack</h3><div class="full">OMB M-25-21/22 · SR 26-2 · ECOA/Reg B · FTC Act s.5 · Colorado SB 26-189</div>
+          <p>One pack for the US rules that touch AI in lending and in government use.</p>
+          <ul><li>SR 26-2 model validation with independence checks</li><li>Fair-lending proxy scan and disparate-impact evidence</li><li>Adverse-action notices with reason codes, appeals and reconsideration</li><li>OMB inventory export and Colorado developer disclosures</li></ul>
+          <div class="track" aria-label="40 of 44 requirements implemented"><div style="width:90.9%"></div></div>
+          
+        </article>
+        <article class="card fw-card" id="fw-au">
+          <div class="fw-top"><span class="reg">Australia</span><span class="cnt">24 <small>/ 29</small></span></div>
+          <h3>DTA AI policy v2.1</h3><div class="full">Policy for the responsible use of AI in government</div>
+          <p>For Australian Government agencies and their suppliers.</p>
+          <ul><li>AI use-case register with DTA register export</li><li>Accountable official and in-scope tracking</li><li>Transparency statement</li><li>DTA reporting</li></ul>
+          <div class="track" aria-label="24 of 29 requirements implemented"><div style="width:82.8%"></div></div>
+          
+        </article>
+        <article class="card fw-card" id="fw-rbi">
+          <div class="fw-top"><span class="reg">India</span><span class="cnt">19 <small>/ 20</small></span></div>
+          <h3>RBI FREE-AI</h3><div class="full">Framework for Responsible and Ethical Enablement of AI (2025)</div>
+          <p>The Reserve Bank of India framework for banks, NBFCs and fintechs, with DPDP-aligned privacy built in.</p>
+          <ul><li>All seven Sutras checked on every model</li><li>Board-approved AI policy and grievance redress</li><li>RBI inspection export</li><li>PII masking for India DPDP and GDPR patterns</li></ul>
+          <div class="track" aria-label="19 of 20 requirements implemented"><div style="width:95.0%"></div></div>
+          
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── EU AI ACT SPOTLIGHT ───────── -->
+  <section id="eu-ai-act" class="eu plate">
+    <div class="container">
+      <div class="s-head">
+        <span class="kicker" style="color:var(--ice)">EU AI Act workspace</span>
+        <h2>Built for Regulation (EU) 2024/1689.</h2>
+        <p class="lead">Each system records whether you're its provider or deployer, and only those duties apply. From prohibited-practice screening to post-market incidents, every obligation has a record, an owner and a deadline.</p>
+      </div>
+      <div class="eu-grid">
+        <div class="eu-card">
+          <span class="art">Art. 3, 16, 26</span>
+          <h3>Provider or deployer duties</h3>
+          <p>Set the operator role per system and SentRAI scopes the obligations to match.</p>
+          <div class="roles"><span class="on">Provider</span><span>Deployer</span></div>
         </div>
-        <div class="juris">
-          <div class="juris-head"><span class="jcode">US</span><h3>United States</h3><span class="fw-name">NIST AI RMF 1.0</span></div>
-          <p class="what">The de-facto US standard for AI risk management, organised into four functions — Govern, Map, Measure, Manage — and referenced by US regulators and enterprise procurement alike.</p>
-          <p class="checks"><b>SentRAI validates</b> fourteen controls across all four functions — ownership, board policy and audit cadence; documented purpose, context and provenance; red-team recency and live drift measurement; oversight gates, fallback plans, resourced owners, ledger-tracked risks, and incident hygiene.</p>
+        <div class="eu-card">
+          <span class="art">Art. 5</span>
+          <h3>Prohibited-practice screening</h3>
+          <p>A signed screening is required before deployment. An unsigned or failed screen blocks the gate.</p>
         </div>
-        <div class="juris">
-          <div class="juris-head"><span class="jcode">EU</span><h3>European Union</h3><span class="fw-name">EU AI Act</span></div>
-          <p class="what">The world's first comprehensive AI law. Obligations scale with risk tier, and financial-sector uses like credit scoring sit squarely in the high-risk category — with duties for documentation, oversight, and robustness.</p>
-          <p class="checks"><b>SentRAI validates</b> each model's risk classification plus fourteen articles: the core high-risk obligations (Articles 9–15, 17), value-chain and deployer duties (25, 26, 27), post-market monitoring (72), and the Article 50 transparency duty. With the EU AI Act workspace on, it also records each system's operator role, a signed Article 5 screening that blocks the deploy gate, the Annex III classification, conformity, declaration, CE marking and EU database registration, and the Article 73 serious-incident clocks.</p>
+        <div class="eu-card">
+          <span class="art">Art. 6 · Annex III</span>
+          <h3>High-risk classification</h3>
+          <p>Record the Annex III category and rationale, including documented out-of-scope decisions.</p>
         </div>
-        <div class="juris">
-          <div class="juris-head"><span class="jcode">INT</span><h3>International</h3><span class="fw-name">ISO/IEC 42001</span></div>
-          <p class="what">The management-system standard for AI — think ISO 27001, but for how your organisation governs models. Increasingly requested in vendor due-diligence and cross-border deals.</p>
-          <p class="checks"><b>SentRAI validates</b> eight management-system checks spanning clauses 6, 7, 8, 9 and 10 plus Annex A documentation — a living inventory, accountable ownership, risk treatment, incident records, and continuous monitoring.</p>
+        <div class="eu-card">
+          <span class="art">Art. 43, 47, 48, 49</span>
+          <h3>Conformity and registration</h3>
+          <p>Conformity assessment, EU declaration, CE marking and EU database registration records.</p>
+        </div>
+        <div class="eu-card">
+          <span class="art">Annex IV · Art. 13</span>
+          <h3>Technical documentation</h3>
+          <p>Export Annex IV technical documentation and Art. 13 instructions for use from the record.</p>
+        </div>
+        <div class="eu-card">
+          <span class="art">Art. 72</span>
+          <h3>Post-market monitoring</h3>
+          <p>Drift and incident signals feed the post-market monitoring plan automatically.</p>
+        </div>
+      </div>
+      <div class="clk-head">
+        <span class="m-label">Art. 73 serious-incident deadlines, tracked automatically</span>
+      </div>
+      <div class="clocks">
+        <div class="clk"><span class="d">2<small>days</small></span><p>Widespread infringement or serious disruption of critical infrastructure.</p></div>
+        <div class="clk"><span class="d">10<small>days</small></span><p>Where the incident involves the death of a person.</p></div>
+        <div class="clk"><span class="d">15<small>days</small></span><p>All other serious incidents, from awareness of the incident.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── COVERAGE ───────── -->
+  <section id="coverage">
+    <div class="container cov">
+      <div class="cov-left">
+        <span class="kicker">Proven coverage</span>
+        <div class="cov-big">257<small> / 275</small></div>
+        <p>applicable requirements implemented across six frameworks in five regions. Every number is published, requirement by requirement, with the gaps we haven't closed yet.</p>
+        <div class="hero-ctas" style="margin-top:24px"><a class="btn btn-outline" href="/coverage">Read the coverage disclosure &rarr;</a></div>
+      </div>
+      <div class="bars">
+        <div class="bar"><div class="bar-top"><span><b>EU AI Act</b><span class="reg">EU</span></span><span class="n">45 <small>/ 45</small></span></div><div class="track"><div style="width:100%"></div></div></div>
+        <div class="bar"><div class="bar-top"><span><b>ISO/IEC 42001</b><span class="reg">Global</span></span><span class="n">63 <small>/ 65</small></span></div><div class="track"><div style="width:96.9%"></div></div></div>
+        <div class="bar"><div class="bar-top"><span><b>RBI FREE-AI</b><span class="reg">India</span></span><span class="n">19 <small>/ 20</small></span></div><div class="track"><div style="width:95%"></div></div></div>
+        <div class="bar"><div class="bar-top"><span><b>NIST AI RMF</b><span class="reg">US · voluntary</span></span><span class="n">66 <small>/ 72</small></span></div><div class="track"><div style="width:91.7%"></div></div></div>
+        <div class="bar"><div class="bar-top"><span><b>US AI policy pack</b><span class="reg">US · federal + state</span></span><span class="n">40 <small>/ 44</small></span></div><div class="track"><div style="width:90.9%"></div></div></div>
+        <div class="bar"><div class="bar-top"><span><b>DTA AI policy v2.1</b><span class="reg">Australia</span></span><span class="n">24 <small>/ 29</small></span></div><div class="track"><div style="width:82.8%"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── TRUST / UNDER THE HOOD ───────── -->
+  <section class="trust">
+    <div class="container">
+      <div class="s-head">
+        <span class="kicker">Built for regulated teams</span>
+        <h2>Serious machinery for a serious mandate.</h2>
+        <p class="lead">Your model metadata never has to leave your infrastructure.</p>
+      </div>
+      <div class="trust-grid">
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></div><h3>Self-hosted</h3><p>Runs in your environment, so data stays in your jurisdiction.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>PII masking by default</h3><p>India DPDP and GDPR patterns masked in audit events, ledgers and notifications.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div><h3>Append-only audit trail</h3><p>Every mutating action is logged. Even an admin purge leaves a tombstone.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div><h3>Statistical drift detection</h3><p>PSI and Wasserstein checks with configurable thresholds.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></div><h3>Role-based access</h3><p>JWT auth with roles, human and service accounts.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg></div><h3>REST API and webhooks</h3><p>Full API, outbound webhooks and Prometheus metrics.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-2M12 13.5v2"/></svg></div><h3>CI pipeline gate</h3><p>Fail a build when a model isn't ready to ship.</p></div>
+        <div class="trust-item"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg></div><h3>Extensible validators</h3><p>Framework checks are plugins. Add your internal policy alongside.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── FAQ ───────── -->
+  <section id="faq" class="wf">
+    <div class="container faq-wrap">
+      <div class="s-head">
+        <span class="kicker">FAQ</span>
+        <h2>Questions teams ask first.</h2>
+        <p class="lead">Can't find yours? The <a href="/coverage">coverage disclosure</a> lists every requirement we handle and every one we don't yet.</p>
+      </div>
+      <div class="faq">
+        <details><summary>Where does SentRAI run, and where does our data go?</summary><p>SentRAI is self-hosted. It runs in your own environment on SQLite for evaluation or MariaDB/MySQL in production, so model metadata and evidence stay in your infrastructure and your jurisdiction.</p></details>
+        <details><summary>How does it find models without a questionnaire?</summary><p>It scans source code with regex and syntax-tree analysis (Python, JavaScript, TypeScript and Go), from an uploaded zip, a folder or a GitHub repository, plus Kubernetes and Triton serving configuration. You review the discovered components and choose which to govern.</p></details>
+        <details><summary>Which frameworks are included?</summary><p>NIST AI RMF and ISO/IEC 42001 always apply. You add regional packs for the EU AI Act, the US AI policy pack, Australia's DTA policy v2.1 and India's RBI FREE-AI, and SentRAI only asks the questions those packs require.</p></details>
+        <details><summary>Can it actually stop a deployment?</summary><p>Yes. Promotion to a live stage runs the deploy gate, which can warn or block depending on your settings, and lists exactly what's missing. The same check runs as a step in your CI pipeline.</p></details>
+        <details><summary>What's in a model card, and how is it exported?</summary><p>Model details, intended use, risk and impact, data and provenance, evaluation, governance and monitoring, each mapped to the frameworks in force. Cards are versioned as draft or final, signed off, and exported as PDF, Markdown or JSON.</p></details>
+        <details><summary>Does using SentRAI make us compliant?</summary><p>No tool can do that on its own. SentRAI helps you operationalise these frameworks and keep the evidence. Coverage is 257 of 275 applicable requirements, and the disclosure shows the remaining gaps.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── CONTACT + BOOK A DEMO ───────── -->
+  <section id="contact">
+    <div class="container">
+      <div class="s-head">
+        <span class="kicker">Talk to us</span>
+        <h2>Book a demo, or send us a message.</h2>
+        <p class="lead">A 30-minute walkthrough on your own use case: scanning a repository, the governance workflow for your jurisdictions, the deploy gate and the model card. Pick a time that suits you; it's shown in your time zone.</p>
+      </div>
+      <div class="ct-grid">
+        <!-- Book a demo -->
+        <div class="ct-card" id="book">
+          <h3><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span> Book a demo</h3>
+          <div id="bk-flow">
+            <div class="ct-step"><span>1 · Pick a day</span><em id="bk-tz"></em></div>
+            <div class="days" id="bk-days" role="group" aria-label="Available days"><div class="sk" style="width:100%"></div></div>
+            <div class="ct-step"><span>2 · Pick a time</span><em id="bk-dur"></em></div>
+            <div class="slots" id="bk-slots" role="group" aria-label="Available times"></div>
+            <p class="ct-note" id="bk-msg" aria-live="polite"></p>
+            <form id="bk-form" novalidate hidden>
+              <div class="ct-sel" id="bk-sel"></div>
+              <div class="ct-step"><span>3 · Your details</span></div>
+              <div class="ct-form">
+                <div class="fld"><label for="bk-name">Name</label><input id="bk-name" name="name" autocomplete="name" required maxlength="120" /></div>
+                <div class="fld"><label for="bk-email">Work email</label><input id="bk-email" name="email" type="email" autocomplete="email" required maxlength="200" /></div>
+                <div class="fld"><label for="bk-company">Company</label><input id="bk-company" name="company" autocomplete="organization" required maxlength="160" /></div>
+                <div class="fld"><label for="bk-role">Role <i>(optional)</i></label><input id="bk-role" name="role" autocomplete="organization-title" maxlength="120" placeholder="e.g. Head of Model Risk" /></div>
+                <div class="fld full"><label for="bk-message">What should we focus on? <i>(optional)</i></label><textarea id="bk-message" name="message" maxlength="2000" placeholder="Frameworks you need, how many models, where your code lives…"></textarea></div>
+                <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off" /></label></div>
+              </div>
+              <div class="ct-actions"><button class="btn btn-primary" type="submit">Confirm booking</button><span class="ct-err" id="bk-err" role="alert"></span></div>
+            </form>
+          </div>
+          <div class="ct-done" id="bk-done" hidden>
+            <div class="ok">&#10003;</div>
+            <h4>You're booked in.</h4>
+            <p id="bk-done-when"></p>
+            <p>Our team has been notified and will send a meeting invite to <b id="bk-done-email"></b>. Add it to your calendar now so it's held.</p>
+            <div class="ct-actions"><a class="btn btn-primary" id="bk-ics" download="sentrai-demo.ics" href="#">Download calendar invite (.ics)</a><a class="btn btn-outline" id="bk-gcal" target="_blank" rel="noopener" href="#">Add to Google Calendar</a></div>
+          </div>
+        </div>
+
+        <!-- Contact -->
+        <div class="ct-card" id="contact-form-card">
+          <h3><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Send us a message</h3>
+          <p>Pricing, partnerships, a security review or anything else. We reply within one business day.</p>
+          <form id="ct-form" novalidate>
+            <div class="ct-form" style="margin-top:18px">
+              <div class="fld"><label for="ct-name">Name</label><input id="ct-name" name="name" autocomplete="name" required maxlength="120" /></div>
+              <div class="fld"><label for="ct-email">Work email</label><input id="ct-email" name="email" type="email" autocomplete="email" required maxlength="200" /></div>
+              <div class="fld"><label for="ct-company">Company <i>(optional)</i></label><input id="ct-company" name="company" autocomplete="organization" maxlength="160" /></div>
+              <div class="fld"><label for="ct-topic">Topic</label><select id="ct-topic" name="topic"><option value="general">General question</option><option value="pricing">Pricing and licensing</option><option value="partnership">Partnership</option><option value="security">Security review</option><option value="support">Support</option></select></div>
+              <div class="fld full"><label for="ct-message">Message</label><textarea id="ct-message" name="message" required minlength="10" maxlength="4000"></textarea></div>
+              <div class="hp" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off" /></label></div>
+            </div>
+            <div class="ct-actions"><button class="btn btn-primary" type="submit">Send message</button><span class="ct-err" id="ct-err" role="alert"></span></div>
+          </form>
+          <div class="ct-done" id="ct-done" hidden>
+            <div class="ok">&#10003;</div>
+            <h4>Thanks, message received.</h4>
+            <p>We'll reply to <b id="ct-done-email"></b> within one business day.</p>
+          </div>
+          <div class="ct-side">
+            <div><span class="tick">&#10003;</span><span><b>Self-hosted.</b> We can walk you through deployment in your own environment.</span></div>
+            <div><span class="tick">&#10003;</span><span><b>Your details stay here.</b> They go to the SentRAI team only and are never shared.</span></div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="product">
+  <div class="why">
     <div class="container">
-      <span class="kicker">How it works</span>
-      <h2>Governance that starts where your AI actually lives: the code.</h2>
-      <p class="section-sub">
-        Most governance tools begin with a spreadsheet someone forgot to update. SentRAI begins
-        with a scan of your repositories and infrastructure, so the model inventory reflects
-        reality — then keeps it honest for the model's entire life.
-      </p>
-      <div class="pipeline">
-        <div class="pipe-step"><div class="n">01 · DISCOVER</div><h3>Find every model</h3><p>Regex + AST scanning over local code, GitHub repos, and Kubernetes/Triton infrastructure surfaces AI systems you didn't know you were running.</p></div>
-        <div class="pipe-step"><div class="n">02 · REGISTER</div><h3>Build the inventory</h3><p>Every model gets an owner, a risk tier, a purpose, and a ledger entry — scoped per project, with lineage tracked across systems.</p></div>
-        <div class="pipe-step"><div class="n">03 · VALIDATE</div><h3>Close the gaps</h3><p>Automated validators score each model against all four frameworks in one pass — and tell you exactly which artifact or control is missing.</p></div>
-        <div class="pipe-step"><div class="n">04 · MONITOR</div><h3>Catch drift early</h3><p>Your serving layer pushes score windows to the API; an hourly job runs PSI + Wasserstein checks, trips a persistent circuit breaker, and fires a human-review webhook.</p></div>
-        <div class="pipe-step"><div class="n">05 · AUDIT</div><h3>Prove it</h3><p>Immutable audit trails, incident SLAs, and one-click PDF compliance reports — regulator-ready evidence, not screenshots of dashboards.</p></div>
-      </div>
+      <blockquote>Regulators are moving from principles to enforcement. SentRAI turns governance from a yearly audit scramble into <span>an everyday, evidence-backed habit.</span></blockquote>
     </div>
-  </section>
+  </div>
 
-  <section id="principles">
+  <div class="final plate">
     <div class="container">
-      <span class="kicker">Responsible AI, operationalised</span>
-      <h2>Seven principles every framework agrees on — enforced, not framed.</h2>
-      <p class="section-sub">
-        Strip away the acronyms and every serious AI regulation asks for the same seven things.
-        India's FREE-AI calls them Sutras; NIST spreads them across four functions; the EU AI Act
-        writes them into articles. SentRAI enforces each one with a concrete mechanism.
-      </p>
-      <div class="prin-grid">
-        <div class="prin"><h3><span class="num">1</span>Accountability &amp; clear ownership</h3><div class="chips"><span class="chip">IN · Sutra 5</span><span class="chip">US · Govern</span><span class="chip">EU · Art. 16</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> no model can be promoted to a live stage without a named owner, a board policy reference, and a risk tier — the API refuses the promotion and lists exactly what's missing. Incidents carry SLA clocks tracked to closure.</div></div>
-        <div class="prin"><h3><span class="num">2</span>Human oversight</h3><div class="chips"><span class="chip">IN · Sutra 2</span><span class="chip">US · Manage</span><span class="chip">EU · Art. 14</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> when drift crosses the alert threshold, a circuit breaker trips and persists (a restart can't reset it), a mandatory human-review ticket is issued, and your serving layer is notified by webhook to engage the rules fallback.</div></div>
-        <div class="prin"><h3><span class="num">3</span>Fairness &amp; non-discrimination</h3><div class="chips"><span class="chip">IN · Sutra 4</span><span class="chip">US · Measure</span><span class="chip">EU · Art. 10</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> MEDIUM/HIGH-risk models must carry an attached bias-test report as an evidence artifact — a self-declared checkbox does not pass. Validators score exactly which evidence you still owe.</div></div>
-        <div class="prin"><h3><span class="num">4</span>Transparency &amp; explainability</h3><div class="chips"><span class="chip">IN · Sutra 6</span><span class="chip">US · Map</span><span class="chip">EU · Art. 13</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> every inventory entry records the model's purpose, training data, and explainability evidence — so anyone can answer "what does this model do and why?"</div></div>
-        <div class="prin"><h3><span class="num">5</span>Safety, security &amp; robustness</h3><div class="chips"><span class="chip">IN · Sutra 7</span><span class="chip">US · Measure + Manage</span><span class="chip">EU · Art. 15</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> hourly PSI + Wasserstein drift evaluation over ingested score windows, configurable warning/alert thresholds, and a persistent business-continuity breaker for hard failures.</div></div>
-        <div class="prin"><h3><span class="num">6</span>Privacy &amp; data protection</h3><div class="chips"><span class="chip">IN · DPDP 2023</span><span class="chip">US · privacy-enhanced</span><span class="chip">EU · GDPR-aligned</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> automatic PII masking (India DPDP + GDPR patterns, credentials included) on every audit event, ledger entry, and notification — plus a fully self-hosted architecture, so model metadata never leaves your jurisdiction.</div></div>
-        <div class="prin"><h3><span class="num">7</span>Auditability &amp; documented trust</h3><div class="chips"><span class="chip">IN · Sutra 1</span><span class="chip">US · Govern</span><span class="chip">EU · Art. 12</span><span class="chip">INT · ISO 42001</span></div><div class="how"><b>Enforced by:</b> an append-only ledger plus a global audit-event stream covering every mutating action — even an admin purge leaves the model's full history and a tombstone behind. Exportable as one-click PDF evidence packs.</div></div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="container">
-      <span class="kicker">Under the hood</span>
-      <h2>Serious machinery for a serious mandate.</h2>
-      <p class="section-sub">SentRAI is a self-hostable console — your model metadata never has to leave your infrastructure.</p>
-      <div class="feat-grid">
-        <div class="feat"><span class="eyebrow">Discovery</span><h3>Code-level discovery</h3><p>Regex plus <code>tree-sitter</code> AST analysis finds model definitions in real source, not self-reported forms. Scans local paths, GitHub, and k8s/Triton serving infra.</p></div>
-        <div class="feat"><span class="eyebrow">Validators</span><h3>Pluggable validators</h3><p>Framework checks are plugins with a shared registry — run <code>FREE-AI</code>, <code>NIST AI RMF</code>, <code>EU AI Act</code>, and <code>ISO 42001</code> in one pass, or add your own internal policy as a fifth.</p></div>
-        <div class="feat"><span class="eyebrow">Monitoring</span><h3>Statistical drift detection</h3><p>Push score windows to <code>/monitoring/scores</code>; an hourly job computes Population Stability Index and 1-D Wasserstein distance against the reference window, with configurable thresholds.</p></div>
-        <div class="feat"><span class="eyebrow">Privacy</span><h3>Privacy-preserving by default</h3><p>PII masking with India DPDP and GDPR patterns (PAN, Aadhaar, emails, IBANs, credentials) automatically applied to audit events, ledger entries, and outbound notifications.</p></div>
-        <div class="feat"><span class="eyebrow">Evidence</span><h3>Regulator-ready exports</h3><p>One-click PDF compliance reports per model, immutable audit trails, and incident histories with SLA status — evidence in the format audits actually want.</p></div>
-        <div class="feat"><span class="eyebrow">Integration</span><h3>Fits your stack</h3><p>JWT auth with role-based access, Prometheus <code>/metrics</code>, outbound webhooks for breaker trips and overdue incidents, optional Neo4j lineage, daily re-scans, and a full REST API.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <div class="final">
-    <div class="container">
-      <h2>Responsible AI is a practice, not a promise.</h2>
-      <p class="section-sub">Scan your first repository and see your real model inventory in under ten minutes.</p>
+      <h2>See your real AI inventory in under ten minutes.</h2>
+      <p class="lead">Scan your first repository, pick your jurisdictions, and let the workflow show you what's next.</p>
       <div class="hero-ctas">
-        <a class="btn btn-primary" href="/dashboard/">Launch the console</a>
-        <a class="btn btn-ghost" href="/coverage">Read the coverage disclosure</a>
+        <a class="btn btn-light" href="/dashboard/">Launch the console</a>
+        <a class="btn btn-ghost" href="#book">Book a demo</a>
+        <a class="btn btn-ghost" href="/demo">Watch the demo</a>
       </div>
     </div>
   </div>
 
   <footer>
     <div class="container">
-      <div class="foot">
-        <div>© 2026 SentRAI · Responsible AI governance for financial services</div>
-        <div class="links">
-          <a href="#frameworks">Frameworks</a>
-          <a href="#product">Product</a>
-          <a href="#principles">Principles</a>
-          <a href="/dashboard/">Console</a>
-          <a href="/console">Classic console</a>
+      <div class="foot-grid">
+        <div>
+          <a class="brand" href="/"><img src="/static/logo.png" alt="" /> SentRAI</a>
+          <p>Responsible AI governance, from code to boardroom.</p>
+        </div>
+        <div>
+          <h4>Product</h4>
+          <a href="#platform">Platform</a>
+          <a href="#workflows">Workflows</a>
+          <a href="#capabilities">Capabilities</a>
+          <a href="#model-card">Sample model card</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <div>
+          <h4>Frameworks</h4>
+          <a href="#fw-eu">EU AI Act</a>
+          <a href="#fw-nist">NIST AI RMF</a>
+          <a href="#fw-iso">ISO/IEC 42001</a>
+          <a href="#fw-us">US AI policy pack</a>
+          <a href="#fw-au">DTA AI policy v2.1</a>
+          <a href="#fw-rbi">RBI FREE-AI</a>
+        </div>
+        <div>
+          <h4>Evidence</h4>
           <a href="/coverage">Coverage disclosure</a>
+          <a href="/demo">Product demo</a>
           <a href="/docs">API docs</a>
+        </div>
+        <div>
+          <h4>Talk to us</h4>
+          <a href="#book">Book a demo</a>
+          <a href="#contact">Contact form</a>
+          <h4 style="margin-top:18px">Console</h4>
+          <a href="/dashboard/">Sign in</a>
+          <a href="/console">Classic console</a>
         </div>
       </div>
       <p class="disclaimer">
         SentRAI is an independent product and is not affiliated with, endorsed by, or certified by
-        the Reserve Bank of India, NIST, the European Commission, or ISO. "FREE-AI" refers to the
-        RBI committee report <em>Framework for Responsible and Ethical Enablement of AI</em>
-        (August 2025); NIST AI RMF, the EU AI Act, and ISO/IEC 42001 are the property of their
-        respective bodies. SentRAI helps organisations operationalise these frameworks; using it
-        does not by itself constitute regulatory compliance or legal advice.
+        the European Commission, NIST, ISO, the Reserve Bank of India, Australia's Digital Transformation
+        Agency, or any US federal or state body. "FREE-AI" refers to the RBI committee report
+        <em>Framework for Responsible and Ethical Enablement of AI</em> (August 2025). Framework names are the
+        property of their respective owners. Coverage figures count applicable requirements implemented in
+        SentRAI 1.8, as published on the coverage disclosure. SentRAI helps organisations operationalise these
+        frameworks; using it does not by itself constitute regulatory compliance or legal advice. The console
+        view shown above is illustrative.
       </p>
+      <div class="copy"><span>© 2026 SENTRAI · V1.8</span><span>EU AI ACT · NIST AI RMF · ISO/IEC 42001 · RBI FREE-AI · AU DTA · US</span></div>
     </div>
   </footer>
 
+  <script>
+  (function(){
+    var root=document.documentElement; root.classList.add('js');
+    // Frameworks dropdown (click/tap + keyboard; hover handled in CSS)
+    var dd=document.getElementById('fw-dd'), ddb=dd&&dd.querySelector('.dd-btn');
+    function setDD(o){dd.classList.toggle('open',o);ddb.setAttribute('aria-expanded',o?'true':'false');}
+    if(dd){
+      ddb.addEventListener('click',function(e){e.stopPropagation();setDD(!dd.classList.contains('open'));});
+      document.addEventListener('click',function(e){if(!dd.contains(e.target))setDD(false);});
+      document.addEventListener('keydown',function(e){if(e.key==='Escape'){setDD(false);ddb.focus();}});
+      dd.querySelectorAll('.dd-item').forEach(function(a){a.addEventListener('click',function(){setDD(false);});});
+    }
+    // Mobile menu
+    var mb=document.querySelector('.menu-btn'), mn=document.getElementById('mnav');
+    if(mb){mb.addEventListener('click',function(){var o=!mn.classList.contains('open');mn.classList.toggle('open',o);mb.setAttribute('aria-expanded',o?'true':'false');});
+      mn.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){mn.classList.remove('open');mb.setAttribute('aria-expanded','false');});});}
+    // Generic tab groups (audience tabs, model card formats)
+    function tabs(list){
+      var btns=[].slice.call(list.querySelectorAll('[role=tab]'));
+      function sel(b){btns.forEach(function(x){var on=x===b;x.setAttribute('aria-selected',on?'true':'false');x.tabIndex=on?0:-1;var p=document.getElementById(x.getAttribute('aria-controls'));if(p)p.hidden=!on;});}
+      btns.forEach(function(b,i){b.addEventListener('click',function(){sel(b);});
+        b.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(d){var n=btns[(i+d+btns.length)%btns.length];n.focus();sel(n);}});});
+      return sel;
+    }
+    document.querySelectorAll('[role=tablist]').forEach(tabs);
+    // Export buttons on the sample card switch the preview format
+    var map={card:'mct-card',md:'mct-md',json:'mct-json'};
+    document.querySelectorAll('.exp button').forEach(function(b){b.addEventListener('click',function(){var t=document.getElementById(map[b.dataset.fmt]);if(t){t.click();t.scrollIntoView({block:'nearest',behavior:'smooth'});}});});
+    // Scroll reveal
+    var els=document.querySelectorAll('.reveal');
+    if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});els.forEach(function(el){io.observe(el);});}
+    else{els.forEach(function(el){el.classList.add('in');});}
+
+    // ───── Contact form + demo booking (talks to /api/v1/leads) ─────
+    var API='/api/v1/leads';
+    var vtz; try{vtz=Intl.DateTimeFormat().resolvedOptions().timeZone;}catch(e){vtz='';}
+    function fmt(d,o){try{return new Intl.DateTimeFormat(undefined,Object.assign({timeZone:vtz||undefined},o)).format(d);}catch(e){return d.toString();}}
+    function dayKey(d){return fmt(d,{year:'numeric',month:'2-digit',day:'2-digit'});}
+    function post(path,body){return fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json().catch(function(){return{};}).then(function(j){if(!r.ok){var m=j&&j.message;throw{status:r.status,message:Array.isArray(m)?m[0]:(m||'Something went wrong, please try again.')};}return j;});});}
+    function formData(f){var o={};[].forEach.call(f.elements,function(el){if(el.name)o[el.name]=el.value.trim();});return o;}
+    function validEmail(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);}
+
+    var bk={days:[],day:null,slot:null,minutes:30};
+    var $days=document.getElementById('bk-days'),$slots=document.getElementById('bk-slots'),$msg=document.getElementById('bk-msg'),$form=document.getElementById('bk-form');
+    function loadSlots(keepDay){
+      return fetch(API+'/demo-slots').then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(j){
+        bk.minutes=j.slot_minutes||30;
+        document.getElementById('bk-dur').textContent=bk.minutes+'-minute video call';
+        document.getElementById('bk-tz').textContent='Times in '+(vtz?vtz.replace(/_/g,' '):'your time zone');
+        // regroup by the visitor's local date
+        var map={},order=[];
+        (j.days||[]).forEach(function(d){d.slots.forEach(function(s){var t=new Date(s.start),k=dayKey(t);if(!map[k]){map[k]={key:k,date:t,slots:[]};order.push(k);}map[k].slots.push({start:s.start,t:t,available:s.available});});});
+        bk.days=order.map(function(k){return map[k];});
+        renderDays(keepDay);
+      }).catch(function(){
+        $days.innerHTML='';$slots.innerHTML='';
+        $msg.innerHTML='The booking calendar is unavailable right now. Please use the message form and we’ll find a time with you.';
+      });
+    }
+    function renderDays(keepDay){
+      $days.innerHTML='';
+      var first=null;
+      bk.days.forEach(function(d){
+        var open=d.slots.some(function(s){return s.available;});
+        var b=document.createElement('button');b.type='button';b.className='day';b.disabled=!open;
+        b.innerHTML='<small>'+fmt(d.date,{weekday:'short'})+'</small><b>'+fmt(d.date,{day:'numeric'})+'</b><span>'+fmt(d.date,{month:'short'})+'</span>';
+        b.setAttribute('aria-label',fmt(d.date,{weekday:'long',day:'numeric',month:'long'})+(open?'':' (fully booked)'));
+        b.addEventListener('click',function(){selectDay(d.key);});
+        d.btn=b;$days.appendChild(b);
+        if(open&&!first)first=d.key;
+      });
+      if(!bk.days.length||!first){$slots.innerHTML='';$msg.textContent='No times are open in the next two weeks. Send us a message and we’ll find one.';return;}
+      var keep=keepDay&&bk.days.some(function(d){return d.key===keepDay&&!d.btn.disabled;});
+      selectDay(keep?keepDay:first);
+    }
+    function selectDay(k){
+      bk.day=k;bk.slot=null;$form.hidden=true;$msg.textContent='';
+      var day=null;bk.days.forEach(function(d){var on=d.key===k;d.btn.setAttribute('aria-pressed',on?'true':'false');if(on)day=d;});
+      $slots.innerHTML='';
+      day.slots.forEach(function(s){
+        var b=document.createElement('button');b.type='button';b.className='slot';b.disabled=!s.available;
+        b.textContent=fmt(s.t,{hour:'numeric',minute:'2-digit'});
+        b.setAttribute('aria-pressed','false');
+        if(!s.available)b.setAttribute('aria-label',b.textContent+' (taken)');
+        b.addEventListener('click',function(){[].forEach.call($slots.children,function(x){x.setAttribute('aria-pressed','false');});b.setAttribute('aria-pressed','true');bk.slot=s;showForm();});
+        $slots.appendChild(b);
+      });
+    }
+    function slotLabel(s){var e=new Date(s.t.getTime()+bk.minutes*60000);return fmt(s.t,{weekday:'long',day:'numeric',month:'long'})+', '+fmt(s.t,{hour:'numeric',minute:'2-digit'})+' – '+fmt(e,{hour:'numeric',minute:'2-digit',timeZoneName:'short'});}
+    function showForm(){
+      document.getElementById('bk-sel').innerHTML='<span>&#128197;</span><span><b>'+slotLabel(bk.slot)+'</b></span>';
+      $form.hidden=false;document.getElementById('bk-err').textContent='';
+      document.getElementById('bk-name').focus({preventScroll:true});
+      $form.scrollIntoView({block:'nearest',behavior:'smooth'});
+    }
+    function ics(s,o){
+      var st=new Date(s.start),en=new Date(st.getTime()+bk.minutes*60000);
+      function z(d){return d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');}
+      function esc(t){return String(t).replace(/([,;\\])/g,'\\$1').replace(/\n/g,'\\n');}
+      return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//SentRAI//Demo booking//EN','METHOD:PUBLISH','BEGIN:VEVENT',
+        'UID:'+(o.lead_id||Date.now())+'@sentrai','DTSTAMP:'+z(new Date()),'DTSTART:'+z(st),'DTEND:'+z(en),
+        'SUMMARY:'+esc('SentRAI demo'+(o.company?' · '+o.company:'')),
+        'DESCRIPTION:'+esc('Your SentRAI product demo. The SentRAI team will send the video-call link to '+o.email+'.'),
+        'END:VEVENT','END:VCALENDAR'].join('\r\n');
+    }
+    function gcal(s,o){var st=new Date(s.start),en=new Date(st.getTime()+bk.minutes*60000);function z(d){return d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');}
+      return 'https://calendar.google.com/calendar/render?'+new URLSearchParams({action:'TEMPLATE',text:'SentRAI demo',dates:z(st)+'/'+z(en),details:'Your SentRAI product demo. The video-call link will follow by email.'}).toString();}
+    if($form){
+      loadSlots();
+      $form.addEventListener('submit',function(e){
+        e.preventDefault();
+        var o=formData($form),err=document.getElementById('bk-err'),btn=$form.querySelector('[type=submit]');
+        if(!o.name||!validEmail(o.email)||o.company.length<2){err.textContent='Please add your name, a valid work email and your company.';return;}
+        if(!bk.slot){err.textContent='Please pick a time.';return;}
+        btn.disabled=true;btn.textContent='Booking…';err.textContent='';
+        post('/demo',{name:o.name,email:o.email,company:o.company,role:o.role||undefined,message:o.message||undefined,website:o.website,slot_start:bk.slot.start,timezone:vtz||undefined})
+          .then(function(r){
+            var s=bk.slot;
+            document.getElementById('bk-flow').hidden=true;
+            document.getElementById('bk-done').hidden=false;
+            document.getElementById('bk-done-when').innerHTML='<b>'+slotLabel(s)+'</b>';
+            document.getElementById('bk-done-email').textContent=o.email;
+            var blob=new Blob([ics(s,{lead_id:r&&r.lead_id,email:o.email,company:o.company})],{type:'text/calendar'});
+            document.getElementById('bk-ics').href=URL.createObjectURL(blob);
+            document.getElementById('bk-gcal').href=gcal(s,o);
+          })
+          .catch(function(x){
+            btn.disabled=false;btn.textContent='Confirm booking';
+            if(x&&x.status===409){err.textContent='Someone just took that time. Please pick another.';loadSlots(bk.day);}
+            else err.textContent=(x&&x.message)||'Something went wrong, please try again.';
+          });
+      });
+    }
+    var cf=document.getElementById('ct-form');
+    if(cf)cf.addEventListener('submit',function(e){
+      e.preventDefault();
+      var o=formData(cf),err=document.getElementById('ct-err'),btn=cf.querySelector('[type=submit]');
+      if(!o.name||!validEmail(o.email)||o.message.length<10){err.textContent='Please add your name, a valid work email and a message of at least 10 characters.';return;}
+      btn.disabled=true;btn.textContent='Sending…';err.textContent='';
+      post('/contact',{name:o.name,email:o.email,company:o.company||undefined,topic:o.topic,message:o.message,website:o.website})
+        .then(function(){cf.hidden=true;document.getElementById('ct-done').hidden=false;document.getElementById('ct-done-email').textContent=o.email;})
+        .catch(function(x){btn.disabled=false;btn.textContent='Send message';err.textContent=(x&&x.message)||'Something went wrong, please try again.';});
+    });
+  })();
+  </script>
 </body>
 </html>

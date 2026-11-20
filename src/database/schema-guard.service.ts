@@ -1224,6 +1224,30 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'leads', // lead.entity.ts (landing-page contact form and demo bookings)
+    createSql: `CREATE TABLE IF NOT EXISTS \`leads\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`kind\` VARCHAR(10) NOT NULL,
+      \`name\` VARCHAR(120) NOT NULL,
+      \`email\` VARCHAR(255) NOT NULL,
+      \`company\` VARCHAR(160) NULL,
+      \`jobRole\` VARCHAR(120) NULL,
+      \`topic\` VARCHAR(40) NULL,
+      \`message\` TEXT NULL,
+      \`slotStart\` DATETIME NULL,
+      \`slotMinutes\` INT NULL,
+      \`visitorTimezone\` VARCHAR(64) NULL,
+      \`status\` VARCHAR(20) NOT NULL,
+      \`adminNotes\` VARCHAR(2000) NULL,
+      \`handledBy\` VARCHAR(255) NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_leads_kind\` (\`kind\`),
+      INDEX \`IDX_leads_status\` (\`status\`),
+      INDEX \`IDX_leads_slotStart\` (\`slotStart\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'eu_act_records', // governance E5.1 (EU AI Act)
     createSql: `CREATE TABLE IF NOT EXISTS \`eu_act_records\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
