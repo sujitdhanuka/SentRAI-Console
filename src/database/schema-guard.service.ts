@@ -73,6 +73,9 @@ const REQUIRED_COLUMNS: ColumnSpec[] = [
   { table: 'ai_models', column: 'contextProfile', definition: 'TEXT NULL' },
   // ai-model.entity.ts — named model owner (governance E1.9).
   { table: 'ai_models', column: 'ownerUserId', definition: 'VARCHAR(36) NULL' },
+  // Model card v2: record type (null until classified) and human/service accounts for owner checks.
+  { table: 'ai_models', column: 'recordType', definition: 'VARCHAR(30) NULL' },
+  { table: 'users', column: 'accountType', definition: "VARCHAR(10) NOT NULL DEFAULT 'HUMAN'" },
   // ai-model.entity.ts — governance Phase 2: reason codes (E2.2), MRM scope (E2.3), red-team-required flag (E2.8).
   { table: 'ai_models', column: 'reasonCodeMap', definition: 'TEXT NULL' },
   { table: 'ai_models', column: 'reasonCodeSign', definition: 'VARCHAR(10) NULL' },
@@ -1007,6 +1010,25 @@ const REQUIRED_TABLES: TableSpec[] = [
       INDEX \`IDX_model_cards_orgId\` (\`orgId\`),
       INDEX \`IDX_model_cards_modelId\` (\`modelId\`),
       UNIQUE KEY \`UQ_model_cards_model_version\` (\`modelId\`, \`version\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    table: 'ai_record_links', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`ai_record_links\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`fromModelId\` VARCHAR(36) NOT NULL,
+      \`toModelId\` VARCHAR(36) NOT NULL,
+      \`relation\` VARCHAR(30) NOT NULL,
+      \`tenantScope\` VARCHAR(255) NULL,
+      \`attributes\` TEXT NULL,
+      \`createdBy\` VARCHAR(255) NOT NULL,
+      \`createdAt\` DATETIME NOT NULL,
+      \`removedAt\` DATETIME NULL,
+      \`removedBy\` VARCHAR(255) NULL,
+      INDEX \`IDX_ai_record_links_orgId\` (\`orgId\`),
+      INDEX \`IDX_ai_record_links_toModelId\` (\`toModelId\`),
+      INDEX \`IDX_ai_record_links_from_relation\` (\`fromModelId\`, \`relation\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {

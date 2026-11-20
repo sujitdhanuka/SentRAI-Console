@@ -25,6 +25,10 @@ export class UserEntity {
   @Column('varchar', { length: 36, nullable: true })
   tenantId!: string | null;
 
+  /** HUMAN or SERVICE. Model card owner fields refuse SERVICE accounts (model card v2). */
+  @Column('varchar', { length: 10, default: 'HUMAN' })
+  accountType!: string;
+
   @Column('boolean', { default: true })
   isActive!: boolean;
 

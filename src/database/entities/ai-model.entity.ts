@@ -194,6 +194,11 @@ export class AIModelEntity {
   @Column('varchar', { length: 500, nullable: true })
   redTeamRequiredReason!: string | null;
 
+  /** Model card v2: AI_MODEL | AI_SYSTEM | AI_COMPONENT | MODEL_CONFIGURATION | AGENT | RAG_PIPELINE.
+   *  Null until classified; distinct from the scanner's modelType. */
+  @Column('varchar', { length: 30, nullable: true })
+  recordType!: string | null;
+
   /** Named accountable owner (a user) in addition to ownerTeam — governance E1.9. */
   @Column('varchar', { length: 36, nullable: true })
   ownerUserId!: string | null;
