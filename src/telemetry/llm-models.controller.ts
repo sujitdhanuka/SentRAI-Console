@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -21,6 +21,13 @@ export class LlmModelsController {
   @Get()
   get(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
     return this.llmModels.get(user, modelId);
+  }
+
+  /** Look for this record's models in the project's code now. */
+  @Post('rescan')
+  @HttpCode(HttpStatus.OK)
+  rescan(@CurrentUser() user: CurrentUserType, @Param('modelId') modelId: string) {
+    return this.llmModels.rescan(user, modelId);
   }
 
   /** Replace the confirmed per-task list. An empty list withdraws it. */

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 
-import { detectInFile, detectLlmConfig, isLlmCandidate, llmConfigForRecord } from './llm-config-detector';
+import { detectInFile, detectLlmConfig, isLlmCandidate, llmConfigForRecord, summarize } from './llm-config-detector';
 
 /** A small app that talks to OpenRouter and keeps its models in the database. */
 function fixture(files: Record<string, string>): string {
@@ -126,5 +126,29 @@ describe('isLlmCandidate', () => {
     expect(isLlmCandidate({ signals: [{ category: 'ast_llm_sdk' }] })).toBe(true);
     expect(isLlmCandidate({ modelTypeGuess: 'GENERATIVE_AI', signals: [] })).toBe(true);
     expect(isLlmCandidate({ modelTypeGuess: 'MACHINE_LEARNING', signals: [{ category: 'ml_library_import' }] })).toBe(false);
+  });
+});
+
+describe('key/value settings tables', () => {
+  it('names the settings table when model settings keys are used', () => {
+    const findings = [
+      ...detectInFile('prisma/schema.prisma', 'model Setting {\n  id    Int    @id\n  organizationId String\n  key   String\n  value String\n}\n'),
+      ...detectInFile('src/api/llm-settings.ts', 'const LLM_KEYS = ["llmProvider", "llmModelId", "llmFastModelId"];\n'),
+    ];
+    const r = summarize(findings);
+    const kv = r.storage.find((s) => s.location === 'Setting.value')!;
+    expect(kv.keyed_by?.[0]).toContain('llmModelId');
+    expect(r.storage.map((s) => s.location)).toEqual(expect.arrayContaining(['llmModelId', 'llmFastModelId']));
+    // Re-summarising (as a record's slice does) leaves it unchanged.
+    expect(summarize(r.findings).storage.find((s) => s.location === 'Setting.value')?.keyed_by).toEqual(kv.keyed_by);
+  });
+
+  it('ignores a settings table when no model keys exist', () => {
+    const r = summarize(detectInFile('prisma/schema.prisma', 'model Setting {\n  key   String\n  value String\n}\n'));
+    expect(r.storage).toEqual([]);
+  });
+
+  it('treats agents as LLM callers', () => {
+    expect(isLlmCandidate({ modelTypeGuess: 'AGENT', signals: [{ category: 'agent_definition' }] })).toBe(true);
   });
 });

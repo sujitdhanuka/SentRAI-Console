@@ -68,6 +68,7 @@ export function LlmModelsTab({ modelId }: { modelId: string }) {
   const [rows, setRows] = useState<Entry[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const load = useCallback(() => {
     setError(false);
@@ -104,6 +105,19 @@ export function LlmModelsTab({ modelId }: { modelId: string }) {
       toast(err instanceof Error ? err.message : 'Save failed', 'negative');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const rescan = async () => {
+    setScanning(true);
+    try {
+      const v = await api<LlmModelsView>(`/inventory/models/${encodeURIComponent(modelId)}/llm-models/rescan`, { method: 'POST' });
+      setView(v);
+      toast(v.detected?.storage?.length || v.detected?.candidate_models?.length ? 'Scan finished' : 'Scan finished: nothing found in the code', 'positive');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Scan failed', 'negative');
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -170,9 +184,12 @@ export function LlmModelsTab({ modelId }: { modelId: string }) {
         </div>
       </Panel>
 
-      <Panel title="Where the scan found them">
+      <Panel
+        title="Where the scan found them"
+        right={<Button variant="secondary" size="xs" disabled={scanning} onClick={rescan}>{scanning ? 'Scanning…' : 'Scan now'}</Button>}
+      >
         {!d ? (
-          <p className="p-3 text-[11px] text-text-secondary">No scan evidence yet. Re-scan the project to look for model settings in its schema, settings and environment files.</p>
+          <p className="p-3 text-[11px] text-text-secondary">No scan evidence yet. Select <span className="font-medium">Scan now</span> to look for model settings in the project's schema, settings and environment files.</p>
         ) : (
           <div className="space-y-3 p-3">
             <div className="flex flex-wrap items-center gap-1">
@@ -192,6 +209,7 @@ export function LlmModelsTab({ modelId }: { modelId: string }) {
                       <Badge tone="neutral">{KIND_LABEL[s.kind]}</Badge>
                       <span className="font-mono text-[10.5px] text-text">{s.location}</span>
                       {s.keyed_by?.length ? <span className="text-[10px] text-text-secondary">one per {s.keyed_by.join(', ')}</span> : null}
+                      {s.kind === 'db_column' && /log|usage|history|event|audit/i.test(s.location.split('.')[0]) ? <span className="text-[10px] text-text-secondary">records the model of each call, so it shows what was really used</span> : null}
                       <span className="ml-auto truncate font-mono text-[9.5px] text-text-tertiary">{s.file}:{s.line}</span>
                     </li>
                   ))}
