@@ -14,13 +14,16 @@ import { FeatureFlagsService } from '../../../../common/feature-flags';
 import { CurrentUser } from '../../../../common/interfaces/current-user.interface';
 import { frameworkLabel, frameworkReportOf, frameworkScopeForOrg } from '../../../../compliance/framework-scope';
 import {
-  AIModelEntity, CardFieldValueEntity, CardRecordEntity, DatasetEntity, ModelDatasetEntity, ModelLedgerEventEntity, ProjectEntity, UserEntity,
+  AIModelEntity, CardControlAssessmentEntity, CardFieldValueEntity, CardRecordEntity, DatasetEntity, ModelDatasetEntity, ModelLedgerEventEntity, ProjectEntity, UserEntity,
 } from '../../../../database/entities';
 import { InventoryService } from '../../../../inventory/inventory.service';
 import { assertFlag } from '../../../governance-access';
 import { governanceHooks } from '../../../hooks';
 import { OFFICERS, orgFor, orgModels, requireRole } from '../../../phase2-util';
 import { CATALOGUE_VERSION } from '../catalogue';
+import { registryIdForV1Label } from '../controls';
+import { FrameworkRegistryService } from '../registry/framework-registry.service';
+import { FrameworkDef } from '../registry/types';
 import { MigrationPlan, planV1Migration, V1Context } from './v1-mapper';
 
 const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : null);
@@ -36,8 +39,7 @@ export class CardV2MigrationService {
     @InjectRepository(ModelDatasetEntity) private readonly modelDatasets: Repository<ModelDatasetEntity>,
     @InjectRepository(DatasetEntity) private readonly datasets: Repository<DatasetEntity>,
     @InjectRepository(CardRecordEntity) private readonly records: Repository<CardRecordEntity>,
-    @InjectRepository(CardFieldValueEntity) private readonly values: Repository<CardFieldValueEntity>,
-    @InjectRepository(ModelLedgerEventEntity) private readonly ledger: Repository<ModelLedgerEventEntity>,
+    private readonly registry: FrameworkRegistryService,
     private readonly inventory: InventoryService,
     private readonly flags: FeatureFlagsService,
   ) {}
@@ -99,23 +101,40 @@ export class CardV2MigrationService {
       `Risk tier ${plan.risk.imported_tier ?? '(none)'}: ${plan.risk.status}.`,
       ...plan.verdicts_reset.map((v) => `${v.framework}: v1 showed "${v.v1_verdict}", now ${v.v2_status}.`),
     ].join('\n');
-    await this.records.save(this.records.create({
-      id: uuidv4(), orgId, modelId: plan.model_id, catalogueVersion: CATALOGUE_VERSION, workflowState: 'DRAFT', author: null,
-      nextReviewAt: null, lastApprovedVersion: null, migratedFromV1: true, migrationNote: note, createdAt: at, updatedAt: at,
-    }));
-    await this.values.save(plan.fields.map((f) => this.values.create({
-      id: uuidv4(), orgId, modelId: plan.model_id, fieldId: f.field_id, value: f.value, status: f.status, provenance: f.provenance, sourceRef: f.source_ref,
-      enteredBy: f.entered_by, enteredAt: f.entered_at ? new Date(f.entered_at) : null, acceptedBy: f.accepted_by, acceptedAt: f.accepted_at ? new Date(f.accepted_at) : null,
-      suggestion: f.suggestion, naJustification: f.na_justification, naDecidedBy: f.na_decided_by, evidenceRefs: f.evidence_refs, verifiedBy: null, verifiedAt: null,
-      catalogueVersion: CATALOGUE_VERSION, updatedAt: at,
-    })));
-    await this.ledger.save(this.ledger.create({
-      id: uuidv4(), modelId: plan.model_id, eventType: 'CARD_MIGRATED_FROM_V1', actor: user.email, occurredAt: at,
-      eventData: {
-        record_type_proposed: plan.record_type.value, fields: plan.fields.length, consistency: plan.consistency.map((c) => c.code),
-        owner: plan.owner.ok ? 'ok' : plan.owner.code, risk: plan.risk, verdicts_reset: plan.verdicts_reset,
-      },
-    }));
+    // Registry entries first (reading may seed the registry), then every write in one transaction.
+    const frameworks: Array<{ verdict: string; fw: FrameworkDef }> = [];
+    for (const v of plan.verdicts_reset) {
+      const id = registryIdForV1Label(v.framework);
+      if (id) frameworks.push({ verdict: v.v1_verdict, fw: await this.registry.get(id) });
+    }
+    await this.records.manager.transaction(async (em) => {
+      await em.save(CardRecordEntity, {
+        id: uuidv4(), orgId, modelId: plan.model_id, catalogueVersion: CATALOGUE_VERSION, workflowState: 'DRAFT', author: null,
+        nextReviewAt: null, lastApprovedVersion: null, migratedFromV1: true, migrationNote: note, createdAt: at, updatedAt: at,
+      });
+      await em.save(CardFieldValueEntity, plan.fields.map((f) => ({
+        id: uuidv4(), orgId, modelId: plan.model_id, fieldId: f.field_id, value: f.value, status: f.status, provenance: f.provenance, sourceRef: f.source_ref,
+        enteredBy: f.entered_by, enteredAt: f.entered_at ? new Date(f.entered_at) : null, acceptedBy: f.accepted_by, acceptedAt: f.accepted_at ? new Date(f.accepted_at) : null,
+        suggestion: f.suggestion, naJustification: f.na_justification, naDecidedBy: f.na_decided_by, evidenceRefs: f.evidence_refs, verifiedBy: null, verifiedAt: null,
+        catalogueVersion: CATALOGUE_VERSION, updatedAt: at,
+      })));
+      // Every v1 framework verdict becomes NOT_ASSESSED on each control of the matching registry entry, keeping the old verdict.
+      for (const { verdict, fw } of frameworks) {
+        if (!fw.controls.length) continue;
+        await em.save(CardControlAssessmentEntity, fw.controls.map((c) => ({
+          id: uuidv4(), orgId, modelId: plan.model_id, frameworkId: fw.framework_id, frameworkRevision: fw.revision, controlId: c.control_id,
+          status: 'NOT_ASSESSED', justification: null, evidenceRefs: [], assessedBy: null, assessedAt: null, implementedBy: null, verifiedBy: null,
+          migratedFromV1Verdict: verdict.slice(0, 100), updatedAt: at,
+        })));
+      }
+      await em.save(ModelLedgerEventEntity, {
+        id: uuidv4(), modelId: plan.model_id, eventType: 'CARD_MIGRATED_FROM_V1', actor: user.email, occurredAt: at,
+        eventData: {
+          record_type_proposed: plan.record_type.value, fields: plan.fields.length, consistency: plan.consistency.map((c) => c.code),
+          owner: plan.owner.ok ? 'ok' : plan.owner.code, risk: plan.risk, verdicts_reset: plan.verdicts_reset,
+        },
+      });
+    });
   }
 }
 

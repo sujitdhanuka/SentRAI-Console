@@ -218,7 +218,8 @@ export const CARD_SECTIONS: SectionSpec[] = [
       field('board_policy_ref', 'Board-approved AI policy', f.model.boardPolicyRef || null, true, filledText(f.model.boardPolicyRef), fix('overview')),
       field('next_audit_due', 'Next audit due', iso(f.model.nextAuditDue), false, Boolean(f.model.nextAuditDue)),
       field('approvals', 'Deployment approvals', f.approvals.map((a) => `${a.target_stage}: ${a.status}${a.resolved_at ? ` (${iso(a.resolved_at)})` : ''}`), false, f.approvals.length > 0, fix('approvals')),
-      field('compliance', 'Framework verdicts (enabled packs)', f.compliance.map((c) => `${c.framework}: ${c.pass ? 'compliant' : `${c.gaps} open gap${c.gaps === 1 ? '' : 's'}`}`), false, true),
+      // Field checks only: passing them is not an assessment of the framework, so the card never says "compliant".
+      field('compliance', 'Framework field checks (enabled packs, not an assessment)', f.compliance.map((c) => `${c.framework}: ${c.pass ? 'no blocking gaps in the checked fields' : `${c.gaps} open gap${c.gaps === 1 ? '' : 's'}`}`), false, true),
     ],
   },
   {

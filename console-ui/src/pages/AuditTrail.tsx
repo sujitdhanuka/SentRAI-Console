@@ -21,6 +21,11 @@ import { labelClass as LABEL } from '../components/ui/form';
 const VERDICT_TONE: Record<string, BadgeTone> = {
   COMPLIANT: 'positive', CONDITIONAL: 'warning', NON_COMPLIANT: 'negative',
 };
+/** Audit verdict values stay as the API sends them; the labels never say "compliant". */
+const VERDICT_LABEL: Record<string, string> = {
+  COMPLIANT: 'No findings', CONDITIONAL: 'Conditional', NON_COMPLIANT: 'Critical findings',
+};
+const verdictLabel = (v: string) => VERDICT_LABEL[v] ?? v;
 
 /* ── View 1 · Model audits (the AI Audit Framework) ───────────────────────── */
 
@@ -146,7 +151,7 @@ function ModelAudits() {
           }),
         },
       );
-      toast(`Audit recorded — verdict ${res.overall_verdict}`, res.overall_verdict === 'COMPLIANT' ? 'positive' : 'negative');
+      toast(`Audit recorded — ${verdictLabel(res.overall_verdict)}`, res.overall_verdict === 'COMPLIANT' ? 'positive' : 'negative');
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Audit failed', 'negative');
@@ -281,7 +286,7 @@ function ModelAudits() {
                     <td className={`${TD} font-mono text-[9.5px] text-text-tertiary`}>{new Date(a.created_at).toLocaleDateString()}</td>
                     <td className={`${TD} font-mono text-[10px]`}>{a.audit_type}</td>
                     <td className={`${TD} text-[10.5px] text-text-secondary`}>{a.auditor_ref}</td>
-                    <td className={TD}><Badge tone={VERDICT_TONE[a.overall_verdict] ?? 'neutral'}>{a.overall_verdict}</Badge></td>
+                    <td className={TD}><Badge tone={VERDICT_TONE[a.overall_verdict] ?? 'neutral'}>{verdictLabel(a.overall_verdict)}</Badge></td>
                     <td className={`${TD} font-mono text-[10px]`}>{a.explainability_score.toFixed(2)}</td>
                     <td className={`${TD} font-mono text-[10px] ${a.findings?.length ? 'text-warning' : 'text-text-tertiary'}`}>{a.findings?.length ?? 0}</td>
                     <td className={`${TD} font-mono text-[9.5px] text-text-tertiary`}>{a.next_audit_due ? new Date(a.next_audit_due).toLocaleDateString() : '—'}</td>

@@ -53,7 +53,7 @@ export class MetricsService {
       '# HELP sentrai_models_total Total number of registered models.',
       '# TYPE sentrai_models_total gauge',
       `sentrai_models_total ${totalModels}`,
-      '# HELP sentrai_compliant_models_total Total number of fully compliant models.',
+      '# HELP sentrai_compliant_models_total Models with no blocking gaps in the framework field checks (not a compliance assessment; name kept for existing dashboards).',
       '# TYPE sentrai_compliant_models_total gauge',
       `sentrai_compliant_models_total ${compliantCount}`,
       '# HELP sentrai_open_governance_gaps Total number of outstanding regulatory framework gaps.',

@@ -108,6 +108,10 @@ describe('Model card v2 (e2e)', () => {
       expect(vals.filter((v: any) => v.provenance === 'IMPORTED_V1').every((v: any) => v.acceptedBy === null)).toBe(true);
       const ledger = await db.query("SELECT * FROM model_ledger_events WHERE modelId = ? AND eventType = 'CARD_MIGRATED_FROM_V1'", [o.modelId]);
       expect(ledger).toHaveLength(1);
+      // v1 framework verdicts are now NOT_ASSESSED control assessments that keep the old verdict.
+      const ctl = await db.query('SELECT frameworkId, status, migratedFromV1Verdict FROM card_control_assessments WHERE modelId = ?', [o.modelId]);
+      expect(ctl.filter((c: any) => c.frameworkId === 'iso-42001-2023')).toHaveLength(9);
+      expect(ctl.every((c: any) => c.status === 'NOT_ASSESSED' && c.migratedFromV1Verdict)).toBe(true);
 
       // The v1 record is untouched; the v1 card still reads.
       expect(await db.query('SELECT * FROM ai_models WHERE id = ?', [o.modelId])).toEqual(before);

@@ -87,7 +87,7 @@ export function generateBoardReportPdf(p: BoardReportPayload): Promise<Buffer> {
     doc.moveDown(0.5);
     kv([
       ['Models in scope', String(p.summary.total_models)],
-      ['Fully compliant', `${p.summary.fully_compliant} (${Math.round(p.summary.compliance_rate * 100)}%)`],
+      ['No blocking gaps (field checks)', `${p.summary.fully_compliant} (${Math.round(p.summary.compliance_rate * 100)}%)`],
       ['High-risk', String(p.summary.high_risk_models)],
       ['Open blocking gaps', String(p.summary.open_blocking_gaps)],
     ]);

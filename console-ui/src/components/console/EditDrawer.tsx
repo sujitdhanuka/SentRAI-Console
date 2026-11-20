@@ -478,7 +478,7 @@ export function ModelWorkspace({ component, onClose }: { component: AIComponent;
                         <span className="font-mono text-[9px] text-text-tertiary">checking…</span>
                       ) : (
                         <Badge tone={pass == null ? 'neutral' : pass ? 'positive' : 'negative'}>
-                          {pass == null ? '—' : pass ? 'Compliant' : 'Non-compliant'}
+                          {pass == null ? '—' : pass ? 'Checks pass' : 'Gaps open'}
                         </Badge>
                       )}
                     </div>

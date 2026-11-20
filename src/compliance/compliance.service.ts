@@ -379,7 +379,7 @@ export class ComplianceService {
     const headline =
       total === 0
         ? 'No AI models registered yet — add models to assess portfolio compliance.'
-        : `${fullyCompliant} of ${total} models (${Math.round(rate * 100)}%) fully compliant across ${frameworksPhrase(reported, fwIds.length < FRAMEWORK_IDS.length)}; ` +
+        : `${fullyCompliant} of ${total} models (${Math.round(rate * 100)}%) with no blocking gaps across ${frameworksPhrase(reported, fwIds.length < FRAMEWORK_IDS.length)}; ` +
           `${highRisk} high-risk, ${totalGaps} blocking control gap${totalGaps === 1 ? '' : 's'} open.`;
 
     return {
@@ -530,7 +530,7 @@ export class ComplianceService {
 
     const portfolioStats = [
       `${s.total_models} models registered`,
-      `${s.fully_compliant} fully compliant across ${frameworksPhrase(report.frameworks.map((f) => f.id), false)} (${Math.round(s.compliance_rate * 100)}%)`,
+      `${s.fully_compliant} with no blocking gaps across ${frameworksPhrase(report.frameworks.map((f) => f.id), false)} (${Math.round(s.compliance_rate * 100)}%)`,
       `${s.high_risk_models} high-risk`,
       `${s.open_blocking_gaps} blocking control gaps open`,
       ...report.frameworks.map((f) => `${f.name}: ${f.models_passing}/${f.models_assessed} passing`),

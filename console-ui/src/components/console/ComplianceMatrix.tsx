@@ -16,7 +16,7 @@ const DRIFT_TITLE = { ok: 'no drift detected', warn: 'warning — investigate', 
 // Hover tooltips spell out the real value behind each icon/abbreviation.
 const fwTitle = (label: string, check: FrameworkCheck) =>
   check.status === 'ok'
-    ? `${label}: ${check.evidenceUrl ? 'Compliant — evidence attached' : 'Compliant (unevidenced) — attach an artifact'}`
+    ? `${label}: ${check.evidenceUrl ? 'Checks pass — evidence attached (not a compliance assessment)' : 'Checks pass, no evidence — attach an artifact'}`
     : check.status === 'gap'
       ? `${label}: Gap — control not satisfied`
       : `${label}: Not applicable`;

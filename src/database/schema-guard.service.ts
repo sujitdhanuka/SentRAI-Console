@@ -1108,6 +1108,28 @@ const REQUIRED_TABLES: TableSpec[] = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
   {
+    table: 'card_control_assessments', // model card v2
+    createSql: `CREATE TABLE IF NOT EXISTS \`card_control_assessments\` (
+      \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,
+      \`orgId\` VARCHAR(36) NOT NULL,
+      \`modelId\` VARCHAR(36) NOT NULL,
+      \`frameworkId\` VARCHAR(64) NOT NULL,
+      \`frameworkRevision\` INT NOT NULL,
+      \`controlId\` VARCHAR(64) NOT NULL,
+      \`status\` VARCHAR(30) NOT NULL,
+      \`justification\` TEXT NULL,
+      \`evidenceRefs\` TEXT NULL,
+      \`assessedBy\` VARCHAR(255) NULL,
+      \`assessedAt\` DATETIME NULL,
+      \`implementedBy\` VARCHAR(255) NULL,
+      \`verifiedBy\` VARCHAR(255) NULL,
+      \`migratedFromV1Verdict\` VARCHAR(100) NULL,
+      \`updatedAt\` DATETIME NOT NULL,
+      INDEX \`IDX_card_control_assessments_orgId\` (\`orgId\`),
+      UNIQUE KEY \`UQ_card_control_assessments_model_fw_control\` (\`modelId\`, \`frameworkId\`, \`controlId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
     table: 'energy_readings', // governance Phase 3
     createSql: `CREATE TABLE IF NOT EXISTS \`energy_readings\` (
       \`id\` VARCHAR(36) NOT NULL PRIMARY KEY,

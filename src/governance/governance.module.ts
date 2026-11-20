@@ -55,6 +55,7 @@ import {
   CardRecordEntity,
   FrameworkRegistryEntity,
   FrameworkControlEntity,
+  CardControlAssessmentEntity,
   CardFieldValueEntity,
   AiRecordLinkEntity,
   ModelApprovalEntity,
@@ -149,7 +150,7 @@ import { EuActService } from './eu-act/eu-act.service';
       TrainingRecordEntity, DatasetEntity, ModelDatasetEntity,
       AiProviderAttestationEntity, AiProviderConfigEntity, BcpStateEntity, DisclosureEntity, EnergyReadingEntity, EngagementRecordEntity, IntegrationDeliveryEntity, IntegrationEndpointEntity,
       ModelDeployerEntity, ModelRetirementEntity, SecurityEvaluationEntity, SoaEntryEntity, SoaStatementEntity, TestSetEntity, TevvRunEntity, ThreatModelEntity,
-      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity, CardRecordEntity, CardFieldValueEntity, AiRecordLinkEntity, FrameworkRegistryEntity, FrameworkControlEntity,
+      ModelCardEntity, ModelApprovalEntity, EuActRecordEntity, CardRecordEntity, CardFieldValueEntity, AiRecordLinkEntity, FrameworkRegistryEntity, FrameworkControlEntity, CardControlAssessmentEntity,
     ]),
     InventoryModule,
     ComplianceModule, // board-pack inputs for management review (E1.6)

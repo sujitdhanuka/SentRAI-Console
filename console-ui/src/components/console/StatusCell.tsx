@@ -5,12 +5,12 @@ import { FrameworkCheck } from '../../providers';
 /**
  * One framework check: status icon + evidence affordance. Compliance must be
  * traceable to an artifact — an "ok" with no evidenceUrl gets the amber dot
- * (compliant-but-unevidenced), never a clean green.
+ * (checks pass, no evidence), never a clean green.
  */
 export function StatusCell({ check, framework }: { check: FrameworkCheck; framework: string }) {
   const icon =
     check.status === 'ok' ? (
-      <CheckCircle2 size={14} className="text-positive" aria-label={`${framework}: compliant`} />
+      <CheckCircle2 size={14} className="text-positive" aria-label={`${framework}: checks pass`} />
     ) : check.status === 'gap' ? (
       <XCircle size={14} className="text-negative" aria-label={`${framework}: gap`} />
     ) : (
@@ -24,7 +24,7 @@ export function StatusCell({ check, framework }: { check: FrameworkCheck; framew
         {check.status === 'ok' && !check.evidenceUrl && (
           <span
             className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-warning"
-            title="Compliant but unevidenced — attach an artifact"
+            title="Checks pass but no evidence — attach an artifact"
           />
         )}
       </span>

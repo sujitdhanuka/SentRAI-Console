@@ -122,7 +122,7 @@ export function Lineage() {
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <Badge tone={RISK_TONE[m.risk_level] ?? 'neutral'}>{m.risk_level}</Badge>
                             <Badge tone={m.compliance_pass ? 'positive' : 'negative'}>
-                              {m.compliance_pass ? 'compliant' : `${m.open_gap_count} gap(s)`}
+                              {m.compliance_pass ? 'no gaps' : `${m.open_gap_count} gap(s)`}
                             </Badge>
                             <span className="truncate font-mono text-[8.5px] text-text-tertiary">
                               {m.owner_team ?? 'unassigned'}

@@ -94,7 +94,7 @@ export function generatePortfolioPdf(report: {
     doc.moveDown(0.3);
     const s = report.summary;
     doc.fontSize(9).fillColor('#475569').text(
-      `Total models: ${s.total_models}    Fully compliant: ${s.fully_compliant} (${Math.round(s.compliance_rate * 100)}%)    ` +
+      `Total models: ${s.total_models}    No blocking gaps: ${s.fully_compliant} (${Math.round(s.compliance_rate * 100)}%)    ` +
         `High-risk: ${s.high_risk_models}    Open blocking gaps: ${s.open_blocking_gaps}`,
     );
 

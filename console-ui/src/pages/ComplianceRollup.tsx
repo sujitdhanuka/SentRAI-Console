@@ -178,7 +178,7 @@ export function ComplianceRollup() {
       ) : s ? (
         <div className="grid shrink-0 grid-cols-3 gap-px border-b border-border bg-border lg:grid-cols-5">
           <Stat label="Models in scope" value={String(s.total_models)} sub={activeProjectId ? 'active project' : 'all projects'} />
-          <Stat label="Fully compliant" value={`${Math.round(s.compliance_rate * 100)}%`} sub={`${s.fully_compliant}/${s.total_models} across ${report?.frameworks.length ?? 4} framework${report?.frameworks.length === 1 ? '' : 's'}`} tone={s.compliance_rate >= 1 ? 'text-positive' : s.compliance_rate > 0 ? 'text-warning' : 'text-negative'} />
+          <Stat label="No blocking gaps" value={`${Math.round(s.compliance_rate * 100)}%`} sub={`${s.fully_compliant}/${s.total_models} across ${report?.frameworks.length ?? 4} framework${report?.frameworks.length === 1 ? '' : 's'}`} tone={s.compliance_rate >= 1 ? 'text-positive' : s.compliance_rate > 0 ? 'text-warning' : 'text-negative'} />
           <Stat label="Open blocking gaps" value={String(s.open_blocking_gaps)} sub="must close before sign-off" tone={s.open_blocking_gaps > 0 ? 'text-negative' : 'text-positive'} />
           <Stat label="High-risk models" value={String(s.high_risk_models)} sub="HIGH / CRITICAL tier" tone={s.high_risk_models > 0 ? 'text-warning' : 'text-positive'} />
           <Stat label="Blocked gates" value={String(ci?.active_blocked_gates ?? 0)} sub={`${ci?.shadow_ai_assets ?? 0} shadow AI asset(s)`} tone={(ci?.active_blocked_gates ?? 0) > 0 ? 'text-negative' : 'text-positive'} />
